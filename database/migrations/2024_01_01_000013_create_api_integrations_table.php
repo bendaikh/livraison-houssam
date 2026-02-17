@@ -10,8 +10,9 @@ return new class extends Migration
     {
         Schema::create('api_integrations', function (Blueprint $table) {
             $table->id();
-            $table->string('name'); // Shopify, Delivery Company 1, Delivery Company 2
+            $table->string('name'); // Shopify, Tawsilex, BMDelivery, etc.
             $table->string('type'); // shopify, delivery
+            $table->string('provider')->nullable(); // tawsilex, bmdelivery, shopify
             $table->boolean('is_active')->default(true);
             $table->json('credentials'); // API keys, secrets, etc.
             $table->json('settings')->nullable();

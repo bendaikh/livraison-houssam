@@ -1,0 +1,327 @@
+{
+  "info": {
+    "name": "Livraison API Integrations",
+    "description": "API collection for Shopify, Tawsilex, and BMDelivery integrations",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "YOUR_AUTH_TOKEN",
+      "type": "string"
+    },
+    {
+      "key": "integration_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Integration Management",
+      "item": [
+        {
+          "name": "List All Integrations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations"]
+            }
+          }
+        },
+        {
+          "name": "Create Shopify Integration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Shopify Store\",\n  \"type\": \"shopify\",\n  \"provider\": \"shopify\",\n  \"is_active\": true,\n  \"credentials\": {\n    \"shop_url\": \"https://your-store.myshopify.com\",\n    \"access_token\": \"shpat_xxxxxxxxxxxxxxxxxxxxx\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api-integrations",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations"]
+            }
+          }
+        },
+        {
+          "name": "Create Tawsilex Integration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tawsilex\",\n  \"type\": \"delivery\",\n  \"provider\": \"tawsilex\",\n  \"is_active\": true,\n  \"credentials\": {\n    \"api_token\": \"your-tawsilex-api-token\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api-integrations",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations"]
+            }
+          }
+        },
+        {
+          "name": "Create BMDelivery Integration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"BMDelivery\",\n  \"type\": \"delivery\",\n  \"provider\": \"bmdelivery\",\n  \"is_active\": true,\n  \"credentials\": {\n    \"api_token\": \"your-bmdelivery-api-token\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api-integrations",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations"]
+            }
+          }
+        },
+        {
+          "name": "Get Integration Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Integration",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Integration",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integration Operations",
+      "item": [
+        {
+          "name": "Test Connection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}/test-connection",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}", "test-connection"]
+            }
+          }
+        },
+        {
+          "name": "Sync Orders (Shopify)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}/sync",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}", "sync"]
+            }
+          }
+        },
+        {
+          "name": "Get Sync Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}/logs",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}", "logs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delivery Operations",
+      "item": [
+        {
+          "name": "Create Shipment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 123\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}/create-shipment",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}", "create-shipment"]
+            }
+          }
+        },
+        {
+          "name": "Track Shipment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tracking_code\": \"TWX123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}/track-shipment",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}", "track-shipment"]
+            }
+          }
+        },
+        {
+          "name": "Get Cities (BMDelivery)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}/cities",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}", "cities"]
+            }
+          }
+        },
+        {
+          "name": "Get Statuses (Tawsilex)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api-integrations/{{integration_id}}/statuses",
+              "host": ["{{base_url}}"],
+              "path": ["api-integrations", "{{integration_id}}", "statuses"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

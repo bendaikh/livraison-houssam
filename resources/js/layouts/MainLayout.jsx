@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt
+    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag
 } from 'lucide-react';
 
 export default function MainLayout() {
@@ -18,6 +18,7 @@ export default function MainLayout() {
     const [darkMode, setDarkMode] = useState(false);
     const [productsExpanded, setProductsExpanded] = useState(true);
     const [expensesExpanded, setExpensesExpanded] = useState(true);
+    const [apiIntegrationsExpanded, setApiIntegrationsExpanded] = useState(true);
 
     const handleLogout = async () => {
         await logout();
@@ -37,6 +38,7 @@ export default function MainLayout() {
                 { path: '/categories', icon: Tags, label: 'Categories', description: 'Product categories' }
             ]
         },
+        { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Vendor products' },
         { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control' },
         { path: '/orders', icon: ShoppingCart, label: 'Orders', description: 'Order management' },
         { path: '/clients', icon: Users, label: 'Clients', description: 'Customer database' },
@@ -52,7 +54,18 @@ export default function MainLayout() {
                 { path: '/expense-categories', icon: Tags, label: 'Expense Categories', description: 'Expense types' }
             ]
         },
-        { path: '/api-integrations', icon: Link2, label: 'API Integrations', description: 'External APIs' },
+        { 
+            path: '/api-integrations', 
+            icon: Link2, 
+            label: 'API Integrations', 
+            description: 'External APIs',
+            hasSubItems: true,
+            subItems: [
+                { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
+                { path: '/api-integrations/tawsilex', icon: Package, label: 'Tawsilex', description: 'Delivery service' },
+                { path: '/api-integrations/bmdelivery', icon: Box, label: 'BMDelivery', description: 'Delivery service' }
+            ]
+        },
         { path: '/users', icon: Users, label: 'Users', description: 'User management', adminOnly: true },
         { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings' },
     ];
@@ -103,10 +116,16 @@ export default function MainLayout() {
                         
                         // Handle items with sub-items
                         if (item.hasSubItems && !sidebarCollapsed) {
-                            const isExpanded = item.label === 'Products' ? productsExpanded : expensesExpanded;
+                            const isExpanded = item.label === 'Products' 
+                                ? productsExpanded 
+                                : item.label === 'Expenses' 
+                                    ? expensesExpanded 
+                                    : apiIntegrationsExpanded;
                             const toggleExpanded = item.label === 'Products' 
                                 ? () => setProductsExpanded(!productsExpanded)
-                                : () => setExpensesExpanded(!expensesExpanded);
+                                : item.label === 'Expenses'
+                                    ? () => setExpensesExpanded(!expensesExpanded)
+                                    : () => setApiIntegrationsExpanded(!apiIntegrationsExpanded);
                             
                             return (
                                 <div key={item.path}>

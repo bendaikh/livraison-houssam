@@ -10,6 +10,7 @@ class ApiIntegration extends Model
     protected $fillable = [
         'name',
         'type',
+        'provider',
         'is_active',
         'credentials',
         'settings',

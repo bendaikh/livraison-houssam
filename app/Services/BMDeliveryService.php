@@ -1,0 +1,262 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Order;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class BMDeliveryService
+{
+    private string $baseUrl = 'https://bmdelivery.ma/api';
+    private string $apiToken;
+
+    public function __construct(?string $apiToken = null)
+    {
+        $this->apiToken = $apiToken ?? '';
+    }
+
+    /**
+     * Set the API token for authentication
+     */
+    public function setApiToken(string $token): self
+    {
+        $this->apiToken = $token;
+        return $this;
+    }
+
+    /**
+     * Create a new shipment/colis in BMDelivery
+     * 
+     * @param array $data Shipment data
+     * @return array Response from BMDelivery API
+     * @throws \Exception
+     */
+    public function createShipment(array $data): array
+    {
+        $this->validateApiToken();
+
+        $payload = [
+            'fullname' => $data['fullname'],
+            'phone' => $data['phone'],
+            'city' => $data['city'],
+            'address' => $data['address'] ?? '',
+            'price' => $data['price'],
+            'product' => $data['product'],
+            'qty' => $data['qty'],
+            'note' => $data['note'] ?? '',
+            'change' => $data['change'] ?? 0,
+            'coli_exchange' => $data['coli_exchange'] ?? null,
+            'openpackage' => $data['openpackage'] ?? 0,
+            'from_stock' => $data['from_stock'] ?? 0,
+            'internal_id' => $data['internal_id'] ?? null,
+        ];
+
+        // Remove null values
+        $payload = array_filter($payload, fn($value) => $value !== null);
+
+        try {
+            $response = Http::withHeaders([
+                'Accept' => 'application/json',
+                'Api-Token' => $this->apiToken,
+            ])->post("{$this->baseUrl}/client/post/colis/add-colis", $payload);
+
+            if (!$response->successful()) {
+                throw new \Exception('Failed to create shipment: ' . $response->body());
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('BMDelivery createShipment error', [
+                'error' => $e->getMessage(),
+                'payload' => $payload,
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Create shipment from an Order model
+     * 
+     * @param Order $order
+     * @return array Response from BMDelivery API
+     */
+    public function createShipmentFromOrder(Order $order): array
+    {
+        $order->load(['client', 'items.product']);
+
+        // Prepare products and quantities
+        $products = [];
+        $quantities = [];
+        
+        foreach ($order->items as $item) {
+            $products[] = $item->product->name;
+            $quantities[] = $item->quantity;
+        }
+
+        $data = [
+            'fullname' => $order->client->name,
+            'phone' => $order->client->phone,
+            'city' => $order->client->city ?? 'Casablanca',
+            'address' => $order->shipping_address ?? $order->client->address,
+            'price' => (float) $order->total,
+            'product' => implode(',', $products),
+            'qty' => implode(',', $quantities),
+            'note' => $order->notes ?? '',
+            'change' => 0,
+            'openpackage' => 1,
+            'from_stock' => 0,
+            'internal_id' => $order->order_number,
+        ];
+
+        return $this->createShipment($data);
+    }
+
+    /**
+     * Get list of shipments ready for pickup (ramassage)
+     * 
+     * @return array List of shipments
+     * @throws \Exception
+     */
+    public function listShipmentsForPickup(): array
+    {
+        $this->validateApiToken();
+
+        try {
+            $response = Http::withHeaders([
+                'Accept' => 'application/json',
+                'Api-Token' => $this->apiToken,
+            ])->get("{$this->baseUrl}/client/colis/list-colis-ramassage/");
+
+            if (!$response->successful()) {
+                throw new \Exception('Failed to fetch shipments for pickup: ' . $response->body());
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('BMDelivery listShipmentsForPickup error', [
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get list of all shipments
+     * 
+     * @return array List of shipments
+     * @throws \Exception
+     */
+    public function listShipments(): array
+    {
+        $this->validateApiToken();
+
+        try {
+            $response = Http::withHeaders([
+                'Accept' => 'application/json',
+                'Api-Token' => $this->apiToken,
+            ])->get("{$this->baseUrl}/colis/list-coli");
+
+            if (!$response->successful()) {
+                throw new \Exception('Failed to fetch shipments: ' . $response->body());
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('BMDelivery listShipments error', [
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Track a shipment by internal code
+     * 
+     * @param string $code Internal tracking code
+     * @return array Tracking information
+     * @throws \Exception
+     */
+    public function trackShipment(string $code): array
+    {
+        $this->validateApiToken();
+
+        try {
+            $response = Http::withHeaders([
+                'Accept' => 'application/json',
+                'Api-Token' => $this->apiToken,
+            ])->get("{$this->baseUrl}/client/colis/track/{$code}");
+
+            if (!$response->successful()) {
+                throw new \Exception('Failed to track shipment: ' . $response->body());
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('BMDelivery trackShipment error', [
+                'error' => $e->getMessage(),
+                'code' => $code,
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get list of available cities
+     * 
+     * @return array List of cities
+     * @throws \Exception
+     */
+    public function listCities(): array
+    {
+        $this->validateApiToken();
+
+        try {
+            $response = Http::withHeaders([
+                'Accept' => 'application/json',
+                'Api-Token' => $this->apiToken,
+            ])->get("{$this->baseUrl}/client/villes");
+
+            if (!$response->successful()) {
+                throw new \Exception('Failed to fetch cities: ' . $response->body());
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('BMDelivery listCities error', [
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Validate that API token is set
+     * 
+     * @throws \Exception
+     */
+    private function validateApiToken(): void
+    {
+        if (empty($this->apiToken)) {
+            throw new \Exception('BMDelivery API token is not set');
+        }
+    }
+
+    /**
+     * Test the API connection
+     * 
+     * @return bool True if connection is successful
+     */
+    public function testConnection(): bool
+    {
+        try {
+            $this->listCities();
+            return true;
+        } catch (\Exception $e) {
+            Log::error('BMDelivery connection test failed', [
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+}

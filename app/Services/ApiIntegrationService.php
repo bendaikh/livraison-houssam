@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\Log;
 class ApiIntegrationService
 {
     public function __construct(
-        private OrderService $orderService
+        private OrderService $orderService,
+        private ShopifyService $shopifyService,
+        private TawsilexService $tawsilexService,
+        private BMDeliveryService $bmDeliveryService
     ) {}
 
     public function syncShopifyOrders(int $integrationId)
@@ -41,20 +44,21 @@ class ApiIntegrationService
                 throw new \Exception('Missing Shopify credentials');
             }
 
+            // Configure Shopify service
+            $this->shopifyService->setCredentials($shopUrl, $accessToken);
+
             // Fetch orders from Shopify API
-            $response = Http::withHeaders([
-                'X-Shopify-Access-Token' => $accessToken,
-            ])->get("{$shopUrl}/admin/api/2024-01/orders.json", [
+            $params = [
                 'status' => 'any',
                 'limit' => 250,
-                'updated_at_min' => $integration->last_sync_at ?? now()->subDays(7),
-            ]);
+            ];
 
-            if (!$response->successful()) {
-                throw new \Exception('Failed to fetch orders from Shopify: ' . $response->body());
+            if ($integration->last_sync_at) {
+                $params['updated_at_min'] = $integration->last_sync_at->toIso8601String();
             }
 
-            $shopifyOrders = $response->json()['orders'] ?? [];
+            $response = $this->shopifyService->fetchOrders($params);
+            $shopifyOrders = $response['orders'] ?? [];
             $log->update(['total_records' => count($shopifyOrders)]);
 
             $errors = [];
@@ -164,6 +168,9 @@ class ApiIntegrationService
             throw new \Exception('Integration is not active');
         }
 
+        // Determine which delivery service to use
+        $deliveryService = $this->getDeliveryService($integration);
+
         $log = ApiImportLog::create([
             'api_integration_id' => $integrationId,
             'status' => 'failed',
@@ -173,38 +180,22 @@ class ApiIntegrationService
         ]);
 
         try {
-            $credentials = $integration->credentials;
-            $apiUrl = $credentials['api_url'] ?? '';
-            $apiKey = $credentials['api_key'] ?? '';
-
-            if (!$apiUrl || !$apiKey) {
-                throw new \Exception('Missing delivery company credentials');
-            }
-
-            // This is a placeholder - each delivery company will have different API
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-            ])->get("{$apiUrl}/orders");
-
-            if (!$response->successful()) {
-                throw new \Exception('Failed to fetch orders from delivery company');
-            }
-
-            $orders = $response->json()['data'] ?? [];
-            $log->update(['total_records' => count($orders)]);
+            // Fetch shipments from delivery company
+            $shipments = $deliveryService->listShipments();
+            $log->update(['total_records' => count($shipments)]);
 
             $errors = [];
             $successful = 0;
             $failed = 0;
 
-            foreach ($orders as $deliveryOrder) {
+            foreach ($shipments as $shipment) {
                 try {
-                    $this->importDeliveryCompanyOrder($deliveryOrder);
+                    $this->syncDeliveryShipmentStatus($shipment, $integration->name);
                     $successful++;
                 } catch (\Exception $e) {
                     $failed++;
                     $errors[] = [
-                        'order_id' => $deliveryOrder['id'] ?? 'unknown',
+                        'shipment_id' => $shipment['code'] ?? $shipment['id'] ?? 'unknown',
                         'error' => $e->getMessage(),
                     ];
                 }
@@ -215,7 +206,7 @@ class ApiIntegrationService
                 'successful_records' => $successful,
                 'failed_records' => $failed,
                 'errors' => $errors,
-                'message' => "Imported {$successful} orders, {$failed} failed",
+                'message' => "Synced {$successful} shipments, {$failed} failed",
             ]);
 
             $integration->update(['last_sync_at' => now()]);
@@ -230,33 +221,160 @@ class ApiIntegrationService
         }
     }
 
-    private function importDeliveryCompanyOrder(array $deliveryOrder)
+    /**
+     * Sync delivery shipment status with local order
+     */
+    private function syncDeliveryShipmentStatus(array $shipment, string $provider)
     {
-        // Check if order already exists
-        $existingOrder = Order::where('external_order_id', $deliveryOrder['id'])
-            ->where('source', 'delivery_company')
-            ->first();
+        // Find order by internal_id or external tracking code
+        $trackingCode = $shipment['code'] ?? $shipment['tracking_code'] ?? null;
+        $internalId = $shipment['internal_id'] ?? null;
 
-        if ($existingOrder) {
-            return $existingOrder;
+        if (!$trackingCode && !$internalId) {
+            return;
         }
 
-        // Implementation depends on delivery company API structure
-        // This is a placeholder
-        $client = $this->getOrCreateClient([
-            'name' => $deliveryOrder['customer_name'],
-            'phone' => $deliveryOrder['customer_phone'],
-            'address' => $deliveryOrder['delivery_address'],
-        ]);
+        $order = Order::where(function ($query) use ($trackingCode, $internalId) {
+            if ($internalId) {
+                $query->where('order_number', $internalId);
+            }
+            if ($trackingCode) {
+                $query->orWhere('external_order_id', $trackingCode);
+            }
+        })->first();
 
-        return $this->orderService->createOrder([
-            'client_id' => $client->id,
-            'source' => 'delivery_company',
-            'external_order_id' => $deliveryOrder['id'],
-            'status' => 'pending',
-            'items' => [], // Parse from delivery order
-            'shipping_address' => $deliveryOrder['delivery_address'] ?? null,
-        ]);
+        if (!$order) {
+            return;
+        }
+
+        // Map delivery status to our status
+        $deliveryStatus = $shipment['status'] ?? $shipment['state'] ?? '';
+        $mappedStatus = $this->mapDeliveryStatus($deliveryStatus, $provider);
+
+        if ($mappedStatus && $order->status !== $mappedStatus) {
+            $this->orderService->updateOrderStatus(
+                $order->id,
+                $mappedStatus,
+                "Status updated from {$provider}: {$deliveryStatus}"
+            );
+        }
+    }
+
+    /**
+     * Map delivery company status to internal status
+     */
+    private function mapDeliveryStatus(string $deliveryStatus, string $provider): ?string
+    {
+        $statusMap = [
+            'tawsilex' => [
+                'en_attente' => 'pending',
+                'ramassage' => 'confirmed',
+                'en_cours' => 'shipped',
+                'livre' => 'delivered',
+                'annule' => 'cancelled',
+                'retour' => 'cancelled',
+            ],
+            'bmdelivery' => [
+                'pending' => 'pending',
+                'picked_up' => 'confirmed',
+                'in_transit' => 'shipped',
+                'delivered' => 'delivered',
+                'cancelled' => 'cancelled',
+                'returned' => 'cancelled',
+            ],
+        ];
+
+        $providerKey = strtolower(str_replace(' ', '', $provider));
+        $map = $statusMap[$providerKey] ?? [];
+
+        return $map[strtolower($deliveryStatus)] ?? null;
+    }
+
+    /**
+     * Get the appropriate delivery service based on integration
+     */
+    private function getDeliveryService(ApiIntegration $integration)
+    {
+        $credentials = $integration->credentials;
+        $apiToken = $credentials['api_token'] ?? '';
+
+        if (!$apiToken) {
+            throw new \Exception('Missing API token for delivery service');
+        }
+
+        // Use provider field if available, otherwise fall back to name matching
+        $provider = $integration->provider ?? strtolower($integration->name);
+
+        if (str_contains($provider, 'tawsilex')) {
+            return $this->tawsilexService->setApiToken($apiToken);
+        } elseif (str_contains($provider, 'bmd') || str_contains($provider, 'bmdelivery')) {
+            return $this->bmDeliveryService->setApiToken($apiToken);
+        }
+
+        throw new \Exception('Unknown delivery provider: ' . $provider);
+    }
+
+    /**
+     * Create shipment in delivery company from order
+     */
+    public function createDeliveryShipment(int $orderId, int $integrationId): array
+    {
+        $order = Order::with(['client', 'items.product'])->findOrFail($orderId);
+        $integration = ApiIntegration::findOrFail($integrationId);
+
+        if (!$integration->is_active) {
+            throw new \Exception('Integration is not active');
+        }
+
+        $deliveryService = $this->getDeliveryService($integration);
+
+        try {
+            $result = $deliveryService->createShipmentFromOrder($order);
+
+            // Update order with tracking information
+            if (isset($result['code']) || isset($result['tracking_code'])) {
+                $trackingCode = $result['code'] ?? $result['tracking_code'];
+                $order->update([
+                    'external_order_id' => $trackingCode,
+                    'notes' => ($order->notes ? $order->notes . "\n" : '') . 
+                               "Shipment created in {$integration->name}: {$trackingCode}",
+                ]);
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            Log::error('Failed to create delivery shipment', [
+                'order_id' => $orderId,
+                'integration_id' => $integrationId,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Track shipment in delivery company
+     */
+    public function trackDeliveryShipment(string $trackingCode, int $integrationId): array
+    {
+        $integration = ApiIntegration::findOrFail($integrationId);
+
+        if (!$integration->is_active) {
+            throw new \Exception('Integration is not active');
+        }
+
+        $deliveryService = $this->getDeliveryService($integration);
+
+        try {
+            return $deliveryService->trackShipment($trackingCode);
+        } catch (\Exception $e) {
+            Log::error('Failed to track delivery shipment', [
+                'tracking_code' => $trackingCode,
+                'integration_id' => $integrationId,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 
     private function getOrCreateClient(array $data)
@@ -291,5 +409,77 @@ class ApiIntegrationService
         }
 
         return $product;
+    }
+
+    /**
+     * Test API connection
+     */
+    public function testConnection(int $integrationId): bool
+    {
+        $integration = ApiIntegration::findOrFail($integrationId);
+
+        try {
+            if ($integration->type === 'shopify') {
+                $credentials = $integration->credentials;
+                $this->shopifyService->setCredentials(
+                    $credentials['shop_url'] ?? '',
+                    $credentials['access_token'] ?? ''
+                );
+                return $this->shopifyService->testConnection();
+            } elseif ($integration->type === 'delivery') {
+                $deliveryService = $this->getDeliveryService($integration);
+                return $deliveryService->testConnection();
+            }
+
+            return false;
+        } catch (\Exception $e) {
+            Log::error('API connection test failed', [
+                'integration_id' => $integrationId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Get delivery cities
+     */
+    public function getDeliveryCities(int $integrationId): array
+    {
+        $integration = ApiIntegration::findOrFail($integrationId);
+
+        if ($integration->type !== 'delivery') {
+            throw new \Exception('This integration does not support city listing');
+        }
+
+        $deliveryService = $this->getDeliveryService($integration);
+
+        // BMDelivery has cities endpoint, Tawsilex doesn't
+        if (method_exists($deliveryService, 'listCities')) {
+            return $deliveryService->listCities();
+        }
+
+        throw new \Exception('City listing not supported for this provider');
+    }
+
+    /**
+     * Get delivery statuses
+     */
+    public function getDeliveryStatuses(int $integrationId): array
+    {
+        $integration = ApiIntegration::findOrFail($integrationId);
+
+        if ($integration->type !== 'delivery') {
+            throw new \Exception('This integration does not support status listing');
+        }
+
+        $deliveryService = $this->getDeliveryService($integration);
+
+        // Tawsilex has statuses endpoint
+        if (method_exists($deliveryService, 'listStatuses')) {
+            return $deliveryService->listStatuses();
+        }
+
+        throw new \Exception('Status listing not supported for this provider');
     }
 }

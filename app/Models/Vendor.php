@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Vendor extends Model
 {
@@ -35,5 +36,17 @@ class Vendor extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function marketplaceProducts(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'marketplace_products')
+            ->withPivot('is_active', 'commission_rate', 'assigned_quantity', 'activated_at', 'deactivated_at')
+            ->withTimestamps();
+    }
+
+    public function activeMarketplaceProducts(): BelongsToMany
+    {
+        return $this->marketplaceProducts()->wherePivot('is_active', true);
     }
 }

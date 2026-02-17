@@ -15,6 +15,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\MarketplaceController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -61,10 +62,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/stock/history', [StockController::class, 'history']);
     Route::get('/stock/low-stock', [StockController::class, 'lowStock']);
 
+    // Marketplace Management
+    Route::get('/marketplace', [MarketplaceController::class, 'index']);
+    Route::get('/marketplace/statistics', [MarketplaceController::class, 'statistics']);
+    Route::get('/marketplace/vendor-products', [MarketplaceController::class, 'vendorProducts']);
+    Route::get('/marketplace/products/{product}', [MarketplaceController::class, 'show']);
+    Route::post('/marketplace/products/{product}/assign', [MarketplaceController::class, 'assignVendor']);
+    Route::patch('/marketplace/assignments/{marketplaceProduct}', [MarketplaceController::class, 'updateAssignment']);
+    Route::post('/marketplace/assignments/{marketplaceProduct}/toggle', [MarketplaceController::class, 'toggleActivation']);
+    Route::delete('/marketplace/assignments/{marketplaceProduct}', [MarketplaceController::class, 'removeAssignment']);
+    Route::post('/marketplace/bulk-assign', [MarketplaceController::class, 'bulkAssign']);
+    Route::post('/marketplace/bulk-toggle', [MarketplaceController::class, 'bulkToggle']);
+
     // API Integrations
     Route::apiResource('api-integrations', ApiIntegrationController::class);
     Route::post('/api-integrations/{apiIntegration}/sync', [ApiIntegrationController::class, 'sync']);
     Route::get('/api-integrations/{apiIntegration}/logs', [ApiIntegrationController::class, 'logs']);
+    Route::post('/api-integrations/{apiIntegration}/test-connection', [ApiIntegrationController::class, 'testConnection']);
+    Route::post('/api-integrations/{apiIntegration}/create-shipment', [ApiIntegrationController::class, 'createShipment']);
+    Route::post('/api-integrations/{apiIntegration}/track-shipment', [ApiIntegrationController::class, 'trackShipment']);
+    Route::get('/api-integrations/{apiIntegration}/cities', [ApiIntegrationController::class, 'getCities']);
+    Route::get('/api-integrations/{apiIntegration}/statuses', [ApiIntegrationController::class, 'getStatuses']);
 
     // Users & Roles (Admin and SuperAdmin only)
     Route::middleware(['role:admin,superadmin'])->group(function () {

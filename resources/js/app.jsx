@@ -44,6 +44,12 @@ import StockHistory from './pages/Stock/StockHistory';
 
 // API Integrations
 import ApiIntegrations from './pages/ApiIntegrations/ApiIntegrations';
+import ShopifyIntegrationPage from './pages/ApiIntegrations/ShopifyIntegrationPage';
+import TawsilexIntegrationPage from './pages/ApiIntegrations/TawsilexIntegrationPage';
+import BMDeliveryIntegrationPage from './pages/ApiIntegrations/BMDeliveryIntegrationPage';
+
+// Marketplace
+import MarketplaceProducts from './pages/Marketplace/MarketplaceProducts';
 
 // Users
 import UserList from './pages/Users/UserList';
@@ -103,6 +109,12 @@ function App() {
                     
                     {/* API Integrations */}
                     <Route path="api-integrations" element={<ApiIntegrations />} />
+                    <Route path="api-integrations/shopify" element={<ShopifyIntegrationPage />} />
+                    <Route path="api-integrations/tawsilex" element={<TawsilexIntegrationPage />} />
+                    <Route path="api-integrations/bmdelivery" element={<BMDeliveryIntegrationPage />} />
+                    
+                    {/* Marketplace */}
+                    <Route path="marketplace" element={<MarketplaceProducts />} />
                     
                     {/* Users */}
                     <Route path="users" element={<UserList />} />

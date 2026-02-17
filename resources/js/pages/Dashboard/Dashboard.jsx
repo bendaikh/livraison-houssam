@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle } from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown } from 'lucide-react';
 
 export default function Dashboard() {
     const [period, setPeriod] = useState('daily');
@@ -270,6 +270,154 @@ export default function Dashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Additional Statistics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Clients Stats */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-slate-800">Clients</h3>
+                        <Users className="text-blue-500" size={24} />
+                    </div>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Total Clients</span>
+                            <span className="text-lg font-bold text-slate-800">{stats?.clients?.total || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">New This Period</span>
+                            <span className="text-lg font-bold text-emerald-600">{stats?.clients?.new || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Active Clients</span>
+                            <span className="text-lg font-bold text-blue-600">{stats?.clients?.active || 0}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Vendors Stats */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-slate-800">Vendors</h3>
+                        <Store className="text-purple-500" size={24} />
+                    </div>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Total Vendors</span>
+                            <span className="text-lg font-bold text-slate-800">{stats?.vendors?.total || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Active Vendors</span>
+                            <span className="text-lg font-bold text-emerald-600">{stats?.vendors?.active || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Total Commission</span>
+                            <span className="text-lg font-bold text-purple-600">{(parseFloat(stats?.vendors?.total_commission) || 0).toFixed(2)} MAD</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Products Stats */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-slate-800">Products</h3>
+                        <Package className="text-indigo-500" size={24} />
+                    </div>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Total Products</span>
+                            <span className="text-lg font-bold text-slate-800">{stats?.products?.total || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Active Products</span>
+                            <span className="text-lg font-bold text-emerald-600">{stats?.products?.active || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Out of Stock</span>
+                            <span className="text-lg font-bold text-rose-600">{stats?.products?.out_of_stock || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Top Products & Top Clients */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {/* Top Products */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800">Top Selling Products</h3>
+                                <p className="text-sm text-slate-500 mt-1">Best performers this period</p>
+                            </div>
+                            <TrendingUp className="text-emerald-500" size={24} />
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        {stats?.top_products?.length > 0 ? (
+                            <div className="space-y-4">
+                                {stats.top_products.map((product, index) => (
+                                    <div key={product.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                                                {index + 1}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-slate-800">{product.name}</p>
+                                                <p className="text-sm text-slate-500">{product.sku}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold text-slate-800">{product.total_sold}</p>
+                                            <p className="text-xs text-slate-500">units sold</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-slate-500 py-8">No sales data available</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Top Clients */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800">Top Clients</h3>
+                                <p className="text-sm text-slate-500 mt-1">Highest spending customers</p>
+                            </div>
+                            <Users className="text-blue-500" size={24} />
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        {stats?.top_clients?.length > 0 ? (
+                            <div className="space-y-4">
+                                {stats.top_clients.map((client, index) => (
+                                    <div key={client.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-sm">
+                                                {index + 1}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-slate-800">{client.name}</p>
+                                                <p className="text-sm text-slate-500">{client.order_count} orders</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold text-slate-800">{(parseFloat(client.total_spent) || 0).toFixed(2)}</p>
+                                            <p className="text-xs text-slate-500">MAD</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-slate-500 py-8">No client data available</p>
+                        )}
+                    </div>
+                </div>
+            </div>
 
             {/* Recent Orders */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">

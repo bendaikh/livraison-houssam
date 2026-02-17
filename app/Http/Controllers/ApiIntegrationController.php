@@ -26,6 +26,7 @@ class ApiIntegrationController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:shopify,delivery',
+            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery',
             'is_active' => 'boolean',
             'credentials' => 'required|array',
             'settings' => 'nullable|array',
@@ -46,6 +47,7 @@ class ApiIntegrationController extends Controller
         $validated = $request->validate([
             'name' => 'string|max:255',
             'type' => 'in:shopify,delivery',
+            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery',
             'is_active' => 'boolean',
             'credentials' => 'array',
             'settings' => 'nullable|array',
@@ -86,5 +88,100 @@ class ApiIntegrationController extends Controller
     {
         $logs = $apiIntegration->importLogs()->latest()->paginate(20);
         return response()->json($logs);
+    }
+
+    public function testConnection(ApiIntegration $apiIntegration)
+    {
+        try {
+            $result = $this->apiIntegrationService->testConnection($apiIntegration->id);
+            
+            return response()->json([
+                'success' => $result,
+                'message' => $result ? 'Connection successful' : 'Connection failed',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Connection failed: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function createShipment(Request $request, ApiIntegration $apiIntegration)
+    {
+        $validated = $request->validate([
+            'order_id' => 'required|exists:orders,id',
+        ]);
+
+        try {
+            $result = $this->apiIntegrationService->createDeliveryShipment(
+                $validated['order_id'],
+                $apiIntegration->id
+            );
+
+            return response()->json([
+                'message' => 'Shipment created successfully',
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to create shipment: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function trackShipment(Request $request, ApiIntegration $apiIntegration)
+    {
+        $validated = $request->validate([
+            'tracking_code' => 'required|string',
+        ]);
+
+        try {
+            $result = $this->apiIntegrationService->trackDeliveryShipment(
+                $validated['tracking_code'],
+                $apiIntegration->id
+            );
+
+            return response()->json([
+                'message' => 'Tracking information retrieved',
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to track shipment: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getCities(ApiIntegration $apiIntegration)
+    {
+        try {
+            $result = $this->apiIntegrationService->getDeliveryCities($apiIntegration->id);
+
+            return response()->json([
+                'message' => 'Cities retrieved successfully',
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to get cities: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getStatuses(ApiIntegration $apiIntegration)
+    {
+        try {
+            $result = $this->apiIntegrationService->getDeliveryStatuses($apiIntegration->id);
+
+            return response()->json([
+                'message' => 'Statuses retrieved successfully',
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to get statuses: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

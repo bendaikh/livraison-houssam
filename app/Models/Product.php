@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
@@ -62,5 +63,17 @@ class Product extends Model
     public function isLowStock(): bool
     {
         return $this->stock_quantity <= $this->min_stock_quantity;
+    }
+
+    public function marketplaceVendors(): BelongsToMany
+    {
+        return $this->belongsToMany(Vendor::class, 'marketplace_products')
+            ->withPivot('is_active', 'commission_rate', 'assigned_quantity', 'activated_at', 'deactivated_at')
+            ->withTimestamps();
+    }
+
+    public function marketplaceProducts(): HasMany
+    {
+        return $this->hasMany(MarketplaceProduct::class);
     }
 }

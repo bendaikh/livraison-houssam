@@ -5,6 +5,9 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Expense;
+use App\Models\Client;
+use App\Models\Vendor;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +25,11 @@ class DashboardService
             'low_stock_products' => $this->getLowStockProducts(),
             'recent_orders' => $this->getRecentOrders(),
             'charts' => $this->getChartsData($period),
+            'clients' => $this->getClientsStats($dateRange),
+            'vendors' => $this->getVendorsStats(),
+            'products' => $this->getProductsStats(),
+            'top_products' => $this->getTopProducts($dateRange),
+            'top_clients' => $this->getTopClients($dateRange),
         ];
     }
 
@@ -186,5 +194,64 @@ class DashboardService
             ];
         }
         return $data;
+    }
+
+    private function getClientsStats(array $dateRange)
+    {
+        return [
+            'total' => Client::count(),
+            'new' => Client::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])->count(),
+            'active' => Client::whereHas('orders', function ($query) use ($dateRange) {
+                $query->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+            })->count(),
+        ];
+    }
+
+    private function getVendorsStats()
+    {
+        return [
+            'total' => Vendor::count(),
+            'active' => Vendor::where('is_active', true)->count(),
+            'total_commission' => Vendor::sum('total_commission'),
+        ];
+    }
+
+    private function getProductsStats()
+    {
+        return [
+            'total' => Product::count(),
+            'active' => Product::where('is_active', true)->count(),
+            'low_stock' => Product::whereColumn('stock_quantity', '<=', 'min_stock_quantity')
+                ->where('is_active', true)
+                ->count(),
+            'out_of_stock' => Product::where('stock_quantity', 0)
+                ->where('is_active', true)
+                ->count(),
+        ];
+    }
+
+    private function getTopProducts(array $dateRange)
+    {
+        return Product::select('products.*', DB::raw('SUM(order_items.quantity) as total_sold'))
+            ->join('order_items', 'products.id', '=', 'order_items.product_id')
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->whereBetween('orders.created_at', [$dateRange['start'], $dateRange['end']])
+            ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered'])
+            ->groupBy('products.id')
+            ->orderBy('total_sold', 'desc')
+            ->limit(5)
+            ->get();
+    }
+
+    private function getTopClients(array $dateRange)
+    {
+        return Client::select('clients.*', DB::raw('COUNT(orders.id) as order_count'), DB::raw('SUM(orders.total) as total_spent'))
+            ->join('orders', 'clients.id', '=', 'orders.client_id')
+            ->whereBetween('orders.created_at', [$dateRange['start'], $dateRange['end']])
+            ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered'])
+            ->groupBy('clients.id')
+            ->orderBy('total_spent', 'desc')
+            ->limit(5)
+            ->get();
     }
 }
