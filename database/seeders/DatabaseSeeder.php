@@ -59,8 +59,8 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $confirmationAgentRole = Role::create([
-            'name' => 'Confirmation Agent',
-            'slug' => 'confirmation_agent',
+            'name' => 'Agent Confirmation',
+            'slug' => 'agent_confirmation',
             'description' => 'Can confirm orders',
             'permissions' => [
                 'view_orders',
@@ -72,13 +72,36 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $deliveryAgentRole = Role::create([
-            'name' => 'Delivery Agent',
-            'slug' => 'delivery_agent',
+            'name' => 'Agent Livraison',
+            'slug' => 'agent_livraison',
             'description' => 'Can manage deliveries',
             'permissions' => [
                 'view_orders',
                 'update_order_status',
                 'view_clients',
+                'view_dashboard',
+            ],
+        ]);
+
+        $deliveryRole = Role::create([
+            'name' => 'Delivery',
+            'slug' => 'delivery',
+            'description' => 'Delivery personnel',
+            'permissions' => [
+                'view_assigned_orders',
+                'update_delivery_status',
+                'view_clients',
+            ],
+        ]);
+
+        $vendorRole = Role::create([
+            'name' => 'Vendor',
+            'slug' => 'vendor',
+            'description' => 'Vendor/Supplier',
+            'permissions' => [
+                'view_own_products',
+                'view_own_orders',
+                'view_dashboard',
             ],
         ]);
 
@@ -104,19 +127,37 @@ class DatabaseSeeder extends Seeder
 
         // Create Confirmation Agent
         User::create([
-            'name' => 'Confirmation Agent',
+            'name' => 'Agent Confirmation',
             'email' => 'confirmation@example.com',
             'password' => Hash::make('password'),
             'role_id' => $confirmationAgentRole->id,
             'is_active' => true,
         ]);
 
-        // Create Delivery Agent
+        // Create Livraison Agent
         User::create([
-            'name' => 'Delivery Agent',
-            'email' => 'delivery@example.com',
+            'name' => 'Agent Livraison',
+            'email' => 'livraison@example.com',
             'password' => Hash::make('password'),
             'role_id' => $deliveryAgentRole->id,
+            'is_active' => true,
+        ]);
+
+        // Create Delivery Personnel
+        User::create([
+            'name' => 'Delivery Person',
+            'email' => 'delivery@example.com',
+            'password' => Hash::make('password'),
+            'role_id' => $deliveryRole->id,
+            'is_active' => true,
+        ]);
+
+        // Create Vendor
+        User::create([
+            'name' => 'Vendor User',
+            'email' => 'vendor@example.com',
+            'password' => Hash::make('password'),
+            'role_id' => $vendorRole->id,
             'is_active' => true,
         ]);
 

@@ -18,6 +18,8 @@ class Product extends Model
         'category_id',
         'vendor_id',
         'price',
+        'company_price',
+        'vendor_price',
         'cost_price',
         'stock_quantity',
         'min_stock_quantity',
@@ -30,6 +32,8 @@ class Product extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'price' => 'decimal:2',
+        'company_price' => 'decimal:2',
+        'vendor_price' => 'decimal:2',
         'cost_price' => 'decimal:2',
         'weight' => 'decimal:2',
         'images' => 'array',

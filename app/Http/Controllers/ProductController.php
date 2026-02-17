@@ -50,7 +50,9 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'category_id' => 'nullable|exists:categories,id',
             'vendor_id' => 'nullable|exists:vendors,id',
-            'price' => 'required|numeric|min:0',
+            'price' => 'nullable|numeric|min:0',
+            'company_price' => 'required|numeric|min:0',
+            'vendor_price' => 'required|numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'required|integer|min:0',
             'min_stock_quantity' => 'required|integer|min:0',
@@ -60,6 +62,11 @@ class ProductController extends Controller
             'images' => 'nullable|array',
             'images.*' => 'image|max:2048',
         ]);
+
+        // Set price to company_price if not provided
+        if (!isset($validated['price']) && isset($validated['company_price'])) {
+            $validated['price'] = $validated['company_price'];
+        }
 
         // Handle image uploads
         if ($request->hasFile('images')) {
@@ -89,7 +96,9 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'category_id' => 'nullable|exists:categories,id',
             'vendor_id' => 'nullable|exists:vendors,id',
-            'price' => 'numeric|min:0',
+            'price' => 'nullable|numeric|min:0',
+            'company_price' => 'numeric|min:0',
+            'vendor_price' => 'numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'integer|min:0',
             'min_stock_quantity' => 'integer|min:0',
@@ -98,6 +107,11 @@ class ProductController extends Controller
             'weight_unit' => 'nullable|string',
             'images' => 'nullable|array',
         ]);
+
+        // Set price to company_price if not provided
+        if (!isset($validated['price']) && isset($validated['company_price'])) {
+            $validated['price'] = $validated['company_price'];
+        }
 
         // Handle new image uploads
         if ($request->hasFile('images')) {

@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, User, ChevronDown
+    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt
 } from 'lucide-react';
 
 export default function MainLayout() {
@@ -16,6 +16,8 @@ export default function MainLayout() {
     const [notifications, setNotifications] = useState([]);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
+    const [productsExpanded, setProductsExpanded] = useState(true);
+    const [expensesExpanded, setExpensesExpanded] = useState(true);
 
     const handleLogout = async () => {
         await logout();
@@ -24,13 +26,32 @@ export default function MainLayout() {
 
     const menuItems = [
         { path: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & Analytics' },
-        { path: '/products', icon: Package, label: 'Products', description: 'Manage inventory' },
-        { path: '/categories', icon: FileText, label: 'Categories', description: 'Product categories' },
+        { 
+            path: '/products', 
+            icon: Package, 
+            label: 'Products', 
+            description: 'Manage inventory',
+            hasSubItems: true,
+            subItems: [
+                { path: '/products', icon: List, label: 'List Products', description: 'View all products' },
+                { path: '/categories', icon: Tags, label: 'Categories', description: 'Product categories' }
+            ]
+        },
+        { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control' },
         { path: '/orders', icon: ShoppingCart, label: 'Orders', description: 'Order management' },
         { path: '/clients', icon: Users, label: 'Clients', description: 'Customer database' },
         { path: '/vendors', icon: Store, label: 'Vendors', description: 'Supplier management' },
-        { path: '/expenses', icon: DollarSign, label: 'Expenses', description: 'Track expenses' },
-        { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control' },
+        { 
+            path: '/expenses', 
+            icon: DollarSign, 
+            label: 'Expenses', 
+            description: 'Track expenses',
+            hasSubItems: true,
+            subItems: [
+                { path: '/expenses', icon: Receipt, label: 'List Expenses', description: 'View all expenses' },
+                { path: '/expense-categories', icon: Tags, label: 'Expense Categories', description: 'Expense types' }
+            ]
+        },
         { path: '/api-integrations', icon: Link2, label: 'API Integrations', description: 'External APIs' },
         { path: '/users', icon: Users, label: 'Users', description: 'User management', adminOnly: true },
         { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings' },
@@ -80,6 +101,70 @@ export default function MainLayout() {
                         
                         const active = isActive(item.path);
                         
+                        // Handle items with sub-items
+                        if (item.hasSubItems && !sidebarCollapsed) {
+                            const isExpanded = item.label === 'Products' ? productsExpanded : expensesExpanded;
+                            const toggleExpanded = item.label === 'Products' 
+                                ? () => setProductsExpanded(!productsExpanded)
+                                : () => setExpensesExpanded(!expensesExpanded);
+                            
+                            return (
+                                <div key={item.path}>
+                                    <button
+                                        onClick={toggleExpanded}
+                                        className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
+                                            active
+                                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
+                                                : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
+                                        }`}
+                                    >
+                                        <div className="flex items-center space-x-3">
+                                            <item.icon size={20} className={active ? 'text-white' : 'text-slate-400 group-hover:text-white'} />
+                                            <div className="flex-1 text-left">
+                                                <span className="font-medium text-sm">{item.label}</span>
+                                                {!active && (
+                                                    <p className="text-xs text-slate-500 group-hover:text-slate-400 mt-0.5">{item.description}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <ChevronRight 
+                                            size={16} 
+                                            className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''} ${active ? 'text-white' : 'text-slate-400'}`}
+                                        />
+                                    </button>
+                                    
+                                    {/* Sub-items */}
+                                    {isExpanded && (
+                                        <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-700/50 pl-2">
+                                            {item.subItems.map((subItem) => {
+                                                const subActive = isActive(subItem.path);
+                                                return (
+                                                    <Link
+                                                        key={subItem.path}
+                                                        to={subItem.path}
+                                                        className={`group flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                                                            subActive
+                                                                ? 'bg-slate-700/50 text-white'
+                                                                : 'text-slate-400 hover:bg-slate-700/30 hover:text-white'
+                                                        }`}
+                                                    >
+                                                        <subItem.icon size={18} className={subActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'} />
+                                                        <div className="flex-1">
+                                                            <span className="font-medium text-sm">{subItem.label}</span>
+                                                        </div>
+                                                        {subActive && (
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
+                                                        )}
+                                                    </Link>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        }
+                        
+                        // Regular menu items
                         return (
                             <Link
                                 key={item.path}

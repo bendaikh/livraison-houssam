@@ -90,7 +90,16 @@ class UserController extends Controller
     public function deliveryAgents()
     {
         $agents = User::whereHas('role', function ($query) {
-            $query->where('slug', 'delivery_agent');
+            $query->whereIn('slug', ['agent_livraison', 'delivery']);
+        })->where('is_active', true)->get();
+
+        return response()->json($agents);
+    }
+
+    public function confirmationAgents()
+    {
+        $agents = User::whereHas('role', function ($query) {
+            $query->where('slug', 'agent_confirmation');
         })->where('is_active', true)->get();
 
         return response()->json($agents);

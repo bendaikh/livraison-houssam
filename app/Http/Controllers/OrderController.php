@@ -14,7 +14,7 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'items.product']);
+        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'confirmationAgent', 'items.product']);
 
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
@@ -42,6 +42,10 @@ class OrderController extends Controller
             $query->where('delivery_agent_id', $request->delivery_agent_id);
         }
 
+        if ($request->has('confirmation_agent_id')) {
+            $query->where('confirmation_agent_id', $request->confirmation_agent_id);
+        }
+
         if ($request->has('date_from')) {
             $query->whereDate('created_at', '>=', $request->date_from);
         }
@@ -62,6 +66,7 @@ class OrderController extends Controller
             'client_id' => 'required|exists:clients,id',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
+            'confirmation_agent_id' => 'nullable|exists:users,id',
             'source' => 'string|in:manual,shopify,delivery_company,marketplace',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
@@ -72,6 +77,7 @@ class OrderController extends Controller
             'discount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',
             'notes' => 'nullable|string',
+            'whatsapp' => 'nullable|string',
         ]);
 
         $order = $this->orderService->createOrder($validated);
@@ -85,6 +91,7 @@ class OrderController extends Controller
             'client',
             'vendor',
             'deliveryAgent',
+            'confirmationAgent',
             'items.product',
             'history.user'
         ]));

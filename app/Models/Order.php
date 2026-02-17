@@ -13,6 +13,7 @@ class Order extends Model
         'client_id',
         'vendor_id',
         'delivery_agent_id',
+        'confirmation_agent_id',
         'status',
         'source',
         'external_order_id',
@@ -24,6 +25,7 @@ class Order extends Model
         'commission_amount',
         'shipping_address',
         'notes',
+        'whatsapp',
         'confirmed_at',
         'shipped_at',
         'delivered_at',
@@ -56,6 +58,11 @@ class Order extends Model
     public function deliveryAgent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'delivery_agent_id');
+    }
+
+    public function confirmationAgent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'confirmation_agent_id');
     }
 
     public function items(): HasMany

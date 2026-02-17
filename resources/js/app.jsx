@@ -36,6 +36,7 @@ import VendorDetail from './pages/Vendors/VendorDetail';
 
 // Expenses
 import ExpenseList from './pages/Expenses/ExpenseList';
+import ExpenseCategoryList from './pages/Expenses/ExpenseCategoryList';
 
 // Stock
 import StockManagement from './pages/Stock/StockManagement';
@@ -73,7 +74,7 @@ function App() {
                     
                     {/* Products */}
                     <Route path="products" element={<ProductList />} />
-                    <Route path="products/new" element={<ProductForm />} />
+                    <Route path="products/create" element={<ProductForm />} />
                     <Route path="products/:id/edit" element={<ProductForm />} />
                     
                     {/* Categories */}
@@ -81,7 +82,7 @@ function App() {
                     
                     {/* Orders */}
                     <Route path="orders" element={<OrderList />} />
-                    <Route path="orders/new" element={<OrderForm />} />
+                    <Route path="orders/create" element={<OrderForm />} />
                     <Route path="orders/:id" element={<OrderDetail />} />
                     
                     {/* Clients */}
@@ -94,6 +95,7 @@ function App() {
                     
                     {/* Expenses */}
                     <Route path="expenses" element={<ExpenseList />} />
+                    <Route path="expense-categories" element={<ExpenseCategoryList />} />
                     
                     {/* Stock */}
                     <Route path="stock" element={<StockManagement />} />

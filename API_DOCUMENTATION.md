@@ -2,44 +2,39 @@
 
 ## Base URL
 ```
-http://localhost:8000/api
+http://your-domain.com/api
 ```
 
 ## Authentication
+All protected endpoints require authentication using Laravel Sanctum.
 
-All protected endpoints require authentication using Bearer token.
-
-### Headers
-```http
-Content-Type: application/json
-Accept: application/json
-Authorization: Bearer {your_token}
+Include the token in the Authorization header:
+```
+Authorization: Bearer {token}
 ```
 
----
-
-## Authentication API
+## Authentication Endpoints
 
 ### Login
 ```http
-POST /api/login
+POST /login
 ```
 
 **Request Body:**
 ```json
 {
-  "email": "admin@example.com",
+  "email": "user@example.com",
   "password": "password"
 }
 ```
 
-**Response (200 OK):**
+**Response:**
 ```json
 {
   "user": {
     "id": 1,
-    "name": "Admin User",
-    "email": "admin@example.com",
+    "name": "User Name",
+    "email": "user@example.com",
     "role": {
       "id": 1,
       "name": "Admin",
@@ -52,11 +47,12 @@ POST /api/login
 
 ### Logout
 ```http
-POST /api/logout
+POST /logout
 ```
-Requires authentication.
 
-**Response (200 OK):**
+**Headers:** Requires authentication
+
+**Response:**
 ```json
 {
   "message": "Logged out successfully"
@@ -65,162 +61,313 @@ Requires authentication.
 
 ### Get Current User
 ```http
-GET /api/me
+GET /me
 ```
 
-**Response (200 OK):**
+**Headers:** Requires authentication
+
+**Response:**
 ```json
 {
   "id": 1,
-  "name": "Admin User",
-  "email": "admin@example.com",
-  "role": { ... }
+  "name": "User Name",
+  "email": "user@example.com",
+  "role": {
+    "id": 1,
+    "name": "Admin",
+    "slug": "admin",
+    "permissions": ["manage_products", "manage_orders"]
+  }
 }
 ```
 
----
+## User Management Endpoints
 
-## Dashboard API
-
-### Get Statistics
+### List Users
 ```http
-GET /api/dashboard?period={daily|monthly|yearly}
+GET /users
 ```
 
 **Query Parameters:**
-- `period` (optional): daily, monthly, yearly (default: daily)
+- `search` (string): Search by name or email
+- `role_id` (integer): Filter by role
+- `is_active` (boolean): Filter by status
+- `per_page` (integer): Items per page (default: 15)
 
-**Response (200 OK):**
+**Response:**
 ```json
 {
-  "sales": 15000.50,
-  "orders": {
-    "total": 150,
-    "pending": 10,
-    "confirmed": 50,
-    "shipped": 40,
-    "delivered": 45,
-    "cancelled": 5
-  },
-  "revenue": {
-    "revenue": 50000,
-    "expenses": 15000,
-    "profit": 35000
-  },
-  "low_stock_products": [...],
-  "recent_orders": [...],
-  "charts": [...]
+  "data": [
+    {
+      "id": 1,
+      "name": "User Name",
+      "email": "user@example.com",
+      "phone": "+212 600 000 000",
+      "address": "Address",
+      "is_active": true,
+      "role": {
+        "id": 1,
+        "name": "Admin",
+        "slug": "admin"
+      }
+    }
+  ],
+  "current_page": 1,
+  "total": 10
 }
 ```
 
----
+### Create User
+```http
+POST /users
+```
 
-## Products API
+**Request Body:**
+```json
+{
+  "name": "User Name",
+  "email": "user@example.com",
+  "password": "password123",
+  "role_id": 1,
+  "phone": "+212 600 000 000",
+  "address": "User Address",
+  "is_active": true
+}
+```
+
+### Update User
+```http
+PUT /users/{id}
+```
+
+**Request Body:**
+```json
+{
+  "name": "Updated Name",
+  "email": "updated@example.com",
+  "password": "newpassword",
+  "role_id": 2,
+  "phone": "+212 600 000 001",
+  "address": "New Address",
+  "is_active": false
+}
+```
+
+### Delete User
+```http
+DELETE /users/{id}
+```
+
+### Get Delivery Agents
+```http
+GET /delivery-agents
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 4,
+    "name": "Delivery Agent",
+    "email": "delivery@example.com",
+    "role": {
+      "name": "Agent Livraison",
+      "slug": "agent_livraison"
+    }
+  }
+]
+```
+
+### Get Confirmation Agents
+```http
+GET /confirmation-agents
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 3,
+    "name": "Confirmation Agent",
+    "email": "confirmation@example.com",
+    "role": {
+      "name": "Agent Confirmation",
+      "slug": "agent_confirmation"
+    }
+  }
+]
+```
+
+## Product Management Endpoints
 
 ### List Products
 ```http
-GET /api/products
+GET /products
 ```
 
 **Query Parameters:**
-- `search` (optional): Search by name or SKU
-- `category_id` (optional): Filter by category
-- `vendor_id` (optional): Filter by vendor
-- `is_active` (optional): Filter by status
-- `low_stock` (optional): Show only low stock items
-- `per_page` (optional): Items per page (default: 15)
+- `search` (string): Search by name or SKU
+- `category_id` (integer): Filter by category
+- `vendor_id` (integer): Filter by vendor
+- `is_active` (boolean): Filter by status
+- `low_stock` (boolean): Show only low stock items
+- `per_page` (integer): Items per page
 
-**Response (200 OK):**
+**Response:**
 ```json
 {
   "data": [
     {
       "id": 1,
       "name": "Product Name",
-      "sku": "SKU123",
-      "price": "99.99",
+      "sku": "SKU-001",
+      "description": "Product description",
+      "price": 100.00,
+      "company_price": 90.00,
+      "vendor_price": 80.00,
+      "cost_price": 70.00,
       "stock_quantity": 50,
+      "min_stock_quantity": 10,
       "is_active": true,
-      "category": { ... },
-      "vendor": { ... }
+      "images": ["products/image1.jpg"],
+      "weight": 1.5,
+      "weight_unit": "kg",
+      "category": {
+        "id": 1,
+        "name": "Electronics"
+      },
+      "vendor": {
+        "id": 1,
+        "name": "Vendor Name"
+      }
     }
-  ],
-  "meta": { ... }
+  ]
 }
 ```
 
 ### Create Product
 ```http
-POST /api/products
+POST /products
 ```
 
-**Request Body:**
-```json
-{
-  "name": "New Product",
-  "sku": "SKU123",
-  "description": "Product description",
-  "category_id": 1,
-  "vendor_id": 1,
-  "price": 99.99,
-  "cost_price": 50.00,
-  "stock_quantity": 100,
-  "min_stock_quantity": 10,
-  "is_active": true,
-  "weight": 1.5,
-  "weight_unit": "kg"
-}
-```
+**Content-Type:** multipart/form-data
 
-### Get Product
-```http
-GET /api/products/{id}
-```
+**Form Data:**
+- `name` (required)
+- `sku` (required, unique)
+- `description`
+- `category_id`
+- `vendor_id`
+- `price` (required)
+- `company_price`
+- `vendor_price`
+- `cost_price`
+- `stock_quantity` (required)
+- `min_stock_quantity` (required)
+- `is_active` (boolean)
+- `weight`
+- `weight_unit`
+- `images[]` (array of files)
 
 ### Update Product
 ```http
-PUT /api/products/{id}
+PUT /products/{id}
 ```
+
+**Content-Type:** multipart/form-data
 
 ### Delete Product
 ```http
-DELETE /api/products/{id}
+DELETE /products/{id}
 ```
 
 ### Delete Product Image
 ```http
-DELETE /api/products/{id}/images
+DELETE /products/{id}/images
 ```
 
 **Request Body:**
 ```json
 {
-  "image_path": "products/image.jpg"
+  "image_path": "products/image1.jpg"
 }
 ```
 
----
-
-## Orders API
+## Order Management Endpoints
 
 ### List Orders
 ```http
-GET /api/orders
+GET /orders
 ```
 
 **Query Parameters:**
-- `search` (optional): Search by order number or client
-- `status` (optional): Filter by status
-- `source` (optional): Filter by source
-- `vendor_id` (optional): Filter by vendor
-- `delivery_agent_id` (optional): Filter by agent
-- `date_from` (optional): Filter by date
-- `date_to` (optional): Filter by date
-- `per_page` (optional): Items per page
+- `search` (string): Search by order number or client
+- `status` (string): pending, confirmed, shipped, delivered, cancelled
+- `source` (string): manual, shopify, delivery_company, marketplace
+- `vendor_id` (integer)
+- `delivery_agent_id` (integer)
+- `confirmation_agent_id` (integer)
+- `date_from` (date)
+- `date_to` (date)
+- `per_page` (integer)
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "order_number": "ORD-ABC123",
+      "status": "pending",
+      "source": "manual",
+      "subtotal": 200.00,
+      "shipping_cost": 30.00,
+      "tax": 20.00,
+      "discount": 0.00,
+      "total": 250.00,
+      "shipping_address": "Client Address",
+      "notes": "Special instructions",
+      "whatsapp": "+212 600 000 000",
+      "created_at": "2024-01-15T10:30:00",
+      "client": {
+        "id": 1,
+        "name": "Client Name",
+        "phone": "+212 600 000 000",
+        "city": "Casablanca"
+      },
+      "vendor": {
+        "id": 1,
+        "name": "Vendor Name"
+      },
+      "delivery_agent": {
+        "id": 4,
+        "name": "Delivery Agent"
+      },
+      "confirmation_agent": {
+        "id": 3,
+        "name": "Confirmation Agent"
+      },
+      "items": [
+        {
+          "id": 1,
+          "product_id": 1,
+          "quantity": 2,
+          "price": 100.00,
+          "product": {
+            "id": 1,
+            "name": "Product Name",
+            "sku": "SKU-001"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
 
 ### Create Order
 ```http
-POST /api/orders
+POST /orders
 ```
 
 **Request Body:**
@@ -228,49 +375,49 @@ POST /api/orders
 {
   "client_id": 1,
   "vendor_id": 1,
-  "delivery_agent_id": 2,
+  "delivery_agent_id": 4,
+  "confirmation_agent_id": 3,
   "source": "manual",
+  "shipping_address": "Delivery Address",
+  "notes": "Order notes",
+  "whatsapp": "+212 600 000 000",
+  "shipping_cost": 30.00,
+  "tax": 20.00,
+  "discount": 0.00,
   "items": [
     {
       "product_id": 1,
       "quantity": 2,
-      "price": 99.99
+      "price": 100.00
+    },
+    {
+      "product_id": 2,
+      "quantity": 1,
+      "price": 50.00
     }
-  ],
-  "shipping_cost": 30.00,
-  "tax": 20.00,
-  "discount": 10.00,
-  "shipping_address": "123 Main St",
-  "notes": "Special instructions"
+  ]
 }
 ```
 
-**Response (201 Created):**
-```json
-{
-  "id": 1,
-  "order_number": "ORD-ABC123",
-  "total": 239.98,
-  "status": "pending",
-  "client": { ... },
-  "items": [ ... ]
-}
+### Get Order Details
+```http
+GET /orders/{id}
 ```
 
 ### Update Order Status
 ```http
-PATCH /api/orders/{id}/status
+PATCH /orders/{id}/status
 ```
 
 **Request Body:**
 ```json
 {
   "status": "confirmed",
-  "note": "Order confirmed and ready for processing"
+  "note": "Order confirmed by agent"
 }
 ```
 
-**Status Values:**
+**Valid Statuses:**
 - `pending`
 - `confirmed`
 - `shipped`
@@ -279,356 +426,274 @@ PATCH /api/orders/{id}/status
 
 ### Assign Delivery Agent
 ```http
-PATCH /api/orders/{id}/assign-agent
+PATCH /orders/{id}/assign-agent
 ```
 
 **Request Body:**
 ```json
 {
-  "delivery_agent_id": 3
+  "delivery_agent_id": 4
 }
 ```
 
----
-
-## Stock API
-
-### Add Stock
+### Delete Order
 ```http
-POST /api/stock/add
+DELETE /orders/{id}
+```
+
+## Role Management Endpoints
+
+### List Roles
+```http
+GET /roles
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Super Admin",
+    "slug": "superadmin",
+    "description": "Supreme administrator with all permissions",
+    "permissions": [
+      "manage_products",
+      "manage_orders",
+      "manage_users",
+      "access_everything"
+    ]
+  }
+]
+```
+
+### Create Role
+```http
+POST /roles
 ```
 
 **Request Body:**
 ```json
 {
-  "product_id": 1,
-  "quantity": 50,
-  "unit_cost": 45.00,
-  "note": "Restocking from supplier",
-  "reference": "PO-2024-001"
+  "name": "Custom Role",
+  "slug": "custom_role",
+  "description": "Custom role description",
+  "permissions": [
+    "view_orders",
+    "view_products"
+  ]
 }
 ```
 
-### Remove Stock
+### Update Role
 ```http
-POST /api/stock/remove
+PUT /roles/{id}
 ```
 
-**Request Body:**
-```json
-{
-  "product_id": 1,
-  "quantity": 10,
-  "note": "Damaged items",
-  "reference": "ADJ-2024-001"
-}
-```
-
-### Adjust Stock
+### Delete Role
 ```http
-POST /api/stock/adjust
+DELETE /roles/{id}
 ```
 
-**Request Body:**
-```json
-{
-  "product_id": 1,
-  "new_quantity": 100,
-  "note": "Annual inventory adjustment"
-}
-```
-
-### Get Stock History
-```http
-GET /api/stock/history?product_id={id}&type={in|out|adjustment}
-```
-
-### Get Low Stock Products
-```http
-GET /api/stock/low-stock
-```
-
----
-
-## Clients API
+## Client Management Endpoints
 
 ### List Clients
 ```http
-GET /api/clients?search={term}&is_active={true|false}
+GET /clients
 ```
+
+**Query Parameters:**
+- `search` (string)
+- `city` (string)
+- `per_page` (integer)
 
 ### Create Client
 ```http
-POST /api/clients
+POST /clients
 ```
 
 **Request Body:**
 ```json
 {
-  "name": "John Doe",
-  "email": "john@example.com",
-  "phone": "+212600000000",
-  "address": "123 Main St",
+  "name": "Client Name",
+  "phone": "+212 600 000 000",
+  "email": "client@example.com",
+  "address": "Client Address",
   "city": "Casablanca",
-  "state": "Grand Casablanca",
-  "postal_code": "20000",
-  "is_active": true,
-  "notes": "VIP customer"
+  "notes": "Client notes"
 }
 ```
 
----
-
-## Vendors API
+## Vendor Management Endpoints
 
 ### List Vendors
 ```http
-GET /api/vendors
+GET /vendors
 ```
 
 ### Create Vendor
 ```http
-POST /api/vendors
+POST /vendors
 ```
 
 **Request Body:**
 ```json
 {
   "name": "Vendor Name",
+  "company_name": "Company Name",
+  "phone": "+212 600 000 000",
   "email": "vendor@example.com",
-  "phone": "+212600000000",
-  "company_name": "Company LLC",
+  "address": "Vendor Address",
   "commission_rate": 10.00,
   "is_active": true
 }
 ```
 
-### Get Vendor Sales Report
+## Category Management Endpoints
+
+### List Categories
 ```http
-GET /api/vendors/{id}/sales-report?date_from=2024-01-01&date_to=2024-12-31
+GET /categories
 ```
 
-**Response:**
-```json
-{
-  "vendor": { ... },
-  "total_orders": 50,
-  "total_sales": 50000.00,
-  "total_commission": 5000.00,
-  "net_revenue": 45000.00,
-  "orders": [ ... ]
-}
-```
-
----
-
-## Expenses API
-
-### List Expenses
+### Create Category
 ```http
-GET /api/expenses?category_id={id}&date_from={date}&date_to={date}
-```
-
-### Create Expense
-```http
-POST /api/expenses
-```
-
-**Request Body (multipart/form-data):**
-```
-expense_category_id: 1
-amount: 500.00
-expense_date: 2024-01-15
-description: Office rent
-receipt: [file]
-```
-
-### Get Expense Report
-```http
-GET /api/expenses-report?date_from=2024-01-01&date_to=2024-12-31
-```
-
----
-
-## API Integrations
-
-### List Integrations
-```http
-GET /api/api-integrations
-```
-
-### Create Integration
-```http
-POST /api/api-integrations
-```
-
-**Request Body (Shopify):**
-```json
-{
-  "name": "My Shopify Store",
-  "type": "shopify",
-  "is_active": true,
-  "credentials": {
-    "shop_url": "https://mystore.myshopify.com",
-    "access_token": "shpat_xxxxx"
-  }
-}
-```
-
-**Request Body (Delivery Company):**
-```json
-{
-  "name": "Delivery Company",
-  "type": "delivery",
-  "is_active": true,
-  "credentials": {
-    "api_url": "https://api.delivery.com",
-    "api_key": "your_api_key"
-  }
-}
-```
-
-### Sync Orders
-```http
-POST /api/api-integrations/{id}/sync
-```
-
-**Response:**
-```json
-{
-  "message": "Sync completed",
-  "log": {
-    "status": "success",
-    "total_records": 25,
-    "successful_records": 24,
-    "failed_records": 1
-  }
-}
-```
-
----
-
-## Settings API
-
-### Get Settings
-```http
-GET /api/settings?group={general|company|delivery|commission|notification}
-```
-
-### Update Settings
-```http
-PUT /api/settings
+POST /categories
 ```
 
 **Request Body:**
 ```json
 {
-  "settings": {
-    "company_name": "My Company",
-    "currency": "MAD",
-    "default_commission_rate": 10
-  }
+  "name": "Category Name",
+  "slug": "category-slug",
+  "description": "Category description",
+  "is_active": true,
+  "sort_order": 1
 }
 ```
 
----
+## Dashboard Endpoint
 
-## Notifications API
-
-### List Notifications
+### Get Dashboard Data
 ```http
-GET /api/notifications?is_read={true|false}&type={low_stock|order_status_change}
-```
-
-### Get Unread Count
-```http
-GET /api/notifications/unread-count
+GET /dashboard
 ```
 
 **Response:**
 ```json
 {
-  "count": 5
+  "total_orders": 150,
+  "pending_orders": 25,
+  "total_revenue": 50000.00,
+  "low_stock_products": 5,
+  "recent_orders": [],
+  "top_products": [],
+  "revenue_chart": []
 }
 ```
 
-### Mark As Read
-```http
-PATCH /api/notifications/{id}/read
-```
-
-### Mark All As Read
-```http
-POST /api/notifications/mark-all-read
-```
-
----
-
 ## Error Responses
 
-### 400 Bad Request
+### Validation Error (422)
 ```json
 {
-  "message": "Validation error",
+  "message": "The given data was invalid.",
   "errors": {
-    "email": ["The email field is required."]
+    "email": ["The email field is required."],
+    "password": ["The password must be at least 8 characters."]
   }
 }
 ```
 
-### 401 Unauthorized
+### Unauthorized (401)
 ```json
 {
-  "message": "Unauthenticated"
+  "message": "Unauthenticated."
 }
 ```
 
-### 403 Forbidden
+### Forbidden (403)
 ```json
 {
-  "message": "Unauthorized"
+  "message": "This action is unauthorized."
 }
 ```
 
-### 404 Not Found
+### Not Found (404)
 ```json
 {
-  "message": "Resource not found"
+  "message": "Resource not found."
 }
 ```
 
-### 500 Server Error
+### Server Error (500)
 ```json
 {
-  "message": "Server error"
+  "message": "Server Error"
 }
 ```
-
----
 
 ## Rate Limiting
 
-API endpoints are rate-limited to prevent abuse:
-- **Authentication endpoints**: 5 requests per minute
-- **Other endpoints**: 60 requests per minute
+API requests are rate-limited to:
+- 60 requests per minute for authenticated users
+- 10 requests per minute for unauthenticated users
 
-Rate limit headers are included in responses:
+Rate limit headers:
 ```
 X-RateLimit-Limit: 60
 X-RateLimit-Remaining: 59
 ```
 
----
+## Pagination
 
-## Postman Collection
+Paginated responses include:
+```json
+{
+  "data": [],
+  "current_page": 1,
+  "per_page": 15,
+  "total": 100,
+  "last_page": 7,
+  "from": 1,
+  "to": 15
+}
+```
 
-Import the Postman collection for easy API testing:
-1. Open Postman
-2. Import > Link
-3. Paste: `http://localhost:8000/api/documentation.json`
+## Best Practices
 
----
+1. **Always validate input** on the client side before sending
+2. **Handle errors gracefully** and show user-friendly messages
+3. **Use appropriate HTTP methods** (GET, POST, PUT, DELETE)
+4. **Include authentication token** in all protected requests
+5. **Check rate limits** and implement retry logic
+6. **Cache responses** when appropriate
+7. **Use pagination** for large datasets
+8. **Sanitize user input** before sending to API
 
-## Support
+## Testing with cURL
 
-For API support, contact: api-support@example.com
+### Login Example
+```bash
+curl -X POST http://your-domain.com/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"password"}'
+```
+
+### Authenticated Request Example
+```bash
+curl -X GET http://your-domain.com/api/users \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Accept: application/json"
+```
+
+### Create Product Example
+```bash
+curl -X POST http://your-domain.com/api/products \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -F "name=Product Name" \
+  -F "sku=SKU-001" \
+  -F "price=100" \
+  -F "stock_quantity=50" \
+  -F "min_stock_quantity=10" \
+  -F "images[]=@/path/to/image.jpg"
+```

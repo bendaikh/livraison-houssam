@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { Plus, Edit2, Trash2, Search, Tag, FolderTree, X, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Check, Tag, AlertCircle } from 'lucide-react';
 
-export default function CategoryList() {
+export default function ExpenseCategoryList() {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -10,10 +10,7 @@ export default function CategoryList() {
     const [editingCategory, setEditingCategory] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
-        description: '',
-        parent_id: '',
-        is_active: true,
-        sort_order: 0
+        description: ''
     });
     const [errors, setErrors] = useState({});
 
@@ -24,8 +21,8 @@ export default function CategoryList() {
     const fetchCategories = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/categories');
-            setCategories(response.data);
+            const response = await api.get('/expense-categories');
+            setCategories(response.data.data || response.data);
         } catch (error) {
             console.error('Error fetching categories:', error);
         } finally {
@@ -40,9 +37,9 @@ export default function CategoryList() {
 
         try {
             if (editingCategory) {
-                await api.put(`/categories/${editingCategory.id}`, formData);
+                await api.put(`/expense-categories/${editingCategory.id}`, formData);
             } else {
-                await api.post('/categories', formData);
+                await api.post('/expense-categories', formData);
             }
             
             fetchCategories();
@@ -60,10 +57,7 @@ export default function CategoryList() {
         setEditingCategory(category);
         setFormData({
             name: category.name,
-            description: category.description || '',
-            parent_id: category.parent_id || '',
-            is_active: category.is_active,
-            sort_order: category.sort_order || 0
+            description: category.description || ''
         });
         setShowModal(true);
     };
@@ -72,11 +66,11 @@ export default function CategoryList() {
         if (!window.confirm('Are you sure you want to delete this category?')) return;
 
         try {
-            await api.delete(`/categories/${id}`);
+            await api.delete(`/expense-categories/${id}`);
             fetchCategories();
         } catch (error) {
             console.error('Error deleting category:', error);
-            alert('Failed to delete category. It may have associated products.');
+            alert('Failed to delete category. It may have associated expenses.');
         }
     };
 
@@ -85,10 +79,7 @@ export default function CategoryList() {
         setEditingCategory(null);
         setFormData({
             name: '',
-            description: '',
-            parent_id: '',
-            is_active: true,
-            sort_order: 0
+            description: ''
         });
         setErrors({});
     };
@@ -97,21 +88,19 @@ export default function CategoryList() {
         category.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const parentCategories = categories.filter(cat => !cat.parent_id);
-
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                        Categories
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">
+                        Expense Categories
                     </h1>
-                    <p className="text-slate-600 mt-1">Organize your products with categories</p>
+                    <p className="text-slate-600 mt-1">Organize your expenses by category</p>
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-semibold shadow-lg shadow-purple-500/30 transition-all flex items-center space-x-2"
+                    className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 font-semibold shadow-lg shadow-red-500/30 transition-all flex items-center space-x-2"
                 >
                     <Plus size={20} />
                     <span>Add Category</span>
@@ -120,29 +109,26 @@ export default function CategoryList() {
 
             {/* Search Bar */}
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-6">
-                <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                    <input
-                        type="text"
-                        placeholder="Search categories..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
-                    />
-                </div>
+                <input
+                    type="text"
+                    placeholder="Search categories..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                />
             </div>
 
             {/* Categories Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading && categories.length === 0 ? (
                     <div className="col-span-full text-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
                         <p className="text-slate-600 mt-4">Loading categories...</p>
                     </div>
                 ) : filteredCategories.length === 0 ? (
                     <div className="col-span-full text-center py-12 bg-white rounded-2xl shadow-xl border border-slate-200/50">
-                        <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Tag size={40} className="text-purple-600" />
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Tag size={40} className="text-red-600" />
                         </div>
                         <h3 className="text-xl font-semibold text-slate-700 mb-2">No categories found</h3>
                         <p className="text-slate-500 mb-4">
@@ -151,7 +137,7 @@ export default function CategoryList() {
                         {!searchTerm && (
                             <button
                                 onClick={() => setShowModal(true)}
-                                className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 font-medium transition-all inline-flex items-center space-x-2"
+                                className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 font-medium transition-all inline-flex items-center space-x-2"
                             >
                                 <Plus size={18} />
                                 <span>Create Category</span>
@@ -166,27 +152,12 @@ export default function CategoryList() {
                         >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center space-x-3">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                                    <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
                                         <Tag size={24} className="text-white" />
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-bold text-slate-800">{category.name}</h3>
-                                        {category.parent && (
-                                            <p className="text-xs text-slate-500 flex items-center mt-1">
-                                                <FolderTree size={12} className="mr-1" />
-                                                {category.parent.name}
-                                            </p>
-                                        )}
                                     </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
-                                        category.is_active 
-                                            ? 'bg-green-100 text-green-700' 
-                                            : 'bg-slate-100 text-slate-600'
-                                    }`}>
-                                        {category.is_active ? 'Active' : 'Inactive'}
-                                    </span>
                                 </div>
                             </div>
 
@@ -196,25 +167,9 @@ export default function CategoryList() {
                                 </p>
                             )}
 
-                            {category.children && category.children.length > 0 && (
-                                <div className="mb-4 p-3 bg-slate-50 rounded-lg">
-                                    <p className="text-xs font-medium text-slate-600 mb-2">Subcategories:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {category.children.map((child) => (
-                                            <span
-                                                key={child.id}
-                                                className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-700"
-                                            >
-                                                {child.name}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
                             <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                 <div className="text-xs text-slate-500">
-                                    {category.products_count || 0} products
+                                    {category.expenses_count || 0} expenses
                                 </div>
                                 <div className="flex space-x-2">
                                     <button
@@ -245,7 +200,7 @@ export default function CategoryList() {
                         {/* Modal Header */}
                         <div className="flex items-center justify-between p-6 border-b border-slate-200">
                             <div className="flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                                <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
                                     <Tag size={20} className="text-white" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">
@@ -262,6 +217,25 @@ export default function CategoryList() {
 
                         {/* Modal Body */}
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            {/* Error Display */}
+                            {Object.keys(errors).length > 0 && (
+                                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                                    <div className="flex items-start">
+                                        <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                                        <div className="ml-3">
+                                            <h3 className="text-sm font-semibold text-red-800">Validation Errors</h3>
+                                            <ul className="mt-2 text-sm text-red-700 list-disc list-inside space-y-1">
+                                                {Object.entries(errors).map(([field, messages]) => (
+                                                    <li key={field}>
+                                                        <strong>{field}:</strong> {Array.isArray(messages) ? messages[0] : messages}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                                     Category Name *
@@ -270,8 +244,8 @@ export default function CategoryList() {
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
-                                    placeholder="e.g., Electronics, Clothing, Food"
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                                    placeholder="e.g., Office Supplies, Travel, Utilities"
                                     required
                                 />
                                 {errors.name && (
@@ -289,70 +263,9 @@ export default function CategoryList() {
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     rows="3"
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all resize-none"
-                                    placeholder="Describe this category..."
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
+                                    placeholder="Describe this expense category..."
                                 />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Parent Category
-                                </label>
-                                <select
-                                    value={formData.parent_id}
-                                    onChange={(e) => setFormData({ ...formData, parent_id: e.target.value })}
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white"
-                                >
-                                    <option value="">None (Top Level)</option>
-                                    {parentCategories
-                                        .filter(cat => !editingCategory || cat.id !== editingCategory.id)
-                                        .map(category => (
-                                            <option key={category.id} value={category.id}>
-                                                {category.name}
-                                            </option>
-                                        ))
-                                    }
-                                </select>
-                                <p className="text-xs text-slate-500 mt-1.5">
-                                    Select a parent to create a subcategory
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Sort Order
-                                </label>
-                                <input
-                                    type="number"
-                                    value={formData.sort_order}
-                                    onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })}
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
-                                    placeholder="0"
-                                />
-                                <p className="text-xs text-slate-500 mt-1.5">
-                                    Lower numbers appear first
-                                </p>
-                            </div>
-
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                                <label className="flex items-center cursor-pointer group">
-                                    <div className="relative">
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.is_active}
-                                            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-14 h-7 bg-slate-300 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-green-400 peer-checked:to-emerald-500 transition-all"></div>
-                                        <div className="absolute left-1 top-1 w-5 h-5 bg-white rounded-full shadow-md transition-all peer-checked:translate-x-7"></div>
-                                    </div>
-                                    <div className="ml-4">
-                                        <span className="text-sm font-semibold text-slate-700">Active Status</span>
-                                        <p className="text-xs text-slate-500 mt-0.5">
-                                            {formData.is_active ? 'Category is visible' : 'Category is hidden'}
-                                        </p>
-                                    </div>
-                                </label>
                             </div>
 
                             {/* Modal Footer */}
@@ -367,7 +280,7 @@ export default function CategoryList() {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="px-8 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:from-slate-400 disabled:to-slate-500 font-semibold shadow-lg shadow-purple-500/30 transition-all disabled:shadow-none flex items-center space-x-2"
+                                    className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 disabled:from-slate-400 disabled:to-slate-500 font-semibold shadow-lg shadow-red-500/30 transition-all disabled:shadow-none flex items-center space-x-2"
                                 >
                                     {loading ? (
                                         <>
