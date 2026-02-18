@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown } from 'lucide-react';
 
 export default function Dashboard() {
+    const { formatCurrency } = useSettings();
     const [period, setPeriod] = useState('daily');
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -37,8 +39,8 @@ export default function Dashboard() {
     const statCards = [
         {
             title: 'Total Revenue',
-            value: `${stats?.revenue?.revenue?.toFixed(2) || 0}`,
-            suffix: 'MAD',
+            value: formatCurrency(stats?.revenue?.revenue || 0),
+            suffix: '',
             icon: DollarSign,
             gradient: 'from-emerald-500 to-teal-600',
             bgGradient: 'from-emerald-50 to-teal-50',
@@ -312,7 +314,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Total Commission</span>
-                            <span className="text-lg font-bold text-purple-600">{(parseFloat(stats?.vendors?.total_commission) || 0).toFixed(2)} MAD</span>
+                            <span className="text-lg font-bold text-purple-600">{formatCurrency(parseFloat(stats?.vendors?.total_commission) || 0)}</span>
                         </div>
                     </div>
                 </div>
@@ -406,8 +408,7 @@ export default function Dashboard() {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-bold text-slate-800">{(parseFloat(client.total_spent) || 0).toFixed(2)}</p>
-                                            <p className="text-xs text-slate-500">MAD</p>
+                                            <p className="font-bold text-slate-800">{formatCurrency(parseFloat(client.total_spent) || 0)}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -460,8 +461,7 @@ export default function Dashboard() {
                                         </div>
                                     </td>
                                     <td className="py-4 px-6">
-                                        <span className="font-semibold text-slate-800">{order.total}</span>
-                                        <span className="text-slate-500 ml-1">MAD</span>
+                                        <span className="font-semibold text-slate-800">{formatCurrency(order.total)}</span>
                                     </td>
                                     <td className="py-4 px-6">
                                         <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold capitalize border ${getStatusColor(order.status)}`}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Plus, Search, Edit, Trash2, Package, Filter, 
     Download, Eye, AlertCircle, TrendingUp, TrendingDown,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function ProductList() {
+    const { formatCurrency } = useSettings();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -295,13 +297,13 @@ export default function ProductList() {
                                                     {product.company_price && (
                                                         <div className="flex items-center space-x-2">
                                                             <span className="text-xs text-slate-500">Company:</span>
-                                                            <span className="font-semibold text-emerald-600">${product.company_price}</span>
+                                                            <span className="font-semibold text-emerald-600">{formatCurrency(product.company_price)}</span>
                                                         </div>
                                                     )}
                                                     {product.vendor_price && (
                                                         <div className="flex items-center space-x-2">
                                                             <span className="text-xs text-slate-500">Vendor:</span>
-                                                            <span className="font-semibold text-slate-700">${product.vendor_price}</span>
+                                                            <span className="font-semibold text-slate-700">{formatCurrency(product.vendor_price)}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -403,13 +405,13 @@ export default function ProductList() {
                                         {product.company_price && (
                                             <div className="flex justify-between items-center">
                                                 <span className="text-xs text-slate-500">Company Price</span>
-                                                <span className="font-bold text-emerald-600">${product.company_price}</span>
+                                                <span className="font-bold text-emerald-600">{formatCurrency(product.company_price)}</span>
                                             </div>
                                         )}
                                         {product.vendor_price && (
                                             <div className="flex justify-between items-center">
                                                 <span className="text-xs text-slate-500">Vendor Price</span>
-                                                <span className="font-semibold text-slate-700">${product.vendor_price}</span>
+                                                <span className="font-semibold text-slate-700">{formatCurrency(product.vendor_price)}</span>
                                             </div>
                                         )}
                                     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Plus, Search, Edit2, Trash2, X, Check, DollarSign, 
     Calendar, FileText, User, TrendingUp, TrendingDown,
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 
 export default function ExpenseList() {
+    const { formatCurrency, settings } = useSettings();
     const [expenses, setExpenses] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -169,7 +171,7 @@ export default function ExpenseList() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-slate-600">Total Expenses</p>
-                            <p className="text-3xl font-bold text-red-600 mt-2">${stats.total.toFixed(2)}</p>
+                            <p className="text-3xl font-bold text-red-600 mt-2">{formatCurrency(stats.total)}</p>
                             <p className="text-xs text-slate-500 mt-1">{stats.count} transactions</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
@@ -182,7 +184,7 @@ export default function ExpenseList() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-slate-600">This Month</p>
-                            <p className="text-3xl font-bold text-orange-600 mt-2">${stats.thisMonth.toFixed(2)}</p>
+                            <p className="text-3xl font-bold text-orange-600 mt-2">{formatCurrency(stats.thisMonth)}</p>
                             <p className="text-xs text-slate-500 mt-1">Current period</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center">
@@ -302,7 +304,7 @@ export default function ExpenseList() {
                                         </td>
                                         <td className="py-4 px-6">
                                             <span className="text-lg font-bold text-red-600">
-                                                ${parseFloat(expense.amount).toFixed(2)}
+                                                {formatCurrency(parseFloat(expense.amount))}
                                             </span>
                                         </td>
                                         <td className="py-4 px-6">
@@ -419,14 +421,14 @@ export default function ExpenseList() {
                                         Amount *
                                     </label>
                                     <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
                                         <input
                                             type="number"
                                             step="0.01"
                                             min="0"
                                             value={formData.amount}
                                             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                            className="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                                            className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
                                             placeholder="0.00"
                                             required
                                         />

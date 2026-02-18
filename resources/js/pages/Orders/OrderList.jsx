@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 
 export default function OrderList() {
+    const { formatCurrency } = useSettings();
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -163,7 +165,7 @@ export default function OrderList() {
                                             {order.shipping_address || order.client?.address || '-'}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {order.total} DH
+                                            {formatCurrency(order.total)}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-500">
                                             {order.items?.map(item => (

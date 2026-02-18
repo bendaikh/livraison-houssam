@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 
 // Layout
 import MainLayout from './layouts/MainLayout';
@@ -70,59 +71,61 @@ function ProtectedRoute({ children }) {
 function App() {
     return (
         <AuthProvider>
-            <Routes>
-                {/* Auth Routes */}
-                <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
+            <SettingsProvider>
+                <Routes>
+                    {/* Auth Routes */}
+                    <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
 
-                {/* Protected Routes */}
-                <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                    <Route index element={<Dashboard />} />
-                    
-                    {/* Products */}
-                    <Route path="products" element={<ProductList />} />
-                    <Route path="products/create" element={<ProductForm />} />
-                    <Route path="products/:id/edit" element={<ProductForm />} />
-                    
-                    {/* Categories */}
-                    <Route path="categories" element={<CategoryList />} />
-                    
-                    {/* Orders */}
-                    <Route path="orders" element={<OrderList />} />
-                    <Route path="orders/create" element={<OrderForm />} />
-                    <Route path="orders/:id" element={<OrderDetail />} />
-                    
-                    {/* Clients */}
-                    <Route path="clients" element={<ClientList />} />
-                    <Route path="clients/:id" element={<ClientDetail />} />
-                    
-                    {/* Vendors */}
-                    <Route path="vendors" element={<VendorList />} />
-                    <Route path="vendors/:id" element={<VendorDetail />} />
-                    
-                    {/* Expenses */}
-                    <Route path="expenses" element={<ExpenseList />} />
-                    <Route path="expense-categories" element={<ExpenseCategoryList />} />
-                    
-                    {/* Stock */}
-                    <Route path="stock" element={<StockManagement />} />
-                    <Route path="stock/history" element={<StockHistory />} />
-                    
-                    {/* API Integrations */}
-                    <Route path="api-integrations" element={<ApiIntegrations />} />
-                    <Route path="api-integrations/shopify" element={<ShopifyIntegrationPage />} />
-                    <Route path="api-integrations/tawsilex" element={<TawsilexIntegrationPage />} />
-                    <Route path="api-integrations/bmdelivery" element={<BMDeliveryIntegrationPage />} />
-                    
-                    {/* Marketplace */}
-                    <Route path="marketplace" element={<MarketplaceProducts />} />
-                    
-                    {/* Users */}
-                    <Route path="users" element={<UserList />} />
-                    
-                    {/* Settings */}
-                    <Route path="settings" element={<Settings />} />
-                </Route>
-            </Routes>
+                    {/* Protected Routes */}
+                    <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                        <Route index element={<Dashboard />} />
+                        
+                        {/* Products */}
+                        <Route path="products" element={<ProductList />} />
+                        <Route path="products/create" element={<ProductForm />} />
+                        <Route path="products/:id/edit" element={<ProductForm />} />
+                        
+                        {/* Categories */}
+                        <Route path="categories" element={<CategoryList />} />
+                        
+                        {/* Orders */}
+                        <Route path="orders" element={<OrderList />} />
+                        <Route path="orders/create" element={<OrderForm />} />
+                        <Route path="orders/:id" element={<OrderDetail />} />
+                        
+                        {/* Clients */}
+                        <Route path="clients" element={<ClientList />} />
+                        <Route path="clients/:id" element={<ClientDetail />} />
+                        
+                        {/* Vendors */}
+                        <Route path="vendors" element={<VendorList />} />
+                        <Route path="vendors/:id" element={<VendorDetail />} />
+                        
+                        {/* Expenses */}
+                        <Route path="expenses" element={<ExpenseList />} />
+                        <Route path="expense-categories" element={<ExpenseCategoryList />} />
+                        
+                        {/* Stock */}
+                        <Route path="stock" element={<StockManagement />} />
+                        <Route path="stock/history" element={<StockHistory />} />
+                        
+                        {/* API Integrations */}
+                        <Route path="api-integrations" element={<ApiIntegrations />} />
+                        <Route path="api-integrations/shopify" element={<ShopifyIntegrationPage />} />
+                        <Route path="api-integrations/tawsilex" element={<TawsilexIntegrationPage />} />
+                        <Route path="api-integrations/bmdelivery" element={<BMDeliveryIntegrationPage />} />
+                        
+                        {/* Marketplace */}
+                        <Route path="marketplace" element={<MarketplaceProducts />} />
+                        
+                        {/* Users */}
+                        <Route path="users" element={<UserList />} />
+                        
+                        {/* Settings */}
+                        <Route path="settings" element={<Settings />} />
+                    </Route>
+                </Routes>
+            </SettingsProvider>
         </AuthProvider>
     );
 }

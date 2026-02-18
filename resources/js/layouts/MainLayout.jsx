@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
@@ -9,6 +10,7 @@ import {
 
 export default function MainLayout() {
     const { user, logout } = useAuth();
+    const { settings } = useSettings();
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -89,8 +91,8 @@ export default function MainLayout() {
                                 <Package className="text-white" size={22} />
                             </div>
                             <div>
-                                <h1 className="text-lg font-bold text-white tracking-tight">Livraison</h1>
-                                <p className="text-xs text-slate-400">Admin Panel</p>
+                                <h1 className="text-lg font-bold text-white tracking-tight">{settings.app_name}</h1>
+                                <p className="text-xs text-slate-400">{settings.app_description}</p>
                             </div>
                         </div>
                     )}
@@ -325,7 +327,7 @@ export default function MainLayout() {
                 {/* Footer */}
                 <footer className="px-6 lg:px-8 py-4 border-t border-slate-200/50 bg-white/50">
                     <div className="flex flex-col md:flex-row items-center justify-between text-sm text-slate-500">
-                        <p>&copy; 2026 Livraison Admin. All rights reserved.</p>
+                        <p>&copy; 2026 {settings.app_name}. All rights reserved.</p>
                         <p className="mt-2 md:mt-0">Made with care for better management</p>
                     </div>
                 </footer>

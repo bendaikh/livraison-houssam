@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Plus, Search, Edit2, Trash2, X, Check, Store, 
     Mail, Phone, MapPin, DollarSign, Package, 
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function VendorList() {
+    const { formatCurrency } = useSettings();
     const [vendors, setVendors] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -184,7 +186,7 @@ export default function VendorList() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-slate-600">Total Sales</p>
-                            <p className="text-3xl font-bold text-orange-600 mt-2">${stats.totalSales.toFixed(2)}</p>
+                            <p className="text-3xl font-bold text-orange-600 mt-2">{formatCurrency(stats.totalSales)}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                             <DollarSign size={28} className="text-white" />
@@ -350,7 +352,7 @@ export default function VendorList() {
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-500">Total Sales</p>
-                                    <p className="text-lg font-bold text-orange-600">${parseFloat(vendor.total_sales || 0).toFixed(2)}</p>
+                                    <p className="text-lg font-bold text-orange-600">{formatCurrency(parseFloat(vendor.total_sales || 0))}</p>
                                 </div>
                             </div>
 

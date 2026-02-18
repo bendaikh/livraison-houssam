@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 
 export default function OrderForm() {
+    const { formatCurrency } = useSettings();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [clients, setClients] = useState([]);
@@ -351,7 +353,7 @@ export default function OrderForm() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
                                     <input
                                         type="text"
-                                        value={(item.price * item.quantity).toFixed(2)}
+                                        value={formatCurrency(item.price * item.quantity)}
                                         disabled
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
                                     />
@@ -415,23 +417,23 @@ export default function OrderForm() {
                         <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Subtotal:</span>
-                                <span className="font-medium">{calculateSubtotal().toFixed(2)} DH</span>
+                                <span className="font-medium">{formatCurrency(calculateSubtotal())}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Shipping:</span>
-                                <span className="font-medium">{parseFloat(formData.shipping_cost || 0).toFixed(2)} DH</span>
+                                <span className="font-medium">{formatCurrency(parseFloat(formData.shipping_cost || 0))}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Tax:</span>
-                                <span className="font-medium">{parseFloat(formData.tax || 0).toFixed(2)} DH</span>
+                                <span className="font-medium">{formatCurrency(parseFloat(formData.tax || 0))}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Discount:</span>
-                                <span className="font-medium text-red-600">-{parseFloat(formData.discount || 0).toFixed(2)} DH</span>
+                                <span className="font-medium text-red-600">-{formatCurrency(parseFloat(formData.discount || 0))}</span>
                             </div>
                             <div className="border-t pt-2 flex justify-between">
                                 <span className="font-semibold text-lg">Total:</span>
-                                <span className="font-bold text-lg text-blue-600">{calculateTotal().toFixed(2)} DH</span>
+                                <span className="font-bold text-lg text-blue-600">{formatCurrency(calculateTotal())}</span>
                             </div>
                         </div>
                     </div>
