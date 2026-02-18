@@ -297,19 +297,19 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* Vendors Stats */}
+                {/* Sellers Stats */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-slate-800">Vendors</h3>
+                        <h3 className="text-lg font-semibold text-slate-800">Sellers</h3>
                         <Store className="text-purple-500" size={24} />
                     </div>
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Total Vendors</span>
+                            <span className="text-sm text-slate-600">Total Sellers</span>
                             <span className="text-lg font-bold text-slate-800">{stats?.vendors?.total || 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Active Vendors</span>
+                            <span className="text-sm text-slate-600">Active Sellers</span>
                             <span className="text-lg font-bold text-emerald-600">{stats?.vendors?.active || 0}</span>
                         </div>
                         <div className="flex items-center justify-between">

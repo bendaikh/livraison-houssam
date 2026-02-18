@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 
 export default function OrderForm() {
     const { formatCurrency } = useSettings();
     const navigate = useNavigate();
+    const { id } = useParams();
+    const isEditing = !!id;
+    
     const [loading, setLoading] = useState(false);
     const [clients, setClients] = useState([]);
     const [products, setProducts] = useState([]);
@@ -42,7 +45,11 @@ export default function OrderForm() {
         fetchVendors();
         fetchDeliveryAgents();
         fetchConfirmationAgents();
-    }, []);
+        
+        if (isEditing) {
+            fetchOrder();
+        }
+    }, [id]);
 
     const fetchClients = async () => {
         try {
@@ -89,14 +96,56 @@ export default function OrderForm() {
         }
     };
 
+    const fetchOrder = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get(`/orders/${id}`);
+            const order = response.data;
+            
+            setFormData({
+                client_id: order.client_id || '',
+                vendor_id: order.vendor_id || '',
+                delivery_agent_id: order.delivery_agent_id || '',
+                confirmation_agent_id: order.confirmation_agent_id || '',
+                source: order.source || 'manual',
+                shipping_address: order.shipping_address || '',
+                notes: order.notes || '',
+                whatsapp: order.whatsapp || '',
+                shipping_cost: order.shipping_cost || 0,
+                tax: order.tax || 0,
+                discount: order.discount || 0
+            });
+            
+            if (order.items && order.items.length > 0) {
+                setOrderItems(order.items.map(item => ({
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    price: item.price
+                })));
+            }
+            
+            if (order.client) {
+                setSelectedClient(order.client);
+            }
+        } catch (error) {
+            console.error('Error fetching order:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleClientChange = (clientId) => {
         const client = clients.find(c => c.id === parseInt(clientId));
         setSelectedClient(client);
+        
+        // Only auto-fill whatsapp if it's empty (to avoid overwriting when editing)
+        const newWhatsapp = formData.whatsapp || client?.phone || '';
+        
         setFormData({
             ...formData,
             client_id: clientId,
-            shipping_address: client?.address || '',
-            whatsapp: client?.phone || ''
+            shipping_address: client?.address || formData.shipping_address || '',
+            whatsapp: newWhatsapp
         });
     };
 
@@ -152,7 +201,12 @@ export default function OrderForm() {
                 items: orderItems
             };
 
-            await api.post('/orders', submitData);
+            if (isEditing) {
+                await api.put(`/orders/${id}`, submitData);
+            } else {
+                await api.post('/orders', submitData);
+            }
+            
             navigate('/orders');
         } catch (error) {
             if (error.response?.data?.errors) {
@@ -166,7 +220,7 @@ export default function OrderForm() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-900">Create Order</h1>
+                <h1 className="text-3xl font-bold text-gray-900">{isEditing ? 'Edit Order' : 'Create Order'}</h1>
                 <button
                     onClick={() => navigate('/orders')}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
@@ -225,13 +279,13 @@ export default function OrderForm() {
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Seller</label>
                             <select
                                 value={formData.vendor_id}
                                 onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
-                                <option value="">Select Vendor</option>
+                                <option value="">Select Seller</option>
                                 {vendors.map(vendor => (
                                     <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                                 ))}
@@ -453,7 +507,7 @@ export default function OrderForm() {
                         disabled={loading}
                         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
                     >
-                        {loading ? 'Creating...' : 'Create Order'}
+                        {loading ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Order' : 'Create Order')}
                     </button>
                 </div>
             </form>

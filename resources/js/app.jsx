@@ -31,7 +31,7 @@ import OrderDetail from './pages/Orders/OrderDetail';
 import ClientList from './pages/Clients/ClientList';
 import ClientDetail from './pages/Clients/ClientDetail';
 
-// Vendors
+// Sellers
 import VendorList from './pages/Vendors/VendorList';
 import VendorDetail from './pages/Vendors/VendorDetail';
 
@@ -92,12 +92,13 @@ function App() {
                         <Route path="orders" element={<OrderList />} />
                         <Route path="orders/create" element={<OrderForm />} />
                         <Route path="orders/:id" element={<OrderDetail />} />
+                        <Route path="orders/:id/edit" element={<OrderForm />} />
                         
                         {/* Clients */}
                         <Route path="clients" element={<ClientList />} />
                         <Route path="clients/:id" element={<ClientDetail />} />
                         
-                        {/* Vendors */}
+                        {/* Sellers */}
                         <Route path="vendors" element={<VendorList />} />
                         <Route path="vendors/:id" element={<VendorDetail />} />
                         

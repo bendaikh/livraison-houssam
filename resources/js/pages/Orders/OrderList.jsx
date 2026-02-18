@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { Eye, Edit } from 'lucide-react';
 
 export default function OrderList() {
     const { formatCurrency } = useSettings();
@@ -198,12 +199,22 @@ export default function OrderList() {
                                             ) : '-'}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                            <Link
-                                                to={`/orders/${order.id}`}
-                                                className="text-blue-600 hover:text-blue-900"
-                                            >
-                                                View
-                                            </Link>
+                                            <div className="flex items-center justify-end space-x-2">
+                                                <Link
+                                                    to={`/orders/${order.id}`}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="View Order"
+                                                >
+                                                    <Eye size={18} />
+                                                </Link>
+                                                <Link
+                                                    to={`/orders/${order.id}/edit`}
+                                                    className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                    title="Edit Order"
+                                                >
+                                                    <Edit size={18} />
+                                                </Link>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

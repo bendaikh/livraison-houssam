@@ -302,7 +302,7 @@ export default function ProductList() {
                                                     )}
                                                     {product.vendor_price && (
                                                         <div className="flex items-center space-x-2">
-                                                            <span className="text-xs text-slate-500">Vendor:</span>
+                                                            <span className="text-xs text-slate-500">Seller:</span>
                                                             <span className="font-semibold text-slate-700">{formatCurrency(product.vendor_price)}</span>
                                                         </div>
                                                     )}
@@ -410,7 +410,7 @@ export default function ProductList() {
                                         )}
                                         {product.vendor_price && (
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs text-slate-500">Vendor Price</span>
+                                                <span className="text-xs text-slate-500">Seller Price</span>
                                                 <span className="font-semibold text-slate-700">{formatCurrency(product.vendor_price)}</span>
                                             </div>
                                         )}

@@ -131,16 +131,16 @@ export default function VendorList() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-                        Vendor Management
+                        Seller Management
                     </h1>
-                    <p className="text-slate-600 mt-1">Manage your supplier network</p>
+                    <p className="text-slate-600 mt-1">Manage your seller network</p>
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
                     className="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 font-semibold shadow-lg shadow-orange-500/30 transition-all flex items-center justify-center space-x-2"
                 >
                     <Plus size={20} />
-                    <span>Add Vendor</span>
+                    <span>Add Seller</span>
                 </button>
             </div>
 
@@ -149,7 +149,7 @@ export default function VendorList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Total Vendors</p>
+                            <p className="text-sm font-medium text-slate-600">Total Sellers</p>
                             <p className="text-3xl font-bold text-slate-800 mt-2">{stats.total}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
@@ -161,7 +161,7 @@ export default function VendorList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Active Vendors</p>
+                            <p className="text-sm font-medium text-slate-600">Active Sellers</p>
                             <p className="text-3xl font-bold text-emerald-600 mt-2">{stats.active}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
@@ -252,16 +252,16 @@ export default function VendorList() {
             {loading && vendors.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
-                    <p className="text-slate-600 mt-4">Loading vendors...</p>
+                    <p className="text-slate-600 mt-4">Loading sellers...</p>
                 </div>
             ) : filteredVendors.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Store size={40} className="text-orange-600" />
                     </div>
-                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No vendors found</h3>
+                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No sellers found</h3>
                     <p className="text-slate-500 mb-6">
-                        {searchTerm ? 'Try a different search term' : 'Get started by adding your first vendor'}
+                        {searchTerm ? 'Try a different search term' : 'Get started by adding your first seller'}
                     </p>
                     {!searchTerm && (
                         <button
@@ -269,7 +269,7 @@ export default function VendorList() {
                             className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 font-medium transition-all"
                         >
                             <Plus size={18} />
-                            <span>Add Vendor</span>
+                            <span>Add Seller</span>
                         </button>
                     )}
                 </div>
@@ -405,7 +405,7 @@ export default function VendorList() {
                                     <Store size={20} className="text-white" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">
-                                    {editingVendor ? 'Edit Vendor' : 'Create New Vendor'}
+                                    {editingVendor ? 'Edit Seller' : 'Create New Seller'}
                                 </h2>
                             </div>
                             <button
@@ -620,7 +620,7 @@ export default function VendorList() {
                                     ) : (
                                         <>
                                             <Check size={20} />
-                                            <span>{editingVendor ? 'Update Vendor' : 'Create Vendor'}</span>
+                                            <span>{editingVendor ? 'Update Seller' : 'Create Seller'}</span>
                                         </>
                                     )}
                                 </button>

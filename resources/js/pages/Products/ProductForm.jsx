@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 
 export default function ProductForm() {
+    const { formatCurrency, settings } = useSettings();
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditing = !!id;
@@ -18,6 +20,7 @@ export default function ProductForm() {
         vendor_id: '',
         company_price: '',
         vendor_price: '',
+        recommended_price: '',
         stock_quantity: 0,
         min_stock_quantity: 10,
         is_active: true,
@@ -67,6 +70,7 @@ export default function ProductForm() {
                 vendor_id: product.vendor_id || '',
                 company_price: product.company_price || '',
                 vendor_price: product.vendor_price || '',
+                recommended_price: product.recommended_price || '',
                 stock_quantity: product.stock_quantity,
                 min_stock_quantity: product.min_stock_quantity,
                 is_active: product.is_active,
@@ -278,13 +282,13 @@ export default function ProductForm() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Seller</label>
                             <select
                                 value={formData.vendor_id}
                                 onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
                                 className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
                             >
-                                <option value="">Select Vendor</option>
+                                <option value="">Select Seller</option>
                                 {vendors.map(vendor => (
                                     <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                                 ))}
@@ -308,14 +312,14 @@ export default function ProductForm() {
                         <div className="relative">
                             <label className="block text-sm font-semibold text-slate-700 mb-2">Company Price *</label>
                             <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
                                 <input
                                     type="number"
                                     step="0.01"
                                     min="0"
                                     value={formData.company_price}
                                     onChange={(e) => setFormData({ ...formData, company_price: e.target.value })}
-                                    className="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                                     placeholder="0.00"
                                     required
                                 />
@@ -325,23 +329,119 @@ export default function ProductForm() {
                         </div>
 
                         <div className="relative">
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Vendor Price *</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Seller Price *</label>
                             <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
                                 <input
                                     type="number"
                                     step="0.01"
                                     min="0"
                                     value={formData.vendor_price}
                                     onChange={(e) => setFormData({ ...formData, vendor_price: e.target.value })}
-                                    className="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                                     placeholder="0.00"
                                     required
                                 />
                             </div>
-                            <p className="text-xs text-slate-500 mt-1.5">Purchase price from vendor</p>
+                            <p className="text-xs text-slate-500 mt-1.5">Purchase price from seller</p>
                             {errors.vendor_price && <p className="text-red-500 text-xs mt-1.5 flex items-center"><span className="mr-1">⚠</span>{errors.vendor_price[0]}</p>}
                         </div>
+                    </div>
+                    
+                    {/* Recommended Selling Price & Profit Calculator */}
+                    <div className="space-y-6">
+                        {/* Recommended Selling Price */}
+                        <div className="relative">
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                Recommended Selling Price
+                                <span className="ml-2 text-xs font-normal text-slate-500">(Seller can change this)</span>
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.recommended_price}
+                                    onChange={(e) => setFormData({ ...formData, recommended_price: e.target.value })}
+                                    className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1.5">Suggested price for sellers to use</p>
+                            {errors.recommended_price && <p className="text-red-500 text-xs mt-1.5 flex items-center"><span className="mr-1">⚠</span>{errors.recommended_price[0]}</p>}
+                        </div>
+
+                        {/* Seller Profit Calculator */}
+                        {formData.recommended_price && formData.vendor_price && (
+                            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-6">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800">Seller Profit Calculation</h3>
+                                        <p className="text-xs text-slate-600 mt-1">Estimated profit for seller</p>
+                                    </div>
+                                    <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {/* Selling Price */}
+                                    <div className="flex justify-between items-center py-2 border-b border-emerald-200">
+                                        <span className="text-sm text-slate-600">Selling Price (Recommended)</span>
+                                        <span className="text-lg font-semibold text-slate-800">
+                                            {formatCurrency(parseFloat(formData.recommended_price))}
+                                        </span>
+                                    </div>
+
+                                    {/* Product Cost */}
+                                    <div className="flex justify-between items-center py-2 border-b border-emerald-200">
+                                        <span className="text-sm text-slate-600">Product Cost</span>
+                                        <span className="text-lg font-medium text-red-600">
+                                            - {formatCurrency(parseFloat(formData.vendor_price))}
+                                        </span>
+                                    </div>
+
+                                    {/* Delivery Fee */}
+                                    <div className="flex justify-between items-center py-2 border-b border-emerald-200">
+                                        <span className="text-sm text-slate-600">Delivery Fee</span>
+                                        <span className="text-lg font-medium text-red-600">
+                                            - {formatCurrency(35)}
+                                        </span>
+                                    </div>
+
+                                    {/* Net Profit */}
+                                    <div className="flex justify-between items-center pt-3 mt-2 border-t-2 border-emerald-300">
+                                        <span className="text-base font-bold text-slate-800">Net Profit</span>
+                                        <span className="text-2xl font-bold text-emerald-600">
+                                            {formatCurrency(
+                                                parseFloat(formData.recommended_price) - 
+                                                parseFloat(formData.vendor_price) - 
+                                                35
+                                            )}
+                                        </span>
+                                    </div>
+
+                                    {/* Profit Percentage */}
+                                    <div className="bg-white rounded-lg p-3 mt-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs text-slate-600">Profit Margin</span>
+                                            <span className="text-sm font-bold text-emerald-700">
+                                                {(((parseFloat(formData.recommended_price) - parseFloat(formData.vendor_price) - 35) / parseFloat(formData.vendor_price)) * 100).toFixed(1)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <p className="text-xs text-blue-800">
+                                        <strong>Note:</strong> This is based on a fixed delivery fee of 35 DH. Actual profit may vary based on actual delivery costs.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                     
                     {/* Profit Margin Indicator */}
@@ -350,11 +450,11 @@ export default function ProductForm() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-semibold text-slate-700">Profit Margin</p>
-                                    <p className="text-xs text-slate-600 mt-0.5">Difference between company and vendor price</p>
+                                    <p className="text-xs text-slate-600 mt-0.5">Difference between company and seller price</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-2xl font-bold text-emerald-600">
-                                        ${(parseFloat(formData.company_price) - parseFloat(formData.vendor_price)).toFixed(2)}
+                                        {formatCurrency(parseFloat(formData.company_price) - parseFloat(formData.vendor_price))}
                                     </p>
                                     <p className="text-xs text-slate-600">
                                         {((parseFloat(formData.company_price) - parseFloat(formData.vendor_price)) / parseFloat(formData.vendor_price) * 100).toFixed(1)}% margin

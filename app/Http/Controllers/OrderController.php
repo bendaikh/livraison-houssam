@@ -97,6 +97,31 @@ class OrderController extends Controller
         ]));
     }
 
+    public function update(Request $request, Order $order)
+    {
+        $validated = $request->validate([
+            'client_id' => 'required|exists:clients,id',
+            'vendor_id' => 'nullable|exists:vendors,id',
+            'delivery_agent_id' => 'nullable|exists:users,id',
+            'confirmation_agent_id' => 'nullable|exists:users,id',
+            'source' => 'string|in:manual,shopify,delivery_company,marketplace',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.price' => 'required|numeric|min:0',
+            'shipping_cost' => 'nullable|numeric|min:0',
+            'tax' => 'nullable|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
+            'shipping_address' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'whatsapp' => 'nullable|string',
+        ]);
+
+        $order = $this->orderService->updateOrder($order->id, $validated);
+
+        return response()->json($order);
+    }
+
     public function updateStatus(Request $request, Order $order)
     {
         $validated = $request->validate([

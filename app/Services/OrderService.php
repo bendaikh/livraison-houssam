@@ -39,6 +39,7 @@ class OrderService
                 'client_id' => $data['client_id'],
                 'vendor_id' => $data['vendor_id'] ?? null,
                 'delivery_agent_id' => $data['delivery_agent_id'] ?? null,
+                'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
                 'status' => $data['status'] ?? 'pending',
                 'source' => $data['source'] ?? 'manual',
                 'external_order_id' => $data['external_order_id'] ?? null,
@@ -50,6 +51,7 @@ class OrderService
                 'commission_amount' => $commissionAmount,
                 'shipping_address' => $data['shipping_address'] ?? null,
                 'notes' => $data['notes'] ?? null,
+                'whatsapp' => $data['whatsapp'] ?? null,
             ]);
 
             // Create order items
@@ -69,6 +71,66 @@ class OrderService
             $this->updateClientStats($order->client_id);
 
             return $order->load(['items.product', 'client']);
+        });
+    }
+
+    public function updateOrder(int $orderId, array $data)
+    {
+        return DB::transaction(function () use ($orderId, $data) {
+            $order = Order::findOrFail($orderId);
+            
+            // Calculate totals
+            $subtotal = 0;
+            foreach ($data['items'] as $item) {
+                $subtotal += $item['price'] * $item['quantity'];
+            }
+
+            $total = $subtotal + ($data['shipping_cost'] ?? 0) + ($data['tax'] ?? 0) - ($data['discount'] ?? 0);
+
+            // Calculate commission if vendor order
+            $commissionAmount = 0;
+            if (isset($data['vendor_id']) && $data['vendor_id']) {
+                $vendor = \App\Models\Vendor::find($data['vendor_id']);
+                if ($vendor) {
+                    $commissionAmount = ($total * $vendor->commission_rate) / 100;
+                }
+            }
+
+            // Update order
+            $order->update([
+                'client_id' => $data['client_id'],
+                'vendor_id' => $data['vendor_id'] ?? null,
+                'delivery_agent_id' => $data['delivery_agent_id'] ?? null,
+                'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
+                'source' => $data['source'] ?? 'manual',
+                'subtotal' => $subtotal,
+                'shipping_cost' => $data['shipping_cost'] ?? 0,
+                'tax' => $data['tax'] ?? 0,
+                'discount' => $data['discount'] ?? 0,
+                'total' => $total,
+                'commission_amount' => $commissionAmount,
+                'shipping_address' => $data['shipping_address'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'whatsapp' => $data['whatsapp'] ?? null,
+            ]);
+
+            // Delete existing items
+            $order->items()->delete();
+
+            // Create new order items
+            foreach ($data['items'] as $item) {
+                $order->items()->create([
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'price' => $item['price'],
+                    'subtotal' => $item['price'] * $item['quantity'],
+                ]);
+            }
+
+            // Create history entry
+            $this->addHistory($order->id, $order->status, 'Order updated');
+
+            return $order->load(['items.product', 'client', 'vendor', 'deliveryAgent', 'confirmationAgent']);
         });
     }
 
