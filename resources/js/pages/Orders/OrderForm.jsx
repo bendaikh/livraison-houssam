@@ -14,12 +14,14 @@ export default function OrderForm() {
     const [products, setProducts] = useState([]);
     const [vendors, setVendors] = useState([]);
     const [deliveryAgents, setDeliveryAgents] = useState([]);
+    const [deliveryPersons, setDeliveryPersons] = useState([]);
     const [confirmationAgents, setConfirmationAgents] = useState([]);
     
     const [formData, setFormData] = useState({
         client_id: '',
         vendor_id: '',
         delivery_agent_id: '',
+        delivery_person_id: '',
         confirmation_agent_id: '',
         source: 'manual',
         shipping_address: '',
@@ -44,6 +46,7 @@ export default function OrderForm() {
         fetchProducts();
         fetchVendors();
         fetchDeliveryAgents();
+        fetchDeliveryPersons();
         fetchConfirmationAgents();
         
         if (isEditing) {
@@ -87,6 +90,15 @@ export default function OrderForm() {
         }
     };
 
+    const fetchDeliveryPersons = async () => {
+        try {
+            const response = await api.get('/delivery-persons');
+            setDeliveryPersons(response.data);
+        } catch (error) {
+            console.error('Error fetching delivery persons:', error);
+        }
+    };
+
     const fetchConfirmationAgents = async () => {
         try {
             const response = await api.get('/confirmation-agents');
@@ -106,6 +118,7 @@ export default function OrderForm() {
                 client_id: order.client_id || '',
                 vendor_id: order.vendor_id || '',
                 delivery_agent_id: order.delivery_agent_id || '',
+                delivery_person_id: order.delivery_person_id || '',
                 confirmation_agent_id: order.confirmation_agent_id || '',
                 source: order.source || 'manual',
                 shipping_address: order.shipping_address || '',
@@ -313,11 +326,27 @@ export default function OrderForm() {
                                 onChange={(e) => setFormData({ ...formData, delivery_agent_id: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
-                                <option value="">Select Agent</option>
+                                <option value="">Select Delivery Agent</option>
                                 {deliveryAgents.map(agent => (
                                     <option key={agent.id} value={agent.id}>{agent.name}</option>
                                 ))}
                             </select>
+                            <p className="text-xs text-gray-500 mt-1">Responsible for managing the delivery</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Person</label>
+                            <select
+                                value={formData.delivery_person_id}
+                                onChange={(e) => setFormData({ ...formData, delivery_person_id: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                                <option value="">Select Delivery Person</option>
+                                {deliveryPersons.map(person => (
+                                    <option key={person.id} value={person.id}>{person.name}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">Person who physically delivers the product</p>
                         </div>
 
                         <div>

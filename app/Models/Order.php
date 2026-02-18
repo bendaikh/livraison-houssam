@@ -13,6 +13,7 @@ class Order extends Model
         'client_id',
         'vendor_id',
         'delivery_agent_id',
+        'delivery_person_id',
         'confirmation_agent_id',
         'status',
         'source',
@@ -58,6 +59,11 @@ class Order extends Model
     public function deliveryAgent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'delivery_agent_id');
+    }
+
+    public function deliveryPerson(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'delivery_person_id');
     }
 
     public function confirmationAgent(): BelongsTo

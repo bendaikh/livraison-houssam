@@ -55,6 +55,9 @@ import MarketplaceProducts from './pages/Marketplace/MarketplaceProducts';
 // Users
 import UserList from './pages/Users/UserList';
 
+// Roles
+import RoleList from './pages/Roles/RoleList';
+
 // Settings
 import Settings from './pages/Settings/Settings';
 
@@ -119,8 +122,9 @@ function App() {
                         {/* Marketplace */}
                         <Route path="marketplace" element={<MarketplaceProducts />} />
                         
-                        {/* Users */}
+                        {/* Users & Roles */}
                         <Route path="users" element={<UserList />} />
+                        <Route path="roles" element={<RoleList />} />
                         
                         {/* Settings */}
                         <Route path="settings" element={<Settings />} />

@@ -5,7 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag
+    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog
 } from 'lucide-react';
 
 export default function MainLayout() {
@@ -21,6 +21,7 @@ export default function MainLayout() {
     const [productsExpanded, setProductsExpanded] = useState(true);
     const [expensesExpanded, setExpensesExpanded] = useState(true);
     const [apiIntegrationsExpanded, setApiIntegrationsExpanded] = useState(true);
+    const [userManagementExpanded, setUserManagementExpanded] = useState(true);
 
     const handleLogout = async () => {
         await logout();
@@ -68,7 +69,18 @@ export default function MainLayout() {
                 { path: '/api-integrations/bmdelivery', icon: Box, label: 'BMDelivery', description: 'Delivery service' }
             ]
         },
-        { path: '/users', icon: Users, label: 'Users', description: 'User management', adminOnly: true },
+        { 
+            path: '/user-management', 
+            icon: UserCog, 
+            label: 'User Management', 
+            description: 'Users & Roles',
+            hasSubItems: true,
+            adminOnly: true,
+            subItems: [
+                { path: '/users', icon: Users, label: 'Users', description: 'Manage users' },
+                { path: '/roles', icon: Shield, label: 'Roles', description: 'Manage roles' }
+            ]
+        },
         { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings' },
     ];
 
@@ -122,12 +134,16 @@ export default function MainLayout() {
                                 ? productsExpanded 
                                 : item.label === 'Expenses' 
                                     ? expensesExpanded 
-                                    : apiIntegrationsExpanded;
+                                    : item.label === 'User Management'
+                                        ? userManagementExpanded
+                                        : apiIntegrationsExpanded;
                             const toggleExpanded = item.label === 'Products' 
                                 ? () => setProductsExpanded(!productsExpanded)
                                 : item.label === 'Expenses'
                                     ? () => setExpensesExpanded(!expensesExpanded)
-                                    : () => setApiIntegrationsExpanded(!apiIntegrationsExpanded);
+                                    : item.label === 'User Management'
+                                        ? () => setUserManagementExpanded(!userManagementExpanded)
+                                        : () => setApiIntegrationsExpanded(!apiIntegrationsExpanded);
                             
                             return (
                                 <div key={item.path}>

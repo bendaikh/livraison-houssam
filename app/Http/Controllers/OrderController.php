@@ -14,7 +14,7 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'confirmationAgent', 'items.product']);
+        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'items.product']);
 
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
@@ -66,6 +66,7 @@ class OrderController extends Controller
             'client_id' => 'required|exists:clients,id',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
+            'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
             'source' => 'string|in:manual,shopify,delivery_company,marketplace',
             'items' => 'required|array|min:1',
@@ -91,6 +92,7 @@ class OrderController extends Controller
             'client',
             'vendor',
             'deliveryAgent',
+            'deliveryPerson',
             'confirmationAgent',
             'items.product',
             'history.user'
@@ -103,6 +105,7 @@ class OrderController extends Controller
             'client_id' => 'required|exists:clients,id',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
+            'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
             'source' => 'string|in:manual,shopify,delivery_company,marketplace',
             'items' => 'required|array|min:1',

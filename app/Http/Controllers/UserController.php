@@ -90,10 +90,21 @@ class UserController extends Controller
     public function deliveryAgents()
     {
         $agents = User::whereHas('role', function ($query) {
-            $query->whereIn('slug', ['agent_livraison', 'delivery']);
+            $query->where('slug', 'agent_livraison');
         })->where('is_active', true)->get();
 
+        \Log::info('Delivery Agents Query Result:', ['count' => $agents->count(), 'agents' => $agents->toArray()]);
+
         return response()->json($agents);
+    }
+
+    public function deliveryPersons()
+    {
+        $persons = User::whereHas('role', function ($query) {
+            $query->where('slug', 'delivery');
+        })->where('is_active', true)->get();
+
+        return response()->json($persons);
     }
 
     public function confirmationAgents()
@@ -101,6 +112,8 @@ class UserController extends Controller
         $agents = User::whereHas('role', function ($query) {
             $query->where('slug', 'agent_confirmation');
         })->where('is_active', true)->get();
+
+        \Log::info('Confirmation Agents Query Result:', ['count' => $agents->count(), 'agents' => $agents->toArray()]);
 
         return response()->json($agents);
     }

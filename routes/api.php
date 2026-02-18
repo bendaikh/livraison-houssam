@@ -90,6 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('roles', RoleController::class);
     });
     Route::get('/delivery-agents', [UserController::class, 'deliveryAgents']);
+    Route::get('/delivery-persons', [UserController::class, 'deliveryPersons']);
     Route::get('/confirmation-agents', [UserController::class, 'confirmationAgents']);
 
     // Settings

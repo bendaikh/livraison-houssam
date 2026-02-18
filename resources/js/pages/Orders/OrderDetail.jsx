@@ -248,6 +248,12 @@ export default function OrderDetail() {
                             <p>${order.delivery_agent.name}</p>
                         </div>
                         ` : ''}
+                        ${order.delivery_person ? `
+                        <div class="info-group">
+                            <label>Delivery Person</label>
+                            <p>${order.delivery_person.name}</p>
+                        </div>
+                        ` : ''}
                         ${order.confirmation_agent ? `
                         <div class="info-group">
                             <label>Confirmation Agent</label>
@@ -545,17 +551,25 @@ export default function OrderDetail() {
                     </div>
 
                     {/* Delivery & Confirmation Agents */}
-                    {(order.delivery_agent || order.confirmation_agent) && (
+                    {(order.delivery_agent || order.delivery_person || order.confirmation_agent) && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                                 <UserCheck className="mr-2" size={20} />
-                                Agents
+                                Agents & Delivery
                             </h2>
                             <div className="space-y-3">
                                 {order.delivery_agent && (
                                     <div>
                                         <p className="text-sm text-gray-500">Delivery Agent</p>
                                         <p className="font-semibold text-gray-900">{order.delivery_agent.name}</p>
+                                        <p className="text-xs text-gray-400">Responsible for managing delivery</p>
+                                    </div>
+                                )}
+                                {order.delivery_person && (
+                                    <div>
+                                        <p className="text-sm text-gray-500">Delivery Person</p>
+                                        <p className="font-semibold text-gray-900">{order.delivery_person.name}</p>
+                                        <p className="text-xs text-gray-400">Physically delivers the product</p>
                                     </div>
                                 )}
                                 {order.confirmation_agent && (

@@ -39,6 +39,7 @@ class OrderService
                 'client_id' => $data['client_id'],
                 'vendor_id' => $data['vendor_id'] ?? null,
                 'delivery_agent_id' => $data['delivery_agent_id'] ?? null,
+                'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
                 'status' => $data['status'] ?? 'pending',
                 'source' => $data['source'] ?? 'manual',
@@ -101,6 +102,7 @@ class OrderService
                 'client_id' => $data['client_id'],
                 'vendor_id' => $data['vendor_id'] ?? null,
                 'delivery_agent_id' => $data['delivery_agent_id'] ?? null,
+                'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
                 'source' => $data['source'] ?? 'manual',
                 'subtotal' => $subtotal,
@@ -130,7 +132,7 @@ class OrderService
             // Create history entry
             $this->addHistory($order->id, $order->status, 'Order updated');
 
-            return $order->load(['items.product', 'client', 'vendor', 'deliveryAgent', 'confirmationAgent']);
+            return $order->load(['items.product', 'client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent']);
         });
     }
 
