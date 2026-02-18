@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { Shield, Plus, Edit, Trash2, Users, CheckCircle } from 'lucide-react';
 
 export default function RoleList() {
+    const navigate = useNavigate();
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -51,7 +53,7 @@ export default function RoleList() {
                     <p className="text-gray-500 mt-1">Manage user roles and permissions</p>
                 </div>
                 <button
-                    onClick={() => window.location.href = '/roles/create'}
+                    onClick={() => navigate('/roles/create')}
                     className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                     <Plus size={20} />
@@ -102,7 +104,7 @@ export default function RoleList() {
                         {/* Actions */}
                         <div className="flex items-center space-x-2 pt-4 border-t border-gray-100">
                             <button
-                                onClick={() => window.location.href = `/roles/${role.id}/edit`}
+                                onClick={() => navigate(`/roles/${role.id}/edit`)}
                                 className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                             >
                                 <Edit size={16} />
@@ -127,7 +129,7 @@ export default function RoleList() {
                     <Shield className="mx-auto text-gray-400 mb-4" size={48} />
                     <p className="text-gray-500 text-lg">No roles found</p>
                     <button
-                        onClick={() => window.location.href = '/roles/create'}
+                        onClick={() => navigate('/roles/create')}
                         className="mt-4 text-blue-600 hover:text-blue-800"
                     >
                         Create your first role

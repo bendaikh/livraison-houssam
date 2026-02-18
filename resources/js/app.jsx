@@ -57,6 +57,7 @@ import UserList from './pages/Users/UserList';
 
 // Roles
 import RoleList from './pages/Roles/RoleList';
+import RoleForm from './pages/Roles/RoleForm';
 
 // Settings
 import Settings from './pages/Settings/Settings';
@@ -125,6 +126,8 @@ function App() {
                         {/* Users & Roles */}
                         <Route path="users" element={<UserList />} />
                         <Route path="roles" element={<RoleList />} />
+                        <Route path="roles/create" element={<RoleForm />} />
+                        <Route path="roles/:id/edit" element={<RoleForm />} />
                         
                         {/* Settings */}
                         <Route path="settings" element={<Settings />} />
