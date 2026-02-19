@@ -22,8 +22,6 @@ export default function VendorList() {
         phone: '',
         address: '',
         company_name: '',
-        tax_id: '',
-        commission_rate: '',
         is_active: true
     });
     const [errors, setErrors] = useState({});
@@ -81,8 +79,6 @@ export default function VendorList() {
             phone: vendor.phone || '',
             address: vendor.address || '',
             company_name: vendor.company_name || '',
-            tax_id: vendor.tax_id || '',
-            commission_rate: vendor.commission_rate || '',
             is_active: vendor.is_active
         });
         setShowModal(true);
@@ -109,8 +105,6 @@ export default function VendorList() {
             phone: '',
             address: '',
             company_name: '',
-            tax_id: '',
-            commission_rate: '',
             is_active: true
         });
         setErrors({});
@@ -511,65 +505,24 @@ export default function VendorList() {
                                 </div>
                             </div>
 
-                            {/* Business Information */}
+                            {/* Address Information */}
                             <div className="space-y-4">
                                 <h3 className="text-lg font-semibold text-slate-800 flex items-center space-x-2">
-                                    <Building2 size={20} className="text-orange-600" />
-                                    <span>Business Information</span>
+                                    <MapPin size={20} className="text-orange-600" />
+                                    <span>Address Information</span>
                                 </h3>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                            Tax ID
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={formData.tax_id}
-                                            onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
-                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
-                                            placeholder="XX-XXXXXXX"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                            Commission Rate (%) *
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                max="100"
-                                                value={formData.commission_rate}
-                                                onChange={(e) => setFormData({ ...formData, commission_rate: e.target.value })}
-                                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
-                                                placeholder="10.00"
-                                                required
-                                            />
-                                            <Percent size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                        </div>
-                                        <p className="text-xs text-slate-500 mt-1.5">Percentage of sales paid to vendor</p>
-                                        {errors.commission_rate && (
-                                            <p className="text-red-500 text-xs mt-1.5 flex items-center">
-                                                <span className="mr-1">⚠</span>{errors.commission_rate[0]}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                            Address
-                                        </label>
-                                        <textarea
-                                            value={formData.address}
-                                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                            rows="3"
-                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all resize-none"
-                                            placeholder="123 Business Street, City, State, ZIP"
-                                        />
-                                    </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                        Address
+                                    </label>
+                                    <textarea
+                                        value={formData.address}
+                                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                        rows="3"
+                                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all resize-none"
+                                        placeholder="123 Business Street, City, State, ZIP"
+                                    />
                                 </div>
                             </div>
 
