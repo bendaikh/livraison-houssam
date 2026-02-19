@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Plus, Minus, Edit, Package, AlertTriangle, TrendingUp, 
     TrendingDown, Search, Filter, ArrowUpCircle, ArrowDownCircle,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function StockManagement() {
+    const { formatCurrency } = useSettings();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -192,7 +194,7 @@ export default function StockManagement() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-slate-600">Stock Value</p>
-                            <p className="text-3xl font-bold text-emerald-600 mt-2">${stats.totalValue.toFixed(2)}</p>
+                            <p className="text-3xl font-bold text-emerald-600 mt-2">{formatCurrency(stats.totalValue)}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
                             <TrendingUp size={28} className="text-white" />
@@ -327,7 +329,7 @@ export default function StockManagement() {
                                             </td>
                                             <td className="py-4 px-6">
                                                 <span className="text-sm font-semibold text-emerald-600">
-                                                    ${(product.stock_quantity * (parseFloat(product.vendor_price) || 0)).toFixed(2)}
+                                                    {formatCurrency(product.stock_quantity * (parseFloat(product.vendor_price) || 0))}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6">
@@ -456,18 +458,15 @@ export default function StockManagement() {
                                             <label className="block text-sm font-semibold text-slate-700 mb-2">
                                                 Unit Cost
                                             </label>
-                                            <div className="relative">
-                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    value={formData.unit_cost}
-                                                    onChange={(e) => setFormData({ ...formData, unit_cost: e.target.value })}
-                                                    className="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                                                    placeholder="0.00"
-                                                />
-                                            </div>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={formData.unit_cost}
+                                                onChange={(e) => setFormData({ ...formData, unit_cost: e.target.value })}
+                                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                                                placeholder="0.00"
+                                            />
                                         </div>
                                     )}
 
