@@ -17,6 +17,11 @@ class MarketplaceController extends Controller
     {
         $query = Product::with(['category', 'marketplaceProducts.vendor']);
 
+        // Filter to only show marketplace-active products if requested
+        if ($request->has('is_marketplace_active') && $request->boolean('is_marketplace_active')) {
+            $query->where('is_marketplace_active', true);
+        }
+
         // Filter by active status
         if ($request->has('is_active')) {
             $query->where('is_active', $request->boolean('is_active'));

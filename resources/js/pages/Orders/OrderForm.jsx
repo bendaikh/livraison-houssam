@@ -243,10 +243,10 @@ export default function OrderForm() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Client Information */}
+                {/* Order Details */}
                 <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Client Information</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Client *</label>
                             <select
@@ -285,12 +285,8 @@ export default function OrderForm() {
                             />
                         </div>
                     </div>
-                </div>
 
-                {/* Order Details */}
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Seller</label>
                             <select
@@ -317,21 +313,6 @@ export default function OrderForm() {
                                     <option key={agent.id} value={agent.id}>{agent.name}</option>
                                 ))}
                             </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Agent</label>
-                            <select
-                                value={formData.delivery_agent_id}
-                                onChange={(e) => setFormData({ ...formData, delivery_agent_id: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">Select Delivery Agent</option>
-                                {deliveryAgents.map(agent => (
-                                    <option key={agent.id} value={agent.id}>{agent.name}</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-gray-500 mt-1">Responsible for managing the delivery</p>
                         </div>
 
                         <div>
@@ -364,7 +345,7 @@ export default function OrderForm() {
                         </div>
                     </div>
 
-                    <div>
+                    <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                         <textarea
                             value={formData.notes}

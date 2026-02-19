@@ -5,7 +5,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Plus, Search, Edit, Trash2, Package, Filter, 
     Download, Eye, AlertCircle, TrendingUp, TrendingDown,
-    Grid, List as ListIcon, Image as ImageIcon
+    Grid, List as ListIcon, Image as ImageIcon, ShoppingBag
 } from 'lucide-react';
 
 export default function ProductList() {
@@ -15,6 +15,7 @@ export default function ProductList() {
     const [search, setSearch] = useState('');
     const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
     const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'active', 'inactive', 'low_stock'
+    const [updatingMarketplace, setUpdatingMarketplace] = useState(null);
 
     useEffect(() => {
         fetchProducts();
@@ -54,6 +55,21 @@ export default function ProductList() {
         if (product.stock_quantity === 0) return { label: 'Out of Stock', color: 'red' };
         if (product.stock_quantity <= product.min_stock_quantity) return { label: 'Low Stock', color: 'orange' };
         return { label: 'In Stock', color: 'green' };
+    };
+
+    const toggleMarketplace = async (productId, currentStatus) => {
+        try {
+            setUpdatingMarketplace(productId);
+            await api.patch(`/products/${productId}`, { 
+                is_marketplace_active: !currentStatus 
+            });
+            fetchProducts();
+        } catch (error) {
+            console.error('Error toggling marketplace:', error);
+            alert('Failed to update marketplace status');
+        } finally {
+            setUpdatingMarketplace(null);
+        }
     };
 
     const stats = {
@@ -334,6 +350,24 @@ export default function ProductList() {
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center justify-center space-x-2">
+                                                    <button
+                                                        onClick={() => toggleMarketplace(product.id, product.is_marketplace_active)}
+                                                        disabled={updatingMarketplace === product.id}
+                                                        className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all ${
+                                                            product.is_marketplace_active
+                                                                ? 'bg-purple-600'
+                                                                : 'bg-gray-300'
+                                                        } ${updatingMarketplace === product.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                                                        title={product.is_marketplace_active ? 'Deactivate from Marketplace' : 'Activate for Marketplace'}
+                                                    >
+                                                        <span
+                                                            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform ${
+                                                                product.is_marketplace_active ? 'translate-x-7' : 'translate-x-1'
+                                                            }`}
+                                                        >
+                                                            <ShoppingBag size={14} className={`m-0.5 ${product.is_marketplace_active ? 'text-purple-600' : 'text-gray-400'}`} />
+                                                        </span>
+                                                    </button>
                                                     <Link
                                                         to={`/products/${product.id}/edit`}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
@@ -432,6 +466,24 @@ export default function ProductList() {
 
                                     {/* Actions */}
                                     <div className="flex space-x-2">
+                                        <button
+                                            onClick={() => toggleMarketplace(product.id, product.is_marketplace_active)}
+                                            disabled={updatingMarketplace === product.id}
+                                            className={`relative inline-flex h-10 w-16 items-center rounded-full transition-all ${
+                                                product.is_marketplace_active
+                                                    ? 'bg-purple-600'
+                                                    : 'bg-gray-300'
+                                            } ${updatingMarketplace === product.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                                            title={product.is_marketplace_active ? 'Deactivate from Marketplace' : 'Activate for Marketplace'}
+                                        >
+                                            <span
+                                                className={`inline-flex items-center justify-center h-8 w-8 transform rounded-full bg-white shadow-lg transition-transform ${
+                                                    product.is_marketplace_active ? 'translate-x-7' : 'translate-x-1'
+                                                }`}
+                                            >
+                                                <ShoppingBag size={16} className={product.is_marketplace_active ? 'text-purple-600' : 'text-gray-400'} />
+                                            </span>
+                                        </button>
                                         <Link
                                             to={`/products/${product.id}/edit`}
                                             className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-1"

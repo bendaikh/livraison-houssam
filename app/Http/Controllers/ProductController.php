@@ -11,7 +11,7 @@ class ProductController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'vendor']);
+        $query = Product::with(['category', 'vendor', 'marketplaceProducts']);
 
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
@@ -103,6 +103,7 @@ class ProductController extends Controller
             'stock_quantity' => 'integer|min:0',
             'min_stock_quantity' => 'integer|min:0',
             'is_active' => 'boolean',
+            'is_marketplace_active' => 'boolean',
             'weight' => 'nullable|numeric|min:0',
             'weight_unit' => 'nullable|string',
             'images' => 'nullable|array',

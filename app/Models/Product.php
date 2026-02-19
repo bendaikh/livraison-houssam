@@ -26,6 +26,7 @@ class Product extends Model
         'stock_quantity',
         'min_stock_quantity',
         'is_active',
+        'is_marketplace_active',
         'images',
         'weight',
         'weight_unit',
@@ -33,6 +34,7 @@ class Product extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_marketplace_active' => 'boolean',
         'price' => 'decimal:2',
         'company_price' => 'decimal:2',
         'vendor_price' => 'decimal:2',

@@ -4,7 +4,7 @@ import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { 
     ArrowLeft, Mail, Phone, MapPin, Store, Calendar, 
-    Package, DollarSign, Building2, FileText, Edit2,
+    Package, DollarSign, Building2, FileText,
     CheckCircle, XCircle, Percent
 } from 'lucide-react';
 
@@ -90,13 +90,13 @@ export default function VendorDetail() {
                         <p className="text-slate-600 mt-1">Seller Details</p>
                     </div>
                 </div>
-                <Link
-                    to={`/vendors/${id}/edit`}
+                <button
+                    onClick={() => navigate('/vendors')}
                     className="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 font-semibold shadow-lg shadow-orange-500/30 transition-all flex items-center space-x-2"
                 >
-                    <Edit2 size={20} />
-                    <span>Edit Seller</span>
-                </Link>
+                    <ArrowLeft size={20} />
+                    <span>Back to Sellers</span>
+                </button>
             </div>
 
             {/* Vendor Information Cards */}

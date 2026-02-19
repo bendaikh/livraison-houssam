@@ -44,7 +44,6 @@ export default function MainLayout() {
         { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Vendor products' },
         { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control' },
         { path: '/orders', icon: ShoppingCart, label: 'Orders', description: 'Order management' },
-        { path: '/clients', icon: Users, label: 'Clients', description: 'Customer database' },
         { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management' },
         { 
             path: '/expenses', 
