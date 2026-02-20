@@ -72,8 +72,8 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $deliveryAgentRole = Role::create([
-            'name' => 'Agent Livraison',
-            'slug' => 'agent_livraison',
+            'name' => 'Manager',
+            'slug' => 'manager',
             'description' => 'Can manage deliveries',
             'permissions' => [
                 'view_orders',

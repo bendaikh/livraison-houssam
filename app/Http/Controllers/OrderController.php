@@ -63,7 +63,9 @@ class OrderController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'client_id' => 'required|exists:clients,id',
+            'client_id' => 'nullable|exists:clients,id',
+            'client_name' => 'required_without:client_id|string|max:255',
+            'client_phone' => 'nullable|string|max:20',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
             'delivery_person_id' => 'nullable|exists:users,id',
@@ -80,6 +82,23 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);
+
+        // If client_id is not provided, create or find client by name and phone
+        if (!isset($validated['client_id'])) {
+            $client = \App\Models\Client::firstOrCreate(
+                [
+                    'phone' => $validated['client_phone'] ?? null,
+                    'name' => $validated['client_name'],
+                ],
+                [
+                    'name' => $validated['client_name'],
+                    'phone' => $validated['client_phone'] ?? null,
+                    'address' => $validated['shipping_address'] ?? null,
+                    'is_active' => true,
+                ]
+            );
+            $validated['client_id'] = $client->id;
+        }
 
         $order = $this->orderService->createOrder($validated);
 
@@ -102,7 +121,9 @@ class OrderController extends Controller
     public function update(Request $request, Order $order)
     {
         $validated = $request->validate([
-            'client_id' => 'required|exists:clients,id',
+            'client_id' => 'nullable|exists:clients,id',
+            'client_name' => 'required_without:client_id|string|max:255',
+            'client_phone' => 'nullable|string|max:20',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
             'delivery_person_id' => 'nullable|exists:users,id',
@@ -119,6 +140,23 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);
+
+        // If client_id is not provided, create or find client by name and phone
+        if (!isset($validated['client_id']) && isset($validated['client_name'])) {
+            $client = \App\Models\Client::firstOrCreate(
+                [
+                    'phone' => $validated['client_phone'] ?? null,
+                    'name' => $validated['client_name'],
+                ],
+                [
+                    'name' => $validated['client_name'],
+                    'phone' => $validated['client_phone'] ?? null,
+                    'address' => $validated['shipping_address'] ?? null,
+                    'is_active' => true,
+                ]
+            );
+            $validated['client_id'] = $client->id;
+        }
 
         $order = $this->orderService->updateOrder($order->id, $validated);
 

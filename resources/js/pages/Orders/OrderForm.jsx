@@ -10,7 +10,6 @@ export default function OrderForm() {
     const isEditing = !!id;
     
     const [loading, setLoading] = useState(false);
-    const [clients, setClients] = useState([]);
     const [products, setProducts] = useState([]);
     const [vendors, setVendors] = useState([]);
     const [deliveryAgents, setDeliveryAgents] = useState([]);
@@ -18,7 +17,8 @@ export default function OrderForm() {
     const [confirmationAgents, setConfirmationAgents] = useState([]);
     
     const [formData, setFormData] = useState({
-        client_id: '',
+        client_name: '',
+        client_phone: '',
         vendor_id: '',
         delivery_agent_id: '',
         delivery_person_id: '',
@@ -28,7 +28,6 @@ export default function OrderForm() {
         notes: '',
         whatsapp: '',
         shipping_cost: 0,
-        tax: 0,
         discount: 0
     });
 
@@ -39,10 +38,8 @@ export default function OrderForm() {
     }]);
 
     const [errors, setErrors] = useState({});
-    const [selectedClient, setSelectedClient] = useState(null);
 
     useEffect(() => {
-        fetchClients();
         fetchProducts();
         fetchVendors();
         fetchDeliveryAgents();
@@ -53,15 +50,6 @@ export default function OrderForm() {
             fetchOrder();
         }
     }, [id]);
-
-    const fetchClients = async () => {
-        try {
-            const response = await api.get('/clients');
-            setClients(response.data.data || response.data);
-        } catch (error) {
-            console.error('Error fetching clients:', error);
-        }
-    };
 
     const fetchProducts = async () => {
         try {
@@ -115,7 +103,8 @@ export default function OrderForm() {
             const order = response.data;
             
             setFormData({
-                client_id: order.client_id || '',
+                client_name: order.client?.name || '',
+                client_phone: order.client?.phone || '',
                 vendor_id: order.vendor_id || '',
                 delivery_agent_id: order.delivery_agent_id || '',
                 delivery_person_id: order.delivery_person_id || '',
@@ -125,7 +114,6 @@ export default function OrderForm() {
                 notes: order.notes || '',
                 whatsapp: order.whatsapp || '',
                 shipping_cost: order.shipping_cost || 0,
-                tax: order.tax || 0,
                 discount: order.discount || 0
             });
             
@@ -136,30 +124,11 @@ export default function OrderForm() {
                     price: item.price
                 })));
             }
-            
-            if (order.client) {
-                setSelectedClient(order.client);
-            }
         } catch (error) {
             console.error('Error fetching order:', error);
         } finally {
             setLoading(false);
         }
-    };
-
-    const handleClientChange = (clientId) => {
-        const client = clients.find(c => c.id === parseInt(clientId));
-        setSelectedClient(client);
-        
-        // Only auto-fill whatsapp if it's empty (to avoid overwriting when editing)
-        const newWhatsapp = formData.whatsapp || client?.phone || '';
-        
-        setFormData({
-            ...formData,
-            client_id: clientId,
-            shipping_address: client?.address || formData.shipping_address || '',
-            whatsapp: newWhatsapp
-        });
     };
 
     const handleProductChange = (index, productId) => {
@@ -198,9 +167,8 @@ export default function OrderForm() {
     const calculateTotal = () => {
         const subtotal = calculateSubtotal();
         const shipping = parseFloat(formData.shipping_cost || 0);
-        const tax = parseFloat(formData.tax || 0);
         const discount = parseFloat(formData.discount || 0);
-        return subtotal + shipping + tax - discount;
+        return subtotal + shipping - discount;
     };
 
     const handleSubmit = async (e) => {
@@ -248,21 +216,28 @@ export default function OrderForm() {
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Client *</label>
-                            <select
-                                value={formData.client_id}
-                                onChange={(e) => handleClientChange(e.target.value)}
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
+                            <input
+                                type="text"
+                                value={formData.client_name}
+                                onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 required
-                            >
-                                <option value="">Select Client</option>
-                                {clients.map(client => (
-                                    <option key={client.id} value={client.id}>
-                                        {client.name} - {client.phone}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.client_id && <p className="text-red-500 text-xs mt-1">{errors.client_id[0]}</p>}
+                                placeholder="Enter client name"
+                            />
+                            {errors.client_name && <p className="text-red-500 text-xs mt-1">{errors.client_name[0]}</p>}
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Client Phone</label>
+                            <input
+                                type="text"
+                                value={formData.client_phone}
+                                onChange={(e) => setFormData({ ...formData, client_phone: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Enter client phone"
+                            />
+                            {errors.client_phone && <p className="text-red-500 text-xs mt-1">{errors.client_phone[0]}</p>}
                         </div>
 
                         <div>
@@ -272,16 +247,18 @@ export default function OrderForm() {
                                 value={formData.whatsapp}
                                 onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Enter WhatsApp number"
                             />
                         </div>
 
-                        <div className="md:col-span-2">
+                        <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Address</label>
-                            <textarea
+                            <input
+                                type="text"
                                 value={formData.shipping_address}
                                 onChange={(e) => setFormData({ ...formData, shipping_address: e.target.value })}
-                                rows="2"
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Enter shipping address"
                             />
                         </div>
                     </div>
@@ -456,17 +433,6 @@ export default function OrderForm() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Tax</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.tax}
-                                    onChange={(e) => setFormData({ ...formData, tax: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
-
-                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Discount</label>
                                 <input
                                     type="number"
@@ -486,10 +452,6 @@ export default function OrderForm() {
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Shipping:</span>
                                 <span className="font-medium">{formatCurrency(parseFloat(formData.shipping_cost || 0))}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">Tax:</span>
-                                <span className="font-medium">{formatCurrency(parseFloat(formData.tax || 0))}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Discount:</span>

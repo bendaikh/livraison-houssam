@@ -18,7 +18,7 @@ class CreateAgentUsers extends Command
 
         // Get roles
         $confirmationRole = Role::where('slug', 'agent_confirmation')->first();
-        $deliveryRole = Role::where('slug', 'agent_livraison')->first();
+        $deliveryRole = Role::where('slug', 'manager')->first();
         $deliveryRole2 = Role::where('slug', 'delivery')->first();
 
         if (!$confirmationRole) {
@@ -34,8 +34,8 @@ class CreateAgentUsers extends Command
         if (!$deliveryRole) {
             $this->error('Delivery agent role not found! Creating it...');
             $deliveryRole = Role::create([
-                'name' => 'Agent Livraison',
-                'slug' => 'agent_livraison',
+                'name' => 'Manager',
+                'slug' => 'manager',
                 'description' => 'Can manage deliveries',
                 'permissions' => ['view_orders', 'update_order_status', 'view_clients', 'view_dashboard'],
             ]);
