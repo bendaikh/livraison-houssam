@@ -30,6 +30,7 @@ class DashboardService
             'products' => $this->getProductsStats(),
             'top_products' => $this->getTopProducts($dateRange),
             'top_clients' => $this->getTopClients($dateRange),
+            'top_vendors' => $this->getTopVendors($dateRange),
         ];
     }
 
@@ -251,6 +252,18 @@ class DashboardService
             ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered'])
             ->groupBy('clients.id')
             ->orderBy('total_spent', 'desc')
+            ->limit(5)
+            ->get();
+    }
+
+    private function getTopVendors(array $dateRange)
+    {
+        return Vendor::select('vendors.*', DB::raw('SUM(orders.total) as total_sales'))
+            ->join('orders', 'vendors.id', '=', 'orders.vendor_id')
+            ->whereBetween('orders.created_at', [$dateRange['start'], $dateRange['end']])
+            ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered'])
+            ->groupBy('vendors.id')
+            ->orderBy('total_sales', 'desc')
             ->limit(5)
             ->get();
     }

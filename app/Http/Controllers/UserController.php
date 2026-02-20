@@ -44,6 +44,7 @@ class UserController extends Controller
             'phone' => 'nullable|string',
             'address' => 'nullable|string',
             'is_active' => 'boolean',
+            'commission_per_order' => 'nullable|numeric|min:0',
         ]);
 
         $validated['password'] = Hash::make($validated['password']);
@@ -68,6 +69,7 @@ class UserController extends Controller
             'phone' => 'nullable|string',
             'address' => 'nullable|string',
             'is_active' => 'boolean',
+            'commission_per_order' => 'nullable|numeric|min:0',
         ]);
 
         if (isset($validated['password'])) {

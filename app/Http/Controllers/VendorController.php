@@ -38,7 +38,7 @@ class VendorController extends Controller
             'address' => 'nullable|string',
             'company_name' => 'nullable|string',
             'tax_id' => 'nullable|string',
-            'commission_rate' => 'required|numeric|min:0|max:100',
+            'commission_rate' => 'nullable|numeric|min:0|max:100',
             'is_active' => 'boolean',
         ]);
 
@@ -72,7 +72,7 @@ class VendorController extends Controller
             'address' => 'nullable|string',
             'company_name' => 'nullable|string',
             'tax_id' => 'nullable|string',
-            'commission_rate' => 'numeric|min:0|max:100',
+            'commission_rate' => 'nullable|numeric|min:0|max:100',
             'is_active' => 'boolean',
         ]);
 

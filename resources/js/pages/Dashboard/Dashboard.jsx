@@ -275,25 +275,33 @@ export default function Dashboard() {
 
             {/* Additional Statistics Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Clients Stats */}
+                {/* Top Sellers Stats */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-slate-800">Clients</h3>
-                        <Users className="text-blue-500" size={24} />
+                        <h3 className="text-lg font-semibold text-slate-800">Top Sellers</h3>
+                        <Store className="text-orange-500" size={24} />
                     </div>
                     <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Total Clients</span>
-                            <span className="text-lg font-bold text-slate-800">{stats?.clients?.total || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">New This Period</span>
-                            <span className="text-lg font-bold text-emerald-600">{stats?.clients?.new || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Active Clients</span>
-                            <span className="text-lg font-bold text-blue-600">{stats?.clients?.active || 0}</span>
-                        </div>
+                        {stats?.top_vendors?.length > 0 ? (
+                            stats.top_vendors.slice(0, 3).map((vendor, index) => (
+                                <div key={vendor.id} className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border border-orange-100">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-sm">
+                                            {index + 1}
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-slate-800 text-sm">{vendor.name}</p>
+                                            <p className="text-xs text-slate-500">{vendor.products_count || 0} products</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-orange-600 text-sm">{formatCurrency(parseFloat(vendor.total_sales) || 0)}</p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-center text-slate-500 py-4 text-sm">No seller data available</p>
+                        )}
                     </div>
                 </div>
 

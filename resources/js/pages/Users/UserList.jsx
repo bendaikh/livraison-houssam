@@ -20,7 +20,8 @@ export default function UserList() {
         role_id: '',
         phone: '',
         address: '',
-        is_active: true
+        is_active: true,
+        commission_per_order: 0
     });
     const [errors, setErrors] = useState({});
 
@@ -85,7 +86,8 @@ export default function UserList() {
             role_id: user.role_id,
             phone: user.phone || '',
             address: user.address || '',
-            is_active: user.is_active
+            is_active: user.is_active,
+            commission_per_order: user.commission_per_order || 0
         });
         setShowModal(true);
     };
@@ -109,7 +111,8 @@ export default function UserList() {
             role_id: '',
             phone: '',
             address: '',
-            is_active: true
+            is_active: true,
+            commission_per_order: 0
         });
         setErrors({});
     };
@@ -343,6 +346,38 @@ export default function UserList() {
                                         <option value="0">Inactive</option>
                                     </select>
                                 </div>
+
+                                {/* Commission Field - Only show for confirmation agents and delivery persons */}
+                                {formData.role_id && (() => {
+                                    const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
+                                    return selectedRole && (selectedRole.slug === 'agent_confirmation' || selectedRole.slug === 'delivery');
+                                })() && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Commission Per Order (MAD)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={formData.commission_per_order}
+                                            onChange={(e) => setFormData({ ...formData, commission_per_order: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            placeholder="e.g., 5.00"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {(() => {
+                                                const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
+                                                if (selectedRole?.slug === 'agent_confirmation') {
+                                                    return 'Commission earned per confirmed order';
+                                                } else if (selectedRole?.slug === 'delivery') {
+                                                    return 'Commission earned per delivered order';
+                                                }
+                                            })()}
+                                        </p>
+                                        {errors.commission_per_order && <p className="text-red-500 text-xs mt-1">{errors.commission_per_order[0]}</p>}
+                                    </div>
+                                )}
                             </div>
 
                             <div>
