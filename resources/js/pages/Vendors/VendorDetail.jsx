@@ -5,7 +5,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { 
     ArrowLeft, Mail, Phone, MapPin, Store, Calendar, 
     Package, DollarSign, Building2, FileText,
-    CheckCircle, XCircle, Percent
+    CheckCircle, XCircle
 } from 'lucide-react';
 
 export default function VendorDetail() {
@@ -27,7 +27,10 @@ export default function VendorDetail() {
                 api.get(`/vendors/${id}`),
                 api.get(`/products?vendor_id=${id}`)
             ]);
-            setVendor(vendorResponse.data.data || vendorResponse.data);
+            
+            // Handle the response structure from backend
+            const vendorData = vendorResponse.data.vendor || vendorResponse.data.data || vendorResponse.data;
+            setVendor(vendorData);
             setProducts(productsResponse.data.data || productsResponse.data);
         } catch (error) {
             console.error('Error fetching vendor details:', error);
@@ -164,20 +167,6 @@ export default function VendorDetail() {
                                 <div>
                                     <p className="text-sm font-medium text-slate-500">Address</p>
                                     <p className="text-lg font-semibold text-slate-800">{vendor.address}</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Commission Rate */}
-                        {vendor.commission_rate && (
-                            <div className="flex items-start space-x-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                                <Percent size={20} className="text-blue-600 mt-1 flex-shrink-0" />
-                                <div className="flex-1">
-                                    <p className="text-sm font-medium text-slate-500">Commission Rate</p>
-                                    <div className="flex items-center justify-between mt-1">
-                                        <p className="text-lg font-semibold text-blue-600">{vendor.commission_rate}%</p>
-                                        <p className="text-xs text-slate-500">of total sales</p>
-                                    </div>
                                 </div>
                             </div>
                         )}

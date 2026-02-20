@@ -5,7 +5,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Plus, Search, Edit2, Trash2, X, Check, Store, 
     Mail, Phone, MapPin, DollarSign, Package, 
-    Building2, AlertCircle, TrendingUp, Percent, FileText
+    Building2, AlertCircle, TrendingUp, FileText
 } from 'lucide-react';
 
 export default function VendorList() {
@@ -324,19 +324,6 @@ export default function VendorList() {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Commission Rate */}
-                            {vendor.commission_rate && (
-                                <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-2">
-                                            <Percent size={16} className="text-blue-600" />
-                                            <span className="text-xs font-medium text-slate-600">Commission Rate</span>
-                                        </div>
-                                        <span className="text-lg font-bold text-blue-600">{vendor.commission_rate}%</span>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Stats */}
                             <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-slate-50 rounded-xl">
