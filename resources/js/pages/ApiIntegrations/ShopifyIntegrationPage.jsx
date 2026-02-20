@@ -5,13 +5,11 @@ import api from '../../utils/api';
 export default function ShopifyIntegrationPage() {
     const [integration, setIntegration] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [isTesting, setIsTesting] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState({
         name: 'Shopify Store',
-        shop_url: '',
-        access_token: '',
+        shop_name: '',
+        webhook_secret: '',
         is_active: true,
     });
     const [message, setMessage] = useState({ type: '', text: '' });
@@ -29,8 +27,8 @@ export default function ShopifyIntegrationPage() {
                 setIntegration(shopifyIntegration);
                 setFormData({
                     name: shopifyIntegration.name,
-                    shop_url: shopifyIntegration.credentials?.shop_url || '',
-                    access_token: shopifyIntegration.credentials?.access_token || '',
+                    shop_name: shopifyIntegration.credentials?.shop_name || '',
+                    webhook_secret: shopifyIntegration.credentials?.webhook_secret || '',
                     is_active: shopifyIntegration.is_active,
                 });
             }
@@ -53,8 +51,8 @@ export default function ShopifyIntegrationPage() {
                 provider: 'shopify',
                 is_active: formData.is_active,
                 credentials: {
-                    shop_url: formData.shop_url,
-                    access_token: formData.access_token,
+                    shop_name: formData.shop_name,
+                    webhook_secret: formData.webhook_secret,
                 },
             };
 
@@ -77,54 +75,6 @@ export default function ShopifyIntegrationPage() {
         }
     };
 
-    const handleTestConnection = async () => {
-        if (!integration) {
-            setMessage({ type: 'error', text: 'Please save the integration first' });
-            return;
-        }
-
-        setIsTesting(true);
-        setMessage({ type: '', text: '' });
-
-        try {
-            const response = await api.post(`/api-integrations/${integration.id}/test-connection`);
-            setMessage({
-                type: response.data.success ? 'success' : 'error',
-                text: response.data.message,
-            });
-        } catch (error) {
-            setMessage({
-                type: 'error',
-                text: error.response?.data?.message || 'Connection test failed',
-            });
-        } finally {
-            setIsTesting(false);
-        }
-    };
-
-    const handleSync = async () => {
-        if (!integration) return;
-
-        setIsSyncing(true);
-        setMessage({ type: '', text: '' });
-
-        try {
-            const response = await api.post(`/api-integrations/${integration.id}/sync`);
-            setMessage({
-                type: 'success',
-                text: response.data.message || 'Sync completed successfully',
-            });
-            fetchIntegration();
-        } catch (error) {
-            setMessage({
-                type: 'error',
-                text: error.response?.data?.message || 'Sync failed',
-            });
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
     const handleDelete = async () => {
         if (!integration) return;
         if (!confirm('Are you sure you want to delete this integration?')) return;
@@ -135,8 +85,8 @@ export default function ShopifyIntegrationPage() {
             setIntegration(null);
             setFormData({
                 name: 'Shopify Store',
-                shop_url: '',
-                access_token: '',
+                shop_name: '',
+                webhook_secret: '',
                 is_active: true,
             });
         } catch (error) {
@@ -176,7 +126,7 @@ export default function ShopifyIntegrationPage() {
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Shopify Integration</h1>
-                            <p className="text-gray-600">E-commerce Platform - Import orders and sync products</p>
+                            <p className="text-gray-600">E-commerce Platform - Receive orders automatically via webhooks</p>
                         </div>
                     </div>
                 </div>
@@ -207,7 +157,7 @@ export default function ShopifyIntegrationPage() {
                 {/* Form Section */}
                 <div className="lg:col-span-2">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Connection Settings</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Webhook Settings</h2>
                         
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
@@ -226,35 +176,59 @@ export default function ShopifyIntegrationPage() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Shop URL
+                                    Shop Name (Optional)
                                 </label>
                                 <input
-                                    type="url"
-                                    value={formData.shop_url}
-                                    onChange={(e) => setFormData({ ...formData, shop_url: e.target.value })}
+                                    type="text"
+                                    value={formData.shop_name}
+                                    onChange={(e) => setFormData({ ...formData, shop_name: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                    placeholder="https://your-store.myshopify.com"
-                                    required
+                                    placeholder="your-store"
                                 />
                                 <p className="mt-2 text-sm text-gray-500">
-                                    Your Shopify store URL (e.g., https://your-store.myshopify.com)
+                                    Your Shopify store name (e.g., your-store from your-store.myshopify.com)
                                 </p>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Admin API Access Token
+                                    Webhook Secret
                                 </label>
                                 <input
                                     type="password"
-                                    value={formData.access_token}
-                                    onChange={(e) => setFormData({ ...formData, access_token: e.target.value })}
+                                    value={formData.webhook_secret}
+                                    onChange={(e) => setFormData({ ...formData, webhook_secret: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                    placeholder="shpat_xxxxxxxxxxxxxxxxxxxxx"
+                                    placeholder="Enter your webhook secret"
                                     required
                                 />
                                 <p className="mt-2 text-sm text-gray-500">
-                                    Get this from your Shopify Admin → Settings → Apps and sales channels → Develop apps
+                                    Get this from your Shopify Admin → Settings → Notifications → Webhooks
+                                </p>
+                            </div>
+
+                            {/* Display webhook URL */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <label className="block text-sm font-medium text-blue-900 mb-2">
+                                    Your Webhook URL
+                                </label>
+                                <div className="flex items-center space-x-2">
+                                    <code className="flex-1 bg-white px-3 py-2 rounded border border-blue-300 text-sm text-gray-800 break-all">
+                                        {window.location.origin}/api/webhooks/shopify/orders/create
+                                    </code>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/shopify/orders/create`);
+                                            setMessage({ type: 'success', text: 'Webhook URL copied to clipboard!' });
+                                        }}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                                <p className="mt-2 text-xs text-blue-700">
+                                    Use this URL when creating the webhook in Shopify. Subscribe to "Order creation" events.
                                 </p>
                             </div>
 
@@ -295,24 +269,30 @@ export default function ShopifyIntegrationPage() {
 
                 {/* Actions Section */}
                 <div className="space-y-6">
-                    {/* Quick Actions */}
+                    {/* Webhook Info */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-                        <div className="space-y-3">
-                            <button
-                                onClick={handleTestConnection}
-                                disabled={!integration || isTesting}
-                                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isTesting ? 'Testing...' : 'Test Connection'}
-                            </button>
-                            <button
-                                onClick={handleSync}
-                                disabled={!integration || isSyncing}
-                                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isSyncing ? 'Syncing...' : 'Sync Orders'}
-                            </button>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">How it works</h2>
+                        <div className="space-y-3 text-sm text-gray-600">
+                            <div className="flex items-start space-x-2">
+                                <span className="text-green-600 font-bold mt-0.5">1.</span>
+                                <p>Copy your webhook URL from the form</p>
+                            </div>
+                            <div className="flex items-start space-x-2">
+                                <span className="text-green-600 font-bold mt-0.5">2.</span>
+                                <p>Go to Shopify Admin → Settings → Notifications → Webhooks</p>
+                            </div>
+                            <div className="flex items-start space-x-2">
+                                <span className="text-green-600 font-bold mt-0.5">3.</span>
+                                <p>Create a new webhook for "Order creation" events</p>
+                            </div>
+                            <div className="flex items-start space-x-2">
+                                <span className="text-green-600 font-bold mt-0.5">4.</span>
+                                <p>Paste the webhook URL and save</p>
+                            </div>
+                            <div className="flex items-start space-x-2">
+                                <span className="text-green-600 font-bold mt-0.5">5.</span>
+                                <p>Copy the webhook secret from Shopify and paste it in the form above</p>
+                            </div>
                         </div>
                     </div>
 
@@ -343,19 +323,19 @@ export default function ShopifyIntegrationPage() {
                     <div className="bg-green-50 rounded-xl border border-green-200 p-6">
                         <h2 className="text-lg font-semibold text-green-900 mb-3">Need Help?</h2>
                         <ul className="text-sm text-green-800 space-y-2">
-                            <li>• Go to your Shopify Admin</li>
-                            <li>• Navigate to Settings → Apps</li>
-                            <li>• Click "Develop apps"</li>
-                            <li>• Create a custom app</li>
-                            <li>• Get the Admin API access token</li>
+                            <li>• No API token needed - webhooks only!</li>
+                            <li>• Orders are automatically pushed by Shopify</li>
+                            <li>• Webhook secret verifies authenticity</li>
+                            <li>• Real-time order synchronization</li>
+                            <li>• Secure and reliable integration</li>
                         </ul>
                         <a
-                            href="https://shopify.dev/docs/api"
+                            href="https://shopify.dev/docs/api/admin-rest/latest/resources/webhook"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-block mt-4 text-green-700 hover:text-green-800 font-medium"
                         >
-                            View Shopify API Docs →
+                            View Shopify Webhook Docs →
                         </a>
                     </div>
                 </div>

@@ -16,11 +16,16 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MarketplaceController;
+use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+
+// Webhook routes (public - no authentication required)
+Route::post('/webhooks/shopify/orders/create', [WebhookController::class, 'handleShopifyOrderCreate']);
+Route::post('/webhooks/test', [WebhookController::class, 'testWebhook']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
