@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Vendor extends Model
 {
     protected $fillable = [
+        'user_id',
         'name',
         'email',
         'phone',
@@ -27,6 +29,11 @@ class Vendor extends Model
         'total_sales' => 'decimal:2',
         'total_commission' => 'decimal:2',
     ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function products(): HasMany
     {
@@ -48,5 +55,10 @@ class Vendor extends Model
     public function activeMarketplaceProducts(): BelongsToMany
     {
         return $this->marketplaceProducts()->wherePivot('is_active', true);
+    }
+
+    public function apiIntegrations(): HasMany
+    {
+        return $this->hasMany(ApiIntegration::class);
     }
 }

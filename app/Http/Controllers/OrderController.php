@@ -16,6 +16,15 @@ class OrderController extends Controller
     {
         $query = Order::with(['client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'items.product']);
 
+        // If user is a vendor, only show their orders
+        $user = $request->user();
+        if ($user && $user->role && $user->role->slug === 'vendor') {
+            $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
+            if ($vendor) {
+                $query->where('vendor_id', $vendor->id);
+            }
+        }
+
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
                 $q->where('order_number', 'like', '%' . $request->search . '%')

@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ApiIntegrations() {
+    const { user } = useAuth();
     const [integrations, setIntegrations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    
+    const isVendor = user?.role?.slug === 'vendor';
 
     useEffect(() => {
         fetchIntegrations();
@@ -29,7 +33,8 @@ export default function ApiIntegrations() {
         return integrations.find(i => i.provider === provider);
     };
 
-    const integrationsList = [
+    // All available integrations
+    const allIntegrations = [
         {
             id: 'shopify',
             path: '/api-integrations/shopify',
@@ -41,6 +46,7 @@ export default function ApiIntegrations() {
             borderColor: 'border-green-200',
             textColor: 'text-green-700',
             badgeColor: 'bg-green-100 text-green-800',
+            vendorVisible: true, // Vendors can see this
         },
         {
             id: 'tawsilex',
@@ -53,6 +59,7 @@ export default function ApiIntegrations() {
             borderColor: 'border-orange-200',
             textColor: 'text-orange-700',
             badgeColor: 'bg-orange-100 text-orange-800',
+            vendorVisible: false, // Hidden from vendors
         },
         {
             id: 'bmdelivery',
@@ -65,8 +72,14 @@ export default function ApiIntegrations() {
             borderColor: 'border-blue-200',
             textColor: 'text-blue-700',
             badgeColor: 'bg-blue-100 text-blue-800',
+            vendorVisible: false, // Hidden from vendors
         },
     ];
+    
+    // Filter integrations based on user role
+    const integrationsList = isVendor 
+        ? allIntegrations.filter(item => item.vendorVisible)
+        : allIntegrations;
 
     if (loading) {
         return (

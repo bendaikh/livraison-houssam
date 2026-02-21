@@ -14,9 +14,30 @@ class ApiIntegrationController extends Controller
 
     public function index()
     {
-        $integrations = ApiIntegration::with(['importLogs' => function ($query) {
+        $user = auth()->user();
+        
+        $query = ApiIntegration::with(['importLogs' => function ($query) {
             $query->latest()->limit(5);
-        }])->get();
+        }]);
+        
+        // If user is a vendor, only show Shopify integration linked to them
+        if ($user && $user->role && $user->role->slug === 'vendor') {
+            $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
+            
+            if ($vendor) {
+                // Show only Shopify integrations linked to this vendor or general Shopify
+                $query->where('type', 'shopify')
+                      ->where(function ($q) use ($vendor) {
+                          $q->where('vendor_id', $vendor->id)
+                            ->orWhereNull('vendor_id');
+                      });
+            } else {
+                // If vendor profile not found, show only Shopify type
+                $query->where('type', 'shopify');
+            }
+        }
+        
+        $integrations = $query->get();
 
         return response()->json($integrations);
     }

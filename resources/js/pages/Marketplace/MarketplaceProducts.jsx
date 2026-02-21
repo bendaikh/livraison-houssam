@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
     Package, Store, Users, Search, Filter, Plus, X, Check, 
     ToggleLeft, ToggleRight, Edit, Trash2, TrendingUp, AlertCircle,
@@ -10,6 +11,7 @@ import {
 
 export default function MarketplaceProducts() {
     const { formatCurrency } = useSettings();
+    const { user } = useAuth();
     const [products, setProducts] = useState([]);
     const [vendors, setVendors] = useState([]);
     const [statistics, setStatistics] = useState(null);
@@ -26,6 +28,8 @@ export default function MarketplaceProducts() {
         assigned_quantity: 0,
         is_active: true,
     });
+    
+    const isVendor = user?.role?.slug === 'vendor';
 
     useEffect(() => {
         fetchData();
@@ -129,7 +133,7 @@ export default function MarketplaceProducts() {
 
             {/* Statistics Cards */}
             {statistics && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className={`grid grid-cols-1 md:grid-cols-2 ${isVendor ? 'xl:grid-cols-3' : 'xl:grid-cols-4'} gap-6`}>
                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200/50">
                         <div className="flex items-center justify-between">
                             <div>
@@ -166,17 +170,19 @@ export default function MarketplaceProducts() {
                         </div>
                     </div>
 
-                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200/50">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-600 mb-1">Active Vendors</p>
-                                <h3 className="text-3xl font-bold text-slate-800">{statistics.total_vendors}</h3>
-                            </div>
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
-                                <Users className="text-white" size={26} />
+                    {!isVendor && (
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200/50">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-slate-600 mb-1">Active Vendors</p>
+                                    <h3 className="text-3xl font-bold text-slate-800">{statistics.total_vendors}</h3>
+                                </div>
+                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
+                                    <Users className="text-white" size={26} />
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 
@@ -292,13 +298,15 @@ export default function MarketplaceProducts() {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    <button
-                                                        onClick={() => handleAssignVendor(product)}
-                                                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all flex items-center space-x-2"
-                                                    >
-                                                        <Plus size={18} />
-                                                        <span>Assign Vendor</span>
-                                                    </button>
+                                                    {!isVendor && (
+                                                        <button
+                                                            onClick={() => handleAssignVendor(product)}
+                                                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all flex items-center space-x-2"
+                                                        >
+                                                            <Plus size={18} />
+                                                            <span>Assign Vendor</span>
+                                                        </button>
+                                                    )}
                                                     {hasAssignments && (
                                                         <button
                                                             onClick={() => toggleProductExpansion(product.id)}
@@ -453,13 +461,15 @@ export default function MarketplaceProducts() {
                                         )}
 
                                         {/* Actions */}
-                                        <button
-                                            onClick={() => handleAssignVendor(product)}
-                                            className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                                        >
-                                            <Plus size={16} />
-                                            <span>Assign Vendor</span>
-                                        </button>
+                                        {!isVendor && (
+                                            <button
+                                                onClick={() => handleAssignVendor(product)}
+                                                className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                                            >
+                                                <Plus size={16} />
+                                                <span>Assign Vendor</span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             );

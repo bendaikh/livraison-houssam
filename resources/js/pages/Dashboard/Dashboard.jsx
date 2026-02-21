@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown } from 'lucide-react';
 
 export default function Dashboard() {
     const { formatCurrency } = useSettings();
+    const { user } = useAuth();
     const [period, setPeriod] = useState('daily');
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    
+    const isVendor = user?.role?.slug === 'vendor';
 
     useEffect(() => {
         fetchDashboardData();
@@ -68,7 +72,7 @@ export default function Dashboard() {
             change: '5 new',
             changeType: 'neutral'
         },
-        {
+        ...(!isVendor ? [{
             title: 'Low Stock Items',
             value: stats?.low_stock_products?.length || 0,
             icon: AlertTriangle,
@@ -77,7 +81,7 @@ export default function Dashboard() {
             iconBg: 'bg-rose-500',
             change: 'Needs attention',
             changeType: 'negative'
-        },
+        }] : [])
     ];
 
     const getStatusColor = (status) => {
@@ -233,7 +237,7 @@ export default function Dashboard() {
             </div>
 
             {/* Low Stock Alert */}
-            {stats?.low_stock_products?.length > 0 && (
+            {!isVendor && stats?.low_stock_products?.length > 0 && (
                 <div className="bg-gradient-to-br from-rose-50 to-orange-50 rounded-2xl border border-rose-200/50 p-6">
                     <div className="flex items-center space-x-3 mb-6">
                         <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/25">
@@ -275,57 +279,61 @@ export default function Dashboard() {
 
             {/* Additional Statistics Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Top Sellers Stats */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-slate-800">Top Sellers</h3>
-                        <Store className="text-orange-500" size={24} />
-                    </div>
-                    <div className="space-y-3">
-                        {stats?.top_vendors?.length > 0 ? (
-                            stats.top_vendors.slice(0, 3).map((vendor, index) => (
-                                <div key={vendor.id} className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border border-orange-100">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-sm">
-                                            {index + 1}
+                {/* Top Sellers Stats - Hidden from vendors */}
+                {!isVendor && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-slate-800">Top Sellers</h3>
+                            <Store className="text-orange-500" size={24} />
+                        </div>
+                        <div className="space-y-3">
+                            {stats?.top_vendors?.length > 0 ? (
+                                stats.top_vendors.slice(0, 3).map((vendor, index) => (
+                                    <div key={vendor.id} className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border border-orange-100">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-sm">
+                                                {index + 1}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-slate-800 text-sm">{vendor.name}</p>
+                                                <p className="text-xs text-slate-500">{vendor.products_count || 0} products</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-semibold text-slate-800 text-sm">{vendor.name}</p>
-                                            <p className="text-xs text-slate-500">{vendor.products_count || 0} products</p>
+                                        <div className="text-right">
+                                            <p className="font-bold text-orange-600 text-sm">{formatCurrency(parseFloat(vendor.total_sales) || 0)}</p>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-bold text-orange-600 text-sm">{formatCurrency(parseFloat(vendor.total_sales) || 0)}</p>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-center text-slate-500 py-4 text-sm">No seller data available</p>
-                        )}
+                                ))
+                            ) : (
+                                <p className="text-center text-slate-500 py-4 text-sm">No seller data available</p>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
 
-                {/* Sellers Stats */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-slate-800">Sellers</h3>
-                        <Store className="text-purple-500" size={24} />
+                {/* Sellers Stats - Hidden from vendors */}
+                {!isVendor && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-slate-800">Sellers</h3>
+                            <Store className="text-purple-500" size={24} />
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-slate-600">Total Sellers</span>
+                                <span className="text-lg font-bold text-slate-800">{stats?.vendors?.total || 0}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-slate-600">Active Sellers</span>
+                                <span className="text-lg font-bold text-emerald-600">{stats?.vendors?.active || 0}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-slate-600">Total Commission</span>
+                                <span className="text-lg font-bold text-purple-600">{formatCurrency(parseFloat(stats?.vendors?.total_commission) || 0)}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Total Sellers</span>
-                            <span className="text-lg font-bold text-slate-800">{stats?.vendors?.total || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Active Sellers</span>
-                            <span className="text-lg font-bold text-emerald-600">{stats?.vendors?.active || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Total Commission</span>
-                            <span className="text-lg font-bold text-purple-600">{formatCurrency(parseFloat(stats?.vendors?.total_commission) || 0)}</span>
-                        </div>
-                    </div>
-                </div>
+                )}
 
                 {/* Products Stats */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">

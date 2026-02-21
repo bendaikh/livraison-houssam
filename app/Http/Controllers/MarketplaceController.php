@@ -15,6 +15,35 @@ class MarketplaceController extends Controller
      */
     public function index(Request $request)
     {
+        $user = $request->user();
+        
+        // If user is a vendor, only show their assigned products
+        if ($user && $user->role && $user->role->slug === 'vendor') {
+            $vendor = Vendor::where('user_id', $user->id)->first();
+            
+            if (!$vendor) {
+                return response()->json(['data' => [], 'total' => 0]);
+            }
+            
+            // Get only products assigned to this vendor
+            $query = $vendor->marketplaceProducts()
+                ->with(['category', 'vendor']);
+            
+            // Search by name or SKU
+            if ($request->has('search')) {
+                $search = $request->get('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('sku', 'like', "%{$search}%");
+                });
+            }
+            
+            $products = $query->paginate($request->get('per_page', 15));
+            
+            return response()->json($products);
+        }
+        
+        // Admin view - show all marketplace products
         $query = Product::with(['category', 'marketplaceProducts.vendor']);
 
         // Filter to only show marketplace-active products if requested

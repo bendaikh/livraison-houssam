@@ -14,7 +14,16 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $period = $request->get('period', 'daily');
-        $statistics = $this->dashboardService->getStatistics($period);
+        $user = $request->user();
+        $vendorId = null;
+        
+        // If user is a vendor, get their vendor ID
+        if ($user && $user->role && $user->role->slug === 'vendor') {
+            $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
+            $vendorId = $vendor?->id;
+        }
+        
+        $statistics = $this->dashboardService->getStatistics($period, $vendorId);
 
         return response()->json($statistics);
     }

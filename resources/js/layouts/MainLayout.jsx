@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -27,8 +27,10 @@ export default function MainLayout() {
         await logout();
         navigate('/login');
     };
+    
+    const isVendor = user?.role?.slug === 'vendor';
 
-    const menuItems = [
+    const menuItems = useMemo(() => [
         { path: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & Analytics' },
         { 
             path: '/products', 
@@ -36,21 +38,23 @@ export default function MainLayout() {
             label: 'Products', 
             description: 'Manage inventory',
             hasSubItems: true,
+            adminOnly: true,
             subItems: [
                 { path: '/products', icon: List, label: 'List Products', description: 'View all products' },
                 { path: '/categories', icon: Tags, label: 'Categories', description: 'Product categories' }
             ]
         },
         { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Vendor products' },
-        { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control' },
+        { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control', adminOnly: true },
         { path: '/orders', icon: ShoppingCart, label: 'Orders', description: 'Order management' },
-        { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management' },
+        { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management', adminOnly: true },
         { 
             path: '/expenses', 
             icon: DollarSign, 
             label: 'Expenses', 
             description: 'Track expenses',
             hasSubItems: true,
+            adminOnly: true,
             subItems: [
                 { path: '/expenses', icon: Receipt, label: 'List Expenses', description: 'View all expenses' },
                 { path: '/expense-categories', icon: Tags, label: 'Expense Categories', description: 'Expense types' }
@@ -60,13 +64,17 @@ export default function MainLayout() {
             path: '/api-integrations', 
             icon: Link2, 
             label: 'API Integrations', 
-            description: 'External APIs',
+            description: 'Connect your store',
             hasSubItems: true,
-            subItems: [
-                { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
-                { path: '/api-integrations/tawsilex', icon: Package, label: 'Tawsilex', description: 'Delivery service' },
-                { path: '/api-integrations/bmdelivery', icon: Box, label: 'BMDelivery', description: 'Delivery service' }
-            ]
+            subItems: isVendor
+                ? [
+                    { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
+                  ]
+                : [
+                    { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
+                    { path: '/api-integrations/tawsilex', icon: Package, label: 'Tawsilex', description: 'Delivery service' },
+                    { path: '/api-integrations/bmdelivery', icon: Box, label: 'BMDelivery', description: 'Delivery service' }
+                  ]
         },
         { 
             path: '/user-management', 
@@ -80,8 +88,8 @@ export default function MainLayout() {
                 { path: '/roles', icon: Shield, label: 'Roles', description: 'Manage roles' }
             ]
         },
-        { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings' },
-    ];
+        { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings', adminOnly: true },
+    ], [isVendor]);
 
     const isActive = (path) => {
         if (path === '/') return location.pathname === '/';

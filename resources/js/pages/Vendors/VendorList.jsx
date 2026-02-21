@@ -22,6 +22,8 @@ export default function VendorList() {
         phone: '',
         address: '',
         company_name: '',
+        password: '',
+        password_confirmation: '',
         is_active: true
     });
     const [errors, setErrors] = useState({});
@@ -79,6 +81,8 @@ export default function VendorList() {
             phone: vendor.phone || '',
             address: vendor.address || '',
             company_name: vendor.company_name || '',
+            password: '',
+            password_confirmation: '',
             is_active: vendor.is_active
         });
         setShowModal(true);
@@ -105,6 +109,8 @@ export default function VendorList() {
             phone: '',
             address: '',
             company_name: '',
+            password: '',
+            password_confirmation: '',
             is_active: true
         });
         setErrors({});
@@ -488,6 +494,74 @@ export default function VendorList() {
                                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
                                             placeholder="+1 (555) 123-4567"
                                         />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Login Credentials */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-slate-800 flex items-center space-x-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                    </svg>
+                                    <span>Login Credentials</span>
+                                </h3>
+                                
+                                {!editingVendor && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                                        <p className="text-sm text-blue-800">
+                                            <strong>Note:</strong> The seller will be able to login to the system using their email and password.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {editingVendor && (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                                        <p className="text-sm text-amber-800">
+                                            <strong>Note:</strong> Leave password fields empty to keep the current password.
+                                        </p>
+                                    </div>
+                                )}
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                            Password {!editingVendor && '*'}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                                            placeholder={editingVendor ? "Leave empty to keep current" : "Enter password"}
+                                            required={!editingVendor}
+                                            minLength="8"
+                                        />
+                                        {errors.password && (
+                                            <p className="text-red-500 text-xs mt-1.5 flex items-center">
+                                                <span className="mr-1">⚠</span>{errors.password[0]}
+                                            </p>
+                                        )}
+                                        <p className="text-xs text-slate-500 mt-1">Minimum 8 characters</p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                            Confirm Password {!editingVendor && '*'}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={formData.password_confirmation}
+                                            onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })}
+                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                                            placeholder={editingVendor ? "Leave empty to keep current" : "Confirm password"}
+                                            required={!editingVendor}
+                                        />
+                                        {errors.password_confirmation && (
+                                            <p className="text-red-500 text-xs mt-1.5 flex items-center">
+                                                <span className="mr-1">⚠</span>{errors.password_confirmation[0]}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

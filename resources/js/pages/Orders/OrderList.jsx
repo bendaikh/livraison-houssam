@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw, Download } from 'lucide-react';
 
 export default function OrderList() {
     const { formatCurrency } = useSettings();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -27,6 +29,8 @@ export default function OrderList() {
         date_from: '',
         date_to: ''
     });
+    
+    const isVendor = user?.role?.slug === 'vendor';
 
     useEffect(() => {
         fetchOrders();
@@ -174,7 +178,7 @@ export default function OrderList() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-900">Orders Management</h1>
                 <div className="flex gap-3">
-                    {shopifyIntegration && (
+                    {shopifyIntegration && !isVendor && (
                         <button
                             onClick={handleSyncShopify}
                             disabled={syncing}

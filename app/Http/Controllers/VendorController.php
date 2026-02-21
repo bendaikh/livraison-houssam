@@ -33,7 +33,8 @@ class VendorController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:vendors,email',
+            'email' => 'required|email|unique:vendors,email|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
             'phone' => 'nullable|string',
             'address' => 'nullable|string',
             'company_name' => 'nullable|string',
@@ -42,9 +43,49 @@ class VendorController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $vendor = Vendor::create($validated);
+        // Start transaction
+        \DB::beginTransaction();
+        
+        try {
+            // Create user account for vendor
+            $user = \App\Models\User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => \Hash::make($validated['password']),
+                'is_active' => $validated['is_active'] ?? true,
+            ]);
 
-        return response()->json($vendor, 201);
+            // Assign vendor role
+            $vendorRole = \App\Models\Role::where('slug', 'vendor')->first();
+            if ($vendorRole) {
+                $user->role()->associate($vendorRole);
+                $user->save();
+            }
+
+            // Create vendor profile linked to user
+            $vendorData = $validated;
+            unset($vendorData['password'], $vendorData['password_confirmation']);
+            $vendorData['user_id'] = $user->id;
+            
+            $vendor = Vendor::create($vendorData);
+
+            \DB::commit();
+
+            return response()->json([
+                'vendor' => $vendor->load('user'),
+                'message' => 'Vendor created successfully. They can now login with their email and password.'
+            ], 201);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('Failed to create vendor', [
+                'error' => $e->getMessage(),
+                'data' => $validated,
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to create vendor: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function show(Vendor $vendor)
@@ -67,7 +108,8 @@ class VendorController extends Controller
     {
         $validated = $request->validate([
             'name' => 'string|max:255',
-            'email' => 'email|unique:vendors,email,' . $vendor->id,
+            'email' => 'email|unique:vendors,email,' . $vendor->id . '|unique:users,email,' . ($vendor->user_id ?? 'NULL'),
+            'password' => 'nullable|string|min:8|confirmed',
             'phone' => 'nullable|string',
             'address' => 'nullable|string',
             'company_name' => 'nullable|string',
@@ -76,9 +118,47 @@ class VendorController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $vendor->update($validated);
+        \DB::beginTransaction();
+        
+        try {
+            // Update vendor profile
+            $vendorData = $validated;
+            unset($vendorData['password'], $vendorData['password_confirmation']);
+            $vendor->update($vendorData);
 
-        return response()->json($vendor);
+            // Update user account if exists
+            if ($vendor->user_id) {
+                $userData = [
+                    'name' => $validated['name'] ?? $vendor->user->name,
+                    'email' => $validated['email'] ?? $vendor->user->email,
+                    'is_active' => $validated['is_active'] ?? $vendor->user->is_active,
+                ];
+
+                // Update password if provided
+                if (!empty($validated['password'])) {
+                    $userData['password'] = \Hash::make($validated['password']);
+                }
+
+                $vendor->user->update($userData);
+            }
+
+            \DB::commit();
+
+            return response()->json([
+                'vendor' => $vendor->load('user'),
+                'message' => 'Vendor updated successfully.'
+            ]);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('Failed to update vendor', [
+                'error' => $e->getMessage(),
+                'vendor_id' => $vendor->id,
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to update vendor: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function destroy(Vendor $vendor)

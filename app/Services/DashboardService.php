@@ -13,24 +13,24 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
-    public function getStatistics(string $period = 'daily')
+    public function getStatistics(string $period = 'daily', $vendorId = null)
     {
         $dateRange = $this->getDateRange($period);
 
         return [
-            'sales' => $this->getSalesStats($dateRange),
-            'orders' => $this->getOrdersStats($dateRange),
-            'revenue' => $this->getRevenueStats($dateRange),
-            'expenses' => $this->getExpensesStats($dateRange),
-            'low_stock_products' => $this->getLowStockProducts(),
-            'recent_orders' => $this->getRecentOrders(),
-            'charts' => $this->getChartsData($period),
-            'clients' => $this->getClientsStats($dateRange),
-            'vendors' => $this->getVendorsStats(),
-            'products' => $this->getProductsStats(),
-            'top_products' => $this->getTopProducts($dateRange),
-            'top_clients' => $this->getTopClients($dateRange),
-            'top_vendors' => $this->getTopVendors($dateRange),
+            'sales' => $this->getSalesStats($dateRange, $vendorId),
+            'orders' => $this->getOrdersStats($dateRange, $vendorId),
+            'revenue' => $this->getRevenueStats($dateRange, $vendorId),
+            'expenses' => $vendorId ? 0 : $this->getExpensesStats($dateRange), // Vendors don't see expenses
+            'low_stock_products' => $vendorId ? [] : $this->getLowStockProducts(), // Vendors don't see stock
+            'recent_orders' => $this->getRecentOrders($vendorId),
+            'charts' => $this->getChartsData($period, $vendorId),
+            'clients' => $this->getClientsStats($dateRange, $vendorId),
+            'vendors' => $vendorId ? [] : $this->getVendorsStats(), // Vendors don't see other vendors
+            'products' => $this->getProductsStats($vendorId),
+            'top_products' => $this->getTopProducts($dateRange, $vendorId),
+            'top_clients' => $this->getTopClients($dateRange, $vendorId),
+            'top_vendors' => $vendorId ? [] : $this->getTopVendors($dateRange), // Vendors don't see this
         ];
     }
 
@@ -56,41 +56,52 @@ class DashboardService
         };
     }
 
-    private function getSalesStats(array $dateRange)
+    private function getSalesStats(array $dateRange, $vendorId = null)
     {
-        return Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-            ->whereIn('status', ['confirmed', 'shipped', 'delivered'])
-            ->sum('total');
+        $query = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+            ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+        
+        if ($vendorId) {
+            $query->where('vendor_id', $vendorId);
+        }
+        
+        return $query->sum('total');
     }
 
-    private function getOrdersStats(array $dateRange)
+    private function getOrdersStats(array $dateRange, $vendorId = null)
     {
+        $baseQuery = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        
+        if ($vendorId) {
+            $baseQuery->where('vendor_id', $vendorId);
+        }
+        
         return [
-            'total' => Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])->count(),
-            'pending' => Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-                ->where('status', 'pending')->count(),
-            'confirmed' => Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-                ->where('status', 'confirmed')->count(),
-            'shipped' => Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-                ->where('status', 'shipped')->count(),
-            'delivered' => Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-                ->where('status', 'delivered')->count(),
-            'cancelled' => Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-                ->where('status', 'cancelled')->count(),
-            'by_source' => Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+            'total' => (clone $baseQuery)->count(),
+            'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
+            'confirmed' => (clone $baseQuery)->where('status', 'confirmed')->count(),
+            'shipped' => (clone $baseQuery)->where('status', 'shipped')->count(),
+            'delivered' => (clone $baseQuery)->where('status', 'delivered')->count(),
+            'cancelled' => (clone $baseQuery)->where('status', 'cancelled')->count(),
+            'by_source' => (clone $baseQuery)
                 ->select('source', DB::raw('count(*) as count'))
                 ->groupBy('source')
                 ->get(),
         ];
     }
 
-    private function getRevenueStats(array $dateRange)
+    private function getRevenueStats(array $dateRange, $vendorId = null)
     {
-        $revenue = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
-            ->whereIn('status', ['confirmed', 'shipped', 'delivered'])
-            ->sum('total');
+        $revenueQuery = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+            ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+        
+        if ($vendorId) {
+            $revenueQuery->where('vendor_id', $vendorId);
+        }
+        
+        $revenue = $revenueQuery->sum('total');
 
-        $expenses = Expense::whereBetween('expense_date', [$dateRange['start'], $dateRange['end']])
+        $expenses = $vendorId ? 0 : Expense::whereBetween('expense_date', [$dateRange['start'], $dateRange['end']])
             ->sum('amount');
 
         return [
@@ -115,15 +126,20 @@ class DashboardService
             ->get();
     }
 
-    private function getRecentOrders()
+    private function getRecentOrders($vendorId = null)
     {
-        return Order::with(['client', 'items.product'])
+        $query = Order::with(['client', 'items.product'])
             ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+            ->limit(10);
+        
+        if ($vendorId) {
+            $query->where('vendor_id', $vendorId);
+        }
+        
+        return $query->get();
     }
 
-    private function getChartsData(string $period)
+    private function getChartsData(string $period, $vendorId = null)
     {
         $days = match($period) {
             'daily' => 24, // hours
@@ -133,78 +149,113 @@ class DashboardService
         };
 
         if ($period === 'daily') {
-            return $this->getHourlyChartData();
+            return $this->getHourlyChartData($vendorId);
         } elseif ($period === 'yearly') {
-            return $this->getMonthlyChartData();
+            return $this->getMonthlyChartData($vendorId);
         }
 
-        return $this->getDailyChartData($days);
+        return $this->getDailyChartData($days, $vendorId);
     }
 
-    private function getHourlyChartData()
+    private function getHourlyChartData($vendorId = null)
     {
         $data = [];
         for ($i = 23; $i >= 0; $i--) {
             $hour = Carbon::now()->subHours($i);
-            $sales = Order::whereBetween('created_at', [$hour, $hour->copy()->addHour()])
-                ->whereIn('status', ['confirmed', 'shipped', 'delivered'])
-                ->sum('total');
+            
+            $salesQuery = Order::whereBetween('created_at', [$hour, $hour->copy()->addHour()])
+                ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $ordersQuery = Order::whereBetween('created_at', [$hour, $hour->copy()->addHour()]);
+            
+            if ($vendorId) {
+                $salesQuery->where('vendor_id', $vendorId);
+                $ordersQuery->where('vendor_id', $vendorId);
+            }
             
             $data[] = [
                 'label' => $hour->format('H:00'),
-                'sales' => $sales,
-                'orders' => Order::whereBetween('created_at', [$hour, $hour->copy()->addHour()])->count(),
+                'sales' => $salesQuery->sum('total'),
+                'orders' => $ordersQuery->count(),
             ];
         }
         return $data;
     }
 
-    private function getDailyChartData(int $days)
+    private function getDailyChartData(int $days, $vendorId = null)
     {
         $data = [];
         for ($i = $days - 1; $i >= 0; $i--) {
             $day = Carbon::now()->subDays($i);
-            $sales = Order::whereDate('created_at', $day)
-                ->whereIn('status', ['confirmed', 'shipped', 'delivered'])
-                ->sum('total');
+            
+            $salesQuery = Order::whereDate('created_at', $day)
+                ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $ordersQuery = Order::whereDate('created_at', $day);
+            
+            if ($vendorId) {
+                $salesQuery->where('vendor_id', $vendorId);
+                $ordersQuery->where('vendor_id', $vendorId);
+            }
             
             $data[] = [
                 'label' => $day->format('M d'),
-                'sales' => $sales,
-                'orders' => Order::whereDate('created_at', $day)->count(),
+                'sales' => $salesQuery->sum('total'),
+                'orders' => $ordersQuery->count(),
             ];
         }
         return $data;
     }
 
-    private function getMonthlyChartData()
+    private function getMonthlyChartData($vendorId = null)
     {
         $data = [];
         for ($i = 11; $i >= 0; $i--) {
             $month = Carbon::now()->subMonths($i);
-            $sales = Order::whereYear('created_at', $month->year)
+            
+            $salesQuery = Order::whereYear('created_at', $month->year)
                 ->whereMonth('created_at', $month->month)
-                ->whereIn('status', ['confirmed', 'shipped', 'delivered'])
-                ->sum('total');
+                ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $ordersQuery = Order::whereYear('created_at', $month->year)
+                ->whereMonth('created_at', $month->month);
+            
+            if ($vendorId) {
+                $salesQuery->where('vendor_id', $vendorId);
+                $ordersQuery->where('vendor_id', $vendorId);
+            }
             
             $data[] = [
                 'label' => $month->format('M Y'),
-                'sales' => $sales,
-                'orders' => Order::whereYear('created_at', $month->year)
-                    ->whereMonth('created_at', $month->month)->count(),
+                'sales' => $salesQuery->sum('total'),
+                'orders' => $ordersQuery->count(),
             ];
         }
         return $data;
     }
 
-    private function getClientsStats(array $dateRange)
+    private function getClientsStats(array $dateRange, $vendorId = null)
     {
+        $totalQuery = Client::query();
+        $newQuery = Client::whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        $activeQuery = Client::whereHas('orders', function ($query) use ($dateRange, $vendorId) {
+            $query->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+            if ($vendorId) {
+                $query->where('vendor_id', $vendorId);
+            }
+        });
+        
+        // If vendor, filter clients who have ordered from them
+        if ($vendorId) {
+            $totalQuery->whereHas('orders', function ($query) use ($vendorId) {
+                $query->where('vendor_id', $vendorId);
+            });
+            $newQuery->whereHas('orders', function ($query) use ($vendorId) {
+                $query->where('vendor_id', $vendorId);
+            });
+        }
+        
         return [
-            'total' => Client::count(),
-            'new' => Client::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])->count(),
-            'active' => Client::whereHas('orders', function ($query) use ($dateRange) {
-                $query->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
-            })->count(),
+            'total' => $totalQuery->count(),
+            'new' => $newQuery->count(),
+            'active' => $activeQuery->count(),
         ];
     }
 
@@ -217,8 +268,31 @@ class DashboardService
         ];
     }
 
-    private function getProductsStats()
+    private function getProductsStats($vendorId = null)
     {
+        if ($vendorId) {
+            // For vendors, show their marketplace products
+            $vendor = Vendor::find($vendorId);
+            if (!$vendor) {
+                return [
+                    'total' => 0,
+                    'active' => 0,
+                    'low_stock' => 0,
+                    'out_of_stock' => 0,
+                ];
+            }
+            
+            $marketplaceProducts = $vendor->marketplaceProducts();
+            
+            return [
+                'total' => $marketplaceProducts->count(),
+                'active' => (clone $marketplaceProducts)->where('is_active', true)->count(),
+                'low_stock' => 0, // Vendors don't manage stock directly
+                'out_of_stock' => 0,
+            ];
+        }
+        
+        // Admin view
         return [
             'total' => Product::count(),
             'active' => Product::where('is_active', true)->count(),
@@ -231,26 +305,36 @@ class DashboardService
         ];
     }
 
-    private function getTopProducts(array $dateRange)
+    private function getTopProducts(array $dateRange, $vendorId = null)
     {
-        return Product::select('products.*', DB::raw('SUM(order_items.quantity) as total_sold'))
+        $query = Product::select('products.*', DB::raw('SUM(order_items.quantity) as total_sold'))
             ->join('order_items', 'products.id', '=', 'order_items.product_id')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
             ->whereBetween('orders.created_at', [$dateRange['start'], $dateRange['end']])
-            ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered'])
-            ->groupBy('products.id')
+            ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered']);
+        
+        if ($vendorId) {
+            $query->where('orders.vendor_id', $vendorId);
+        }
+        
+        return $query->groupBy('products.id')
             ->orderBy('total_sold', 'desc')
             ->limit(5)
             ->get();
     }
 
-    private function getTopClients(array $dateRange)
+    private function getTopClients(array $dateRange, $vendorId = null)
     {
-        return Client::select('clients.*', DB::raw('COUNT(orders.id) as order_count'), DB::raw('SUM(orders.total) as total_spent'))
+        $query = Client::select('clients.*', DB::raw('COUNT(orders.id) as order_count'), DB::raw('SUM(orders.total) as total_spent'))
             ->join('orders', 'clients.id', '=', 'orders.client_id')
             ->whereBetween('orders.created_at', [$dateRange['start'], $dateRange['end']])
-            ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered'])
-            ->groupBy('clients.id')
+            ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered']);
+        
+        if ($vendorId) {
+            $query->where('orders.vendor_id', $vendorId);
+        }
+        
+        return $query->groupBy('clients.id')
             ->orderBy('total_spent', 'desc')
             ->limit(5)
             ->get();
