@@ -37,11 +37,19 @@ class ApiIntegrationService
 
         try {
             $credentials = $integration->credentials;
+            
+            // Check if this is a webhook-only integration
             $shopUrl = $credentials['shop_url'] ?? '';
             $accessToken = $credentials['access_token'] ?? '';
+            $webhookSecret = $credentials['webhook_secret'] ?? '';
+            
+            // If only webhook is configured (no API credentials), explain this
+            if (!$shopUrl && !$accessToken && $webhookSecret) {
+                throw new \Exception('This integration uses webhooks only. Orders are automatically imported when created in Shopify. To manually sync orders, you need to add Shop URL and Admin API Access Token in the integration settings.');
+            }
 
             if (!$shopUrl || !$accessToken) {
-                throw new \Exception('Missing Shopify credentials');
+                throw new \Exception('Missing Shopify credentials. Please add Shop URL and Admin API Access Token to enable manual sync.');
             }
 
             // Configure Shopify service

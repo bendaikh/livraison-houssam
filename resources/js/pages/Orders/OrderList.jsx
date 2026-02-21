@@ -67,6 +67,16 @@ export default function OrderList() {
             const response = await api.get('/api-integrations');
             const shopifyInt = response.data.find(int => int.type === 'shopify' && int.is_active);
             setShopifyIntegration(shopifyInt);
+            
+            // Check if it's webhook-only (no API credentials)
+            if (shopifyInt) {
+                const hasApiCreds = shopifyInt.credentials?.shop_url && shopifyInt.credentials?.access_token;
+                const hasWebhook = shopifyInt.credentials?.webhook_secret;
+                
+                if (!hasApiCreds && hasWebhook) {
+                    console.log('Webhook-only integration detected');
+                }
+            }
         } catch (error) {
             console.error('Error fetching Shopify integration:', error);
         }
