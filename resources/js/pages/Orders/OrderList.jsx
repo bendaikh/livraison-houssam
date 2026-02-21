@@ -81,11 +81,30 @@ export default function OrderList() {
         try {
             setSyncing(true);
             const response = await api.post(`/api-integrations/${shopifyIntegration.id}/sync`);
-            alert(`Sync completed! ${response.data.log?.successful_records || 0} orders imported successfully.`);
-            fetchOrders(); // Refresh the orders list
+            
+            if (response.data.success !== false) {
+                alert(`Sync completed! ${response.data.log?.successful_records || 0} orders imported successfully.`);
+                fetchOrders(); // Refresh the orders list
+            } else {
+                alert(`Sync failed: ${response.data.error_details || response.data.message || 'Unknown error'}`);
+            }
         } catch (error) {
             console.error('Error syncing Shopify orders:', error);
-            alert('Failed to sync Shopify orders. Please check your integration settings.');
+            
+            // Get detailed error message
+            let errorMessage = 'Failed to sync Shopify orders. ';
+            if (error.response?.data?.error_details) {
+                errorMessage += error.response.data.error_details;
+            } else if (error.response?.data?.message) {
+                errorMessage += error.response.data.message;
+            } else if (error.message) {
+                errorMessage += error.message;
+            } else {
+                errorMessage += 'Please check your integration settings.';
+            }
+            
+            alert(errorMessage);
+            console.log('Full error:', error.response?.data);
         } finally {
             setSyncing(false);
         }

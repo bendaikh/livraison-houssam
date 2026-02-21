@@ -58,20 +58,43 @@ class ShopifyService
         $params = array_merge($defaultParams, $params);
 
         try {
+            Log::info('Attempting to fetch Shopify orders', [
+                'shop_url' => $this->shopUrl,
+                'api_version' => $this->apiVersion,
+                'params' => $params,
+            ]);
+
             $response = Http::withHeaders([
                 'X-Shopify-Access-Token' => $this->accessToken,
                 'Content-Type' => 'application/json',
             ])->get("{$this->shopUrl}/admin/api/{$this->apiVersion}/orders.json", $params);
 
+            Log::info('Shopify API response received', [
+                'status' => $response->status(),
+                'success' => $response->successful(),
+            ]);
+
             if (!$response->successful()) {
-                throw new \Exception('Failed to fetch orders from Shopify: ' . $response->body());
+                $errorBody = $response->body();
+                Log::error('Shopify API error response', [
+                    'status' => $response->status(),
+                    'body' => $errorBody,
+                    'headers' => $response->headers(),
+                ]);
+                throw new \Exception('Failed to fetch orders from Shopify (Status: ' . $response->status() . '): ' . $errorBody);
             }
 
-            return $response->json();
+            $data = $response->json();
+            Log::info('Successfully fetched Shopify orders', [
+                'order_count' => count($data['orders'] ?? []),
+            ]);
+
+            return $data;
         } catch (\Exception $e) {
             Log::error('Shopify fetchOrders error', [
                 'error' => $e->getMessage(),
                 'params' => $params,
+                'shop_url' => $this->shopUrl,
             ]);
             throw $e;
         }
@@ -327,8 +350,25 @@ class ShopifyService
      */
     private function validateCredentials(): void
     {
-        if (empty($this->shopUrl) || empty($this->accessToken)) {
-            throw new \Exception('Shopify credentials are not set');
+        if (empty($this->shopUrl)) {
+            throw new \Exception('Shopify shop URL is not configured. Please check your integration settings.');
+        }
+        
+        if (empty($this->accessToken)) {
+            throw new \Exception('Shopify access token is not configured. Please check your integration settings.');
+        }
+
+        // Validate shop URL format
+        if (!str_contains($this->shopUrl, 'myshopify.com') && !str_contains($this->shopUrl, 'http')) {
+            throw new \Exception('Invalid shop URL format. Expected format: yourstore.myshopify.com or https://yourstore.myshopify.com');
+        }
+
+        // Ensure shop URL doesn't have trailing slash
+        $this->shopUrl = rtrim($this->shopUrl, '/');
+
+        // Ensure shop URL has https://
+        if (!str_starts_with($this->shopUrl, 'http')) {
+            $this->shopUrl = 'https://' . $this->shopUrl;
         }
     }
 

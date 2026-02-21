@@ -84,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/api-integrations/{apiIntegration}/sync', [ApiIntegrationController::class, 'sync']);
     Route::get('/api-integrations/{apiIntegration}/logs', [ApiIntegrationController::class, 'logs']);
     Route::post('/api-integrations/{apiIntegration}/test-connection', [ApiIntegrationController::class, 'testConnection']);
+    Route::get('/api-integrations/{apiIntegration}/details', [ApiIntegrationController::class, 'getIntegrationDetails']);
     Route::post('/api-integrations/{apiIntegration}/create-shipment', [ApiIntegrationController::class, 'createShipment']);
     Route::post('/api-integrations/{apiIntegration}/track-shipment', [ApiIntegrationController::class, 'trackShipment']);
     Route::get('/api-integrations/{apiIntegration}/cities', [ApiIntegrationController::class, 'getCities']);
