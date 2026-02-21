@@ -12,6 +12,7 @@ export default function OrderList() {
     const [updatingStatus, setUpdatingStatus] = useState(null);
     const [syncing, setSyncing] = useState(false);
     const [shopifyIntegration, setShopifyIntegration] = useState(null);
+    const [isWebhookOnly, setIsWebhookOnly] = useState(false);
     const [stats, setStats] = useState({
         total: 0,
         manual: 0,
@@ -66,15 +67,18 @@ export default function OrderList() {
         try {
             const response = await api.get('/api-integrations');
             const shopifyInt = response.data.find(int => int.type === 'shopify' && int.is_active);
-            setShopifyIntegration(shopifyInt);
             
-            // Check if it's webhook-only (no API credentials)
             if (shopifyInt) {
                 const hasApiCreds = shopifyInt.credentials?.shop_url && shopifyInt.credentials?.access_token;
                 const hasWebhook = shopifyInt.credentials?.webhook_secret;
                 
+                // Check if webhook-only (no API credentials for manual sync)
                 if (!hasApiCreds && hasWebhook) {
-                    console.log('Webhook-only integration detected');
+                    setIsWebhookOnly(true);
+                    setShopifyIntegration(null); // Hide sync button
+                } else if (hasApiCreds) {
+                    setIsWebhookOnly(false);
+                    setShopifyIntegration(shopifyInt); // Show sync button
                 }
             }
         } catch (error) {
@@ -197,7 +201,7 @@ export default function OrderList() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <div className="flex-1">
-                            <h3 className="text-sm font-semibold text-green-900 mb-1">Shopify Integration Active</h3>
+                            <h3 className="text-sm font-semibold text-green-900 mb-1">Shopify Integration Active (API + Webhooks)</h3>
                             <p className="text-sm text-green-700">
                                 Orders from your Shopify store are automatically imported via webhooks. 
                                 Click "Sync Shopify Orders" to manually fetch recent orders. 
@@ -208,7 +212,24 @@ export default function OrderList() {
                 </div>
             )}
 
-            {!shopifyIntegration && (
+            {isWebhookOnly && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                        <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="flex-1">
+                            <h3 className="text-sm font-semibold text-blue-900 mb-1">Shopify Integration Active (Webhooks Only)</h3>
+                            <p className="text-sm text-blue-700">
+                                Orders from your Shopify store are <strong>automatically imported in real-time</strong> via webhooks. 
+                                No manual sync needed! Orders appear here immediately when created in Shopify.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {!shopifyIntegration && !isWebhookOnly && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
                         <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
