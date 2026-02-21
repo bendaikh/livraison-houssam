@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
-import { Eye, Edit, MessageCircle, RefreshCw } from 'lucide-react';
+import { Eye, Edit, MessageCircle, RefreshCw, Download } from 'lucide-react';
 
 export default function OrderList() {
     const { formatCurrency } = useSettings();
@@ -10,15 +10,26 @@ export default function OrderList() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [updatingStatus, setUpdatingStatus] = useState(null);
+    const [syncing, setSyncing] = useState(false);
+    const [shopifyIntegration, setShopifyIntegration] = useState(null);
+    const [stats, setStats] = useState({
+        total: 0,
+        manual: 0,
+        shopify: 0,
+        delivery_company: 0,
+        marketplace: 0
+    });
     const [filters, setFilters] = useState({
         search: '',
         status: '',
+        source: '',
         date_from: '',
         date_to: ''
     });
 
     useEffect(() => {
         fetchOrders();
+        fetchShopifyIntegration();
     }, [filters]);
 
     const fetchOrders = async () => {
@@ -27,15 +38,56 @@ export default function OrderList() {
             const params = new URLSearchParams();
             if (filters.search) params.append('search', filters.search);
             if (filters.status) params.append('status', filters.status);
+            if (filters.source) params.append('source', filters.source);
             if (filters.date_from) params.append('date_from', filters.date_from);
             if (filters.date_to) params.append('date_to', filters.date_to);
             
             const response = await api.get(`/orders?${params.toString()}`);
-            setOrders(response.data.data);
+            const fetchedOrders = response.data.data;
+            setOrders(fetchedOrders);
+
+            // Calculate statistics
+            const orderStats = {
+                total: fetchedOrders.length,
+                manual: fetchedOrders.filter(o => o.source === 'manual').length,
+                shopify: fetchedOrders.filter(o => o.source === 'shopify').length,
+                delivery_company: fetchedOrders.filter(o => o.source === 'delivery_company').length,
+                marketplace: fetchedOrders.filter(o => o.source === 'marketplace').length
+            };
+            setStats(orderStats);
         } catch (error) {
             console.error('Error fetching orders:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchShopifyIntegration = async () => {
+        try {
+            const response = await api.get('/api-integrations');
+            const shopifyInt = response.data.find(int => int.type === 'shopify' && int.is_active);
+            setShopifyIntegration(shopifyInt);
+        } catch (error) {
+            console.error('Error fetching Shopify integration:', error);
+        }
+    };
+
+    const handleSyncShopify = async () => {
+        if (!shopifyIntegration) {
+            alert('No active Shopify integration found. Please set up Shopify integration first.');
+            return;
+        }
+
+        try {
+            setSyncing(true);
+            const response = await api.post(`/api-integrations/${shopifyIntegration.id}/sync`);
+            alert(`Sync completed! ${response.data.log?.successful_records || 0} orders imported successfully.`);
+            fetchOrders(); // Refresh the orders list
+        } catch (error) {
+            console.error('Error syncing Shopify orders:', error);
+            alert('Failed to sync Shopify orders. Please check your integration settings.');
+        } finally {
+            setSyncing(false);
         }
     };
 
@@ -48,6 +100,16 @@ export default function OrderList() {
             cancelled: 'bg-red-100 text-red-800'
         };
         return colors[status] || 'bg-gray-100 text-gray-800';
+    };
+
+    const getSourceBadgeColor = (source) => {
+        const colors = {
+            manual: 'bg-gray-100 text-gray-800',
+            shopify: 'bg-green-100 text-green-800',
+            delivery_company: 'bg-blue-100 text-blue-800',
+            marketplace: 'bg-purple-100 text-purple-800'
+        };
+        return colors[source] || 'bg-gray-100 text-gray-800';
     };
 
     const formatDate = (dateString) => {
@@ -78,17 +140,138 @@ export default function OrderList() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-900">Orders Management</h1>
-                <button
-                    onClick={() => navigate('/orders/create')}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                    Create Order
-                </button>
+                <div className="flex gap-3">
+                    {shopifyIntegration && (
+                        <button
+                            onClick={handleSyncShopify}
+                            disabled={syncing}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            <Download size={18} />
+                            {syncing ? 'Syncing...' : 'Sync Shopify Orders'}
+                        </button>
+                    )}
+                    <button
+                        onClick={() => navigate('/orders/create')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        Create Order
+                    </button>
+                </div>
+            </div>
+
+            {/* Shopify Integration Info Banner */}
+            {shopifyIntegration && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                        <svg className="w-6 h-6 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="flex-1">
+                            <h3 className="text-sm font-semibold text-green-900 mb-1">Shopify Integration Active</h3>
+                            <p className="text-sm text-green-700">
+                                Orders from your Shopify store are automatically imported via webhooks. 
+                                Click "Sync Shopify Orders" to manually fetch recent orders. 
+                                Last sync: {shopifyIntegration.last_sync_at ? new Date(shopifyIntegration.last_sync_at).toLocaleString() : 'Never'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {!shopifyIntegration && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                        <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="flex-1">
+                            <h3 className="text-sm font-semibold text-blue-900 mb-1">Connect Shopify to Import Orders</h3>
+                            <p className="text-sm text-blue-700">
+                                To automatically import orders from your Shopify store, set up the Shopify integration in the{' '}
+                                <Link to="/api-integrations" className="underline font-medium">API Integrations</Link> section.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Order Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Total Orders</p>
+                            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+                        </div>
+                        <div className="p-3 bg-gray-100 rounded-lg">
+                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'manual' })}>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Manual</p>
+                            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.manual}</p>
+                        </div>
+                        <div className="p-3 bg-gray-100 rounded-lg">
+                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'shopify' })}>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-green-600">Shopify</p>
+                            <p className="text-2xl font-bold text-green-900 mt-1">{stats.shopify}</p>
+                        </div>
+                        <div className="p-3 bg-green-100 rounded-lg">
+                            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'delivery_company' })}>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-blue-600">Delivery</p>
+                            <p className="text-2xl font-bold text-blue-900 mt-1">{stats.delivery_company}</p>
+                        </div>
+                        <div className="p-3 bg-blue-100 rounded-lg">
+                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'marketplace' })}>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-purple-600">Marketplace</p>
+                            <p className="text-2xl font-bold text-purple-900 mt-1">{stats.marketplace}</p>
+                        </div>
+                        <div className="p-3 bg-purple-100 rounded-lg">
+                            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Filters */}
             <div className="bg-white rounded-xl shadow-sm p-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div>
                         <input
                             type="text"
@@ -110,6 +293,19 @@ export default function OrderList() {
                             <option value="shipped">Shipped</option>
                             <option value="delivered">Delivered</option>
                             <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div>
+                        <select
+                            value={filters.source}
+                            onChange={(e) => setFilters({ ...filters, source: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="">All Sources</option>
+                            <option value="manual">Manual</option>
+                            <option value="shopify">Shopify</option>
+                            <option value="delivery_company">Delivery Company</option>
+                            <option value="marketplace">Marketplace</option>
                         </select>
                     </div>
                     <div>
@@ -139,6 +335,7 @@ export default function OrderList() {
                             <tr>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
@@ -154,11 +351,11 @@ export default function OrderList() {
                         <tbody className="bg-white divide-y divide-gray-200">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="12" className="px-6 py-4 text-center text-gray-500">Loading...</td>
+                                    <td colSpan="13" className="px-6 py-4 text-center text-gray-500">Loading...</td>
                                 </tr>
                             ) : orders.length === 0 ? (
                                 <tr>
-                                    <td colSpan="12" className="px-6 py-4 text-center text-gray-500">No orders found</td>
+                                    <td colSpan="13" className="px-6 py-4 text-center text-gray-500">No orders found</td>
                                 </tr>
                             ) : (
                                 orders.map(order => (
@@ -168,6 +365,11 @@ export default function OrderList() {
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600">
                                             {order.order_number}
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getSourceBadgeColor(order.source)}`}>
+                                                {order.source?.charAt(0).toUpperCase() + order.source?.slice(1).replace('_', ' ') || 'Manual'}
+                                            </span>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                             {order.client?.name}
@@ -187,7 +389,7 @@ export default function OrderList() {
                                         <td className="px-4 py-3 text-sm text-gray-500">
                                             {order.items?.map(item => (
                                                 <div key={item.id} className="text-xs">
-                                                    {item.product?.name} (x{item.quantity})
+                                                    {item.product?.name || item.product_name || 'Unknown Product'} (x{item.quantity})
                                                 </div>
                                             ))}
                                         </td>

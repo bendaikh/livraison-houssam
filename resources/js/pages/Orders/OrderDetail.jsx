@@ -278,8 +278,8 @@ export default function OrderDetail() {
                         <tbody>
                             ${order.items?.map(item => `
                                 <tr>
-                                    <td>${item.product?.name || 'Product'}</td>
-                                    <td>${item.product?.sku || 'N/A'}</td>
+                                    <td>${item.product?.name || item.product_name || 'Unknown Product'}</td>
+                                    <td>${item.product?.sku || item.sku || 'N/A'}</td>
                                     <td class="text-right">${formatPrice(item.price)}</td>
                                     <td class="text-right">${item.quantity}</td>
                                     <td class="text-right">${formatPrice(item.price * item.quantity)}</td>
@@ -430,8 +430,8 @@ export default function OrderDetail() {
                                 {order.items?.map((item) => (
                                     <div key={item.id} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
                                         <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-900">{item.product?.name || 'Product'}</h3>
-                                            <p className="text-sm text-gray-500">SKU: {item.product?.sku || 'N/A'}</p>
+                                            <h3 className="font-semibold text-gray-900">{item.product?.name || item.product_name || 'Unknown Product'}</h3>
+                                            <p className="text-sm text-gray-500">SKU: {item.product?.sku || item.sku || 'N/A'}</p>
                                             <p className="text-sm text-gray-600 mt-1">
                                                 {formatCurrency(item.price)} × {item.quantity}
                                             </p>
