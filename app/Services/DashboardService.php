@@ -16,6 +16,20 @@ class DashboardService
     public function getStatistics(string $period = 'daily', $vendorId = null)
     {
         $dateRange = $this->getDateRange($period);
+        
+        // Check if there are any orders in the date range
+        $ordersInRange = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        if ($vendorId) {
+            $ordersInRange->where('vendor_id', $vendorId);
+        }
+        
+        // If no orders in range, expand to show all orders
+        if ($ordersInRange->count() === 0) {
+            $dateRange = [
+                'start' => Order::min('created_at') ?: Carbon::now()->subYear(),
+                'end' => Carbon::now(),
+            ];
+        }
 
         return [
             'sales' => $this->getSalesStats($dateRange, $vendorId),
