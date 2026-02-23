@@ -94,6 +94,11 @@ function App() {
                         
                         {/* Orders */}
                         <Route path="orders" element={<OrderList />} />
+                        <Route path="orders/pending" element={<OrderList status="pending" />} />
+                        <Route path="orders/confirmed" element={<OrderList status="confirmed" />} />
+                        <Route path="orders/shipped" element={<OrderList status="shipped" />} />
+                        <Route path="orders/delivered" element={<OrderList status="delivered" />} />
+                        <Route path="orders/cancelled" element={<OrderList status="cancelled" />} />
                         <Route path="orders/create" element={<OrderForm />} />
                         <Route path="orders/:id" element={<OrderDetail />} />
                         <Route path="orders/:id/edit" element={<OrderForm />} />

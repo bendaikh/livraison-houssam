@@ -5,7 +5,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw } from 'lucide-react';
 
-export default function OrderList() {
+export default function OrderList({ status = '' }) {
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -22,12 +22,17 @@ export default function OrderList() {
     });
     const [filters, setFilters] = useState({
         search: '',
-        status: '',
+        status: status, // Set initial status from prop
         source: '',
         date_from: '',
         date_to: ''
     });
-
+    
+    // Update filters when status prop changes (when navigating between pages)
+    useEffect(() => {
+        setFilters(prev => ({ ...prev, status: status }));
+    }, [status]);
+    
     useEffect(() => {
         fetchOrders();
         fetchShopifyIntegration();
@@ -122,10 +127,15 @@ export default function OrderList() {
         }
     };
 
+    const getPageTitle = () => {
+        if (!status) return 'Orders Management';
+        return `${status.charAt(0).toUpperCase() + status.slice(1)} Orders`;
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-900">Orders Management</h1>
+                <h1 className="text-3xl font-bold text-gray-900">{getPageTitle()}</h1>
                 <button
                     onClick={() => navigate('/orders/create')}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"

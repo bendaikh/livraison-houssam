@@ -21,9 +21,11 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
         try {
             const response = await api.get(`/dashboard?period=${period}`);
+            console.log('Dashboard data received:', response.data);
             setStats(response.data);
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
+            console.error('Error response:', error.response?.data);
         } finally {
             setLoading(false);
         }
@@ -398,42 +400,44 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* Top Clients */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">
-                    <div className="p-6 border-b border-slate-100">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-slate-800">Top Clients</h3>
-                                <p className="text-sm text-slate-500 mt-1">Highest spending customers</p>
+                {/* Top Clients - Hidden from vendors */}
+                {!isVendor && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">
+                        <div className="p-6 border-b border-slate-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-slate-800">Top Clients</h3>
+                                    <p className="text-sm text-slate-500 mt-1">Highest spending customers</p>
+                                </div>
+                                <Users className="text-blue-500" size={24} />
                             </div>
-                            <Users className="text-blue-500" size={24} />
+                        </div>
+                        <div className="p-6">
+                            {stats?.top_clients?.length > 0 ? (
+                                <div className="space-y-4">
+                                    {stats.top_clients.map((client, index) => (
+                                        <div key={client.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-sm">
+                                                    {index + 1}
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-slate-800">{client.name}</p>
+                                                    <p className="text-sm text-slate-500">{client.order_count} orders</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold text-slate-800">{formatCurrency(parseFloat(client.total_spent) || 0)}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-center text-slate-500 py-8">No client data available</p>
+                            )}
                         </div>
                     </div>
-                    <div className="p-6">
-                        {stats?.top_clients?.length > 0 ? (
-                            <div className="space-y-4">
-                                {stats.top_clients.map((client, index) => (
-                                    <div key={client.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-sm">
-                                                {index + 1}
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-slate-800">{client.name}</p>
-                                                <p className="text-sm text-slate-500">{client.order_count} orders</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-slate-800">{formatCurrency(parseFloat(client.total_spent) || 0)}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-center text-slate-500 py-8">No client data available</p>
-                        )}
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Recent Orders */}

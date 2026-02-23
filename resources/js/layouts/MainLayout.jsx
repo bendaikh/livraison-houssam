@@ -5,7 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog
+    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle
 } from 'lucide-react';
 
 export default function MainLayout() {
@@ -20,6 +20,7 @@ export default function MainLayout() {
     const [darkMode, setDarkMode] = useState(false);
     const [productsExpanded, setProductsExpanded] = useState(true);
     const [expensesExpanded, setExpensesExpanded] = useState(true);
+    const [ordersExpanded, setOrdersExpanded] = useState(true);
     const [apiIntegrationsExpanded, setApiIntegrationsExpanded] = useState(true);
     const [userManagementExpanded, setUserManagementExpanded] = useState(true);
 
@@ -46,7 +47,21 @@ export default function MainLayout() {
         },
         { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Vendor products' },
         { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control', adminOnly: true },
-        { path: '/orders', icon: ShoppingCart, label: 'Orders', description: 'Order management' },
+        { 
+            path: '/orders', 
+            icon: ShoppingCart, 
+            label: 'Orders', 
+            description: 'Order management',
+            hasSubItems: true,
+            subItems: [
+                { path: '/orders', icon: List, label: 'All Orders', description: 'View all orders' },
+                { path: '/orders/pending', icon: Clock, label: 'Pending', description: 'Pending orders' },
+                { path: '/orders/confirmed', icon: CheckCircle, label: 'Confirmed', description: 'Confirmed orders' },
+                { path: '/orders/shipped', icon: Package, label: 'Shipped', description: 'Shipped orders' },
+                { path: '/orders/delivered', icon: CheckCircle, label: 'Delivered', description: 'Delivered orders' },
+                { path: '/orders/cancelled', icon: X, label: 'Cancelled', description: 'Cancelled orders' }
+            ]
+        },
         { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management', adminOnly: true },
         { 
             path: '/expenses', 
@@ -93,6 +108,11 @@ export default function MainLayout() {
 
     const isActive = (path) => {
         if (path === '/') return location.pathname === '/';
+        return location.pathname === path;
+    };
+    
+    const isParentActive = (path) => {
+        if (path === '/') return location.pathname === '/';
         return location.pathname.startsWith(path);
     };
 
@@ -133,24 +153,28 @@ export default function MainLayout() {
                     {menuItems.map((item) => {
                         if (item.adminOnly && !['admin', 'superadmin'].includes(user?.role?.slug)) return null;
                         
-                        const active = isActive(item.path);
-                        
                         // Handle items with sub-items
                         if (item.hasSubItems && !sidebarCollapsed) {
                             const isExpanded = item.label === 'Products' 
                                 ? productsExpanded 
                                 : item.label === 'Expenses' 
-                                    ? expensesExpanded 
-                                    : item.label === 'User Management'
-                                        ? userManagementExpanded
-                                        : apiIntegrationsExpanded;
+                                    ? expensesExpanded
+                                    : item.label === 'Orders'
+                                        ? ordersExpanded
+                                        : item.label === 'User Management'
+                                            ? userManagementExpanded
+                                            : apiIntegrationsExpanded;
                             const toggleExpanded = item.label === 'Products' 
                                 ? () => setProductsExpanded(!productsExpanded)
                                 : item.label === 'Expenses'
                                     ? () => setExpensesExpanded(!expensesExpanded)
-                                    : item.label === 'User Management'
-                                        ? () => setUserManagementExpanded(!userManagementExpanded)
-                                        : () => setApiIntegrationsExpanded(!apiIntegrationsExpanded);
+                                    : item.label === 'Orders'
+                                        ? () => setOrdersExpanded(!ordersExpanded)
+                                        : item.label === 'User Management'
+                                            ? () => setUserManagementExpanded(!userManagementExpanded)
+                                            : () => setApiIntegrationsExpanded(!apiIntegrationsExpanded);
+                            
+                            const active = isParentActive(item.path);
                             
                             return (
                                 <div key={item.path}>
@@ -209,6 +233,8 @@ export default function MainLayout() {
                         }
                         
                         // Regular menu items
+                        const active = isActive(item.path);
+                        
                         return (
                             <Link
                                 key={item.path}

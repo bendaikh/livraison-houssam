@@ -38,7 +38,7 @@ class DashboardService
     {
         return match($period) {
             'daily' => [
-                'start' => Carbon::today(),
+                'start' => Carbon::now()->subDays(7),
                 'end' => Carbon::now(),
             ],
             'monthly' => [
@@ -50,7 +50,7 @@ class DashboardService
                 'end' => Carbon::now(),
             ],
             default => [
-                'start' => Carbon::today(),
+                'start' => Carbon::now()->subDays(7),
                 'end' => Carbon::now(),
             ]
         };
