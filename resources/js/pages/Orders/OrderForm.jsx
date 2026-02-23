@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function OrderForm() {
     const { formatCurrency } = useSettings();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const { id } = useParams();
     const isEditing = !!id;
@@ -15,6 +17,7 @@ export default function OrderForm() {
     const [deliveryAgents, setDeliveryAgents] = useState([]);
     const [deliveryPersons, setDeliveryPersons] = useState([]);
     const [confirmationAgents, setConfirmationAgents] = useState([]);
+    const [cities, setCities] = useState([]);
     
     const [formData, setFormData] = useState({
         client_name: '',
@@ -25,6 +28,7 @@ export default function OrderForm() {
         confirmation_agent_id: '',
         source: 'manual',
         shipping_address: '',
+        city: '',
         notes: '',
         whatsapp: '',
         shipping_cost: 0,
@@ -45,11 +49,18 @@ export default function OrderForm() {
         fetchDeliveryAgents();
         fetchDeliveryPersons();
         fetchConfirmationAgents();
+        fetchCities();
         
         if (isEditing) {
             fetchOrder();
+        } else {
+            // Auto-set vendor_id for sellers when creating new orders
+            if (user?.vendor?.id) {
+                console.log('Setting vendor_id for seller:', user.vendor.id);
+                setFormData(prev => ({ ...prev, vendor_id: user.vendor.id }));
+            }
         }
-    }, [id]);
+    }, [id, user]);
 
     const fetchProducts = async () => {
         try {
@@ -96,6 +107,15 @@ export default function OrderForm() {
         }
     };
 
+    const fetchCities = async () => {
+        try {
+            const response = await api.get('/cities');
+            setCities(response.data.filter(city => city.is_active));
+        } catch (error) {
+            console.error('Error fetching cities:', error);
+        }
+    };
+
     const fetchOrder = async () => {
         try {
             setLoading(true);
@@ -111,6 +131,7 @@ export default function OrderForm() {
                 confirmation_agent_id: order.confirmation_agent_id || '',
                 source: order.source || 'manual',
                 shipping_address: order.shipping_address || '',
+                city: order.city || '',
                 notes: order.notes || '',
                 whatsapp: order.whatsapp || '',
                 shipping_cost: order.shipping_cost || 0,
@@ -252,6 +273,30 @@ export default function OrderForm() {
                         </div>
 
                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                            <select
+                                value={formData.city}
+                                onChange={(e) => {
+                                    const selectedCity = cities.find(c => c.name === e.target.value);
+                                    setFormData({ 
+                                        ...formData, 
+                                        city: e.target.value,
+                                        shipping_cost: selectedCity ? selectedCity.delivery_cost : formData.shipping_cost
+                                    });
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                                <option value="">Select city</option>
+                                {cities.map(city => (
+                                    <option key={city.id} value={city.name}>
+                                        {city.name} - {city.delivery_cost} DH
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city[0]}</p>}
+                        </div>
+
+                        <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Address</label>
                             <input
                                 type="text"
@@ -264,19 +309,28 @@ export default function OrderForm() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Seller</label>
-                            <select
-                                value={formData.vendor_id}
-                                onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">Select Seller</option>
-                                {vendors.map(vendor => (
-                                    <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                                ))}
-                            </select>
-                        </div>
+                        {/* Hide seller selection for users who are sellers */}
+                        {!user?.vendor && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Seller</label>
+                                <select
+                                    value={formData.vendor_id}
+                                    onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                    <option value="">Select Seller</option>
+                                    {vendors.map(vendor => (
+                                        <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        {/* Debug: Show when seller field is hidden */}
+                        {user?.vendor && (
+                            <div className="text-sm text-gray-500 italic">
+                                Seller field hidden - You are logged in as seller: {user.vendor.name}
+                            </div>
+                        )}
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Agent Confirmation</label>

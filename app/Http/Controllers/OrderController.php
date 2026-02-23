@@ -88,6 +88,7 @@ class OrderController extends Controller
             'tax' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',
+            'city' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);
@@ -146,6 +147,7 @@ class OrderController extends Controller
             'tax' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',
+            'city' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);

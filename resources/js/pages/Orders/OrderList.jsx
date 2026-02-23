@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, Edit, MessageCircle, RefreshCw, Download } from 'lucide-react';
+import { Eye, Edit, MessageCircle, RefreshCw } from 'lucide-react';
 
 export default function OrderList() {
     const { formatCurrency } = useSettings();
@@ -12,8 +12,6 @@ export default function OrderList() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [updatingStatus, setUpdatingStatus] = useState(null);
-    const [syncing, setSyncing] = useState(false);
-    const [shopifyIntegration, setShopifyIntegration] = useState(null);
     const [isWebhookOnly, setIsWebhookOnly] = useState(false);
     const [stats, setStats] = useState({
         total: 0,
@@ -29,8 +27,6 @@ export default function OrderList() {
         date_from: '',
         date_to: ''
     });
-    
-    const isVendor = user?.role?.slug === 'vendor';
 
     useEffect(() => {
         fetchOrders();
@@ -73,58 +69,11 @@ export default function OrderList() {
             const shopifyInt = response.data.find(int => int.type === 'shopify' && int.is_active);
             
             if (shopifyInt) {
-                const hasApiCreds = shopifyInt.credentials?.shop_url && shopifyInt.credentials?.access_token;
                 const hasWebhook = shopifyInt.credentials?.webhook_secret;
-                
-                // Check if webhook-only (no API credentials for manual sync)
-                if (!hasApiCreds && hasWebhook) {
-                    setIsWebhookOnly(true);
-                    setShopifyIntegration(null); // Hide sync button
-                } else if (hasApiCreds) {
-                    setIsWebhookOnly(false);
-                    setShopifyIntegration(shopifyInt); // Show sync button
-                }
+                setIsWebhookOnly(hasWebhook);
             }
         } catch (error) {
             console.error('Error fetching Shopify integration:', error);
-        }
-    };
-
-    const handleSyncShopify = async () => {
-        if (!shopifyIntegration) {
-            alert('No active Shopify integration found. Please set up Shopify integration first.');
-            return;
-        }
-
-        try {
-            setSyncing(true);
-            const response = await api.post(`/api-integrations/${shopifyIntegration.id}/sync`);
-            
-            if (response.data.success !== false) {
-                alert(`Sync completed! ${response.data.log?.successful_records || 0} orders imported successfully.`);
-                fetchOrders(); // Refresh the orders list
-            } else {
-                alert(`Sync failed: ${response.data.error_details || response.data.message || 'Unknown error'}`);
-            }
-        } catch (error) {
-            console.error('Error syncing Shopify orders:', error);
-            
-            // Get detailed error message
-            let errorMessage = 'Failed to sync Shopify orders. ';
-            if (error.response?.data?.error_details) {
-                errorMessage += error.response.data.error_details;
-            } else if (error.response?.data?.message) {
-                errorMessage += error.response.data.message;
-            } else if (error.message) {
-                errorMessage += error.message;
-            } else {
-                errorMessage += 'Please check your integration settings.';
-            }
-            
-            alert(errorMessage);
-            console.log('Full error:', error.response?.data);
-        } finally {
-            setSyncing(false);
         }
     };
 
@@ -177,45 +126,15 @@ export default function OrderList() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-900">Orders Management</h1>
-                <div className="flex gap-3">
-                    {shopifyIntegration && !isVendor && (
-                        <button
-                            onClick={handleSyncShopify}
-                            disabled={syncing}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            <Download size={18} />
-                            {syncing ? 'Syncing...' : 'Sync Shopify Orders'}
-                        </button>
-                    )}
-                    <button
-                        onClick={() => navigate('/orders/create')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                        Create Order
-                    </button>
-                </div>
+                <button
+                    onClick={() => navigate('/orders/create')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                    Create Order
+                </button>
             </div>
 
             {/* Shopify Integration Info Banner */}
-            {shopifyIntegration && (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                        <svg className="w-6 h-6 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div className="flex-1">
-                            <h3 className="text-sm font-semibold text-green-900 mb-1">Shopify Integration Active (API + Webhooks)</h3>
-                            <p className="text-sm text-green-700">
-                                Orders from your Shopify store are automatically imported via webhooks. 
-                                Click "Sync Shopify Orders" to manually fetch recent orders. 
-                                Last sync: {shopifyIntegration.last_sync_at ? new Date(shopifyIntegration.last_sync_at).toLocaleString() : 'Never'}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {isWebhookOnly && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
@@ -223,17 +142,17 @@ export default function OrderList() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <div className="flex-1">
-                            <h3 className="text-sm font-semibold text-blue-900 mb-1">Shopify Integration Active (Webhooks Only)</h3>
+                            <h3 className="text-sm font-semibold text-blue-900 mb-1">Shopify Integration Active</h3>
                             <p className="text-sm text-blue-700">
                                 Orders from your Shopify store are <strong>automatically imported in real-time</strong> via webhooks. 
-                                No manual sync needed! Orders appear here immediately when created in Shopify.
+                                Orders appear here immediately when created in Shopify.
                             </p>
                         </div>
                     </div>
                 </div>
             )}
 
-            {!shopifyIntegration && !isWebhookOnly && (
+            {!isWebhookOnly && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
                         <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

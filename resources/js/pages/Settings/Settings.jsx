@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Save, Building2, Globe, DollarSign, ShoppingCart, 
     Bell, Percent, AlertCircle, CheckCircle2, Loader2,
-    Settings as SettingsIcon, Mail, Phone, MapPin, FileText
+    Settings as SettingsIcon, Mail, Phone, MapPin, FileText, MapPinned, Plus, Trash2, Edit2
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -11,6 +11,13 @@ export default function Settings() {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
     const [activeTab, setActiveTab] = useState('general');
+    
+    // Cities management state
+    const [cities, setCities] = useState([]);
+    const [loadingCities, setLoadingCities] = useState(false);
+    const [editingCity, setEditingCity] = useState(null);
+    const [cityForm, setCityForm] = useState({ name: '', delivery_cost: 0, is_active: true });
+    const [showCityModal, setShowCityModal] = useState(false);
     
     const [settings, setSettings] = useState({
         // General Settings
@@ -56,6 +63,7 @@ export default function Settings() {
 
     useEffect(() => {
         fetchSettings();
+        fetchCities();
     }, []);
 
     const fetchSettings = async () => {
@@ -68,6 +76,61 @@ export default function Settings() {
             setMessage({ type: 'error', text: 'Failed to load settings' });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchCities = async () => {
+        try {
+            setLoadingCities(true);
+            const response = await api.get('/cities');
+            setCities(response.data);
+        } catch (error) {
+            console.error('Error fetching cities:', error);
+        } finally {
+            setLoadingCities(false);
+        }
+    };
+
+    const handleCitySubmit = async (e) => {
+        e.preventDefault();
+        try {
+            setSaving(true);
+            if (editingCity) {
+                await api.put(`/cities/${editingCity.id}`, cityForm);
+                setMessage({ type: 'success', text: 'City updated successfully!' });
+            } else {
+                await api.post('/cities', cityForm);
+                setMessage({ type: 'success', text: 'City added successfully!' });
+            }
+            setShowCityModal(false);
+            setCityForm({ name: '', delivery_cost: 0, is_active: true });
+            setEditingCity(null);
+            fetchCities();
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error) {
+            console.error('Error saving city:', error);
+            setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to save city' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleEditCity = (city) => {
+        setEditingCity(city);
+        setCityForm({ name: city.name, delivery_cost: city.delivery_cost, is_active: city.is_active });
+        setShowCityModal(true);
+    };
+
+    const handleDeleteCity = async (cityId) => {
+        if (!confirm('Are you sure you want to delete this city?')) return;
+        try {
+            await api.delete(`/cities/${cityId}`);
+            setMessage({ type: 'success', text: 'City deleted successfully!' });
+            fetchCities();
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error) {
+            console.error('Error deleting city:', error);
+            setMessage({ type: 'error', text: 'Failed to delete city' });
         }
     };
 
@@ -95,6 +158,7 @@ export default function Settings() {
         { id: 'currency', label: 'Currency', icon: DollarSign },
         { id: 'company', label: 'Company', icon: Building2 },
         { id: 'orders', label: 'Orders', icon: ShoppingCart },
+        { id: 'cities', label: 'Cities', icon: MapPinned },
         { id: 'notifications', label: 'Notifications', icon: Bell },
         { id: 'commission', label: 'Commission', icon: Percent },
     ];
@@ -521,6 +585,160 @@ export default function Settings() {
                                         </label>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Cities Management */}
+                        {activeTab === 'cities' && (
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="p-3 bg-teal-100 rounded-xl">
+                                            <MapPinned className="text-teal-600" size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-gray-900">Cities Management</h2>
+                                            <p className="text-sm text-gray-600">Manage cities and delivery costs</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setCityForm({ name: '', delivery_cost: 0, is_active: true });
+                                            setEditingCity(null);
+                                            setShowCityModal(true);
+                                        }}
+                                        className="flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-4 py-2 rounded-lg hover:from-teal-700 hover:to-cyan-700 transition-all"
+                                    >
+                                        <Plus size={18} />
+                                        <span>Add City</span>
+                                    </button>
+                                </div>
+
+                                {loadingCities ? (
+                                    <div className="flex items-center justify-center py-12">
+                                        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+                                    </div>
+                                ) : cities.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <MapPinned className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                                        <p className="text-gray-600">No cities added yet</p>
+                                        <p className="text-sm text-gray-500 mt-1">Click "Add City" to get started</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-50 border-b border-gray-200">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City Name</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery Cost</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {cities.map((city) => (
+                                                    <tr key={city.id} className="hover:bg-gray-50">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{city.name}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{city.delivery_cost} DH</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                                                city.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                                            }`}>
+                                                                {city.is_active ? 'Active' : 'Inactive'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                            <button
+                                                                onClick={() => handleEditCity(city)}
+                                                                className="text-blue-600 hover:text-blue-900 mr-3"
+                                                            >
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteCity(city.id)}
+                                                                className="text-red-600 hover:text-red-900"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* City Modal */}
+                                {showCityModal && (
+                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                                        <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                                            <h3 className="text-lg font-bold text-gray-900 mb-4">
+                                                {editingCity ? 'Edit City' : 'Add New City'}
+                                            </h3>
+                                            <form onSubmit={handleCitySubmit} className="space-y-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        City Name *
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={cityForm.name}
+                                                        onChange={(e) => setCityForm({ ...cityForm, name: e.target.value })}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                                        required
+                                                        placeholder="Enter city name"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Delivery Cost *
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={cityForm.delivery_cost}
+                                                        onChange={(e) => setCityForm({ ...cityForm, delivery_cost: parseFloat(e.target.value) })}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                                        required
+                                                        min="0"
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="flex items-center space-x-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={cityForm.is_active}
+                                                            onChange={(e) => setCityForm({ ...cityForm, is_active: e.target.checked })}
+                                                            className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500"
+                                                        />
+                                                        <span className="text-sm text-gray-700">Active</span>
+                                                    </label>
+                                                </div>
+                                                <div className="flex justify-end space-x-3 pt-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowCityModal(false);
+                                                            setEditingCity(null);
+                                                            setCityForm({ name: '', delivery_cost: 0, is_active: true });
+                                                        }}
+                                                        className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="submit"
+                                                        disabled={saving}
+                                                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {saving ? 'Saving...' : (editingCity ? 'Update' : 'Add')}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 

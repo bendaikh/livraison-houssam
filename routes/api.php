@@ -17,6 +17,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\WebhookController;
+use App\Http\Controllers\CityController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -103,6 +104,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/settings', [SettingController::class, 'index']);
     Route::put('/settings', [SettingController::class, 'update']);
     Route::get('/settings/{key}', [SettingController::class, 'get']);
+
+    // Cities
+    Route::apiResource('cities', CityController::class);
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
