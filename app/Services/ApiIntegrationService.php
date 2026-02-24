@@ -136,10 +136,19 @@ class ApiIntegrationService
         // Prepare order items
         $items = [];
         foreach ($shopifyOrder['line_items'] ?? [] as $lineItem) {
-            $product = $this->getOrCreateProduct($lineItem);
+            $sku = $lineItem['sku'] ?? null;
+            $productName = $lineItem['name'] ?? 'Unknown Product';
+            
+            // Try to find existing product by SKU
+            $product = null;
+            if ($sku) {
+                $product = Product::where('sku', $sku)->first();
+            }
             
             $items[] = [
-                'product_id' => $product->id,
+                'product_id' => $product?->id, // Will be null if product not found
+                'product_name' => $productName,
+                'sku' => $sku,
                 'quantity' => $lineItem['quantity'],
                 'price' => $lineItem['price'],
             ];
@@ -397,26 +406,6 @@ class ApiIntegrationService
         }
 
         return $client;
-    }
-
-    private function getOrCreateProduct(array $lineItem)
-    {
-        // Try to find product by SKU or create a new one
-        $sku = $lineItem['sku'] ?? 'SHOP-' . $lineItem['product_id'];
-        
-        $product = Product::where('sku', $sku)->first();
-
-        if (!$product) {
-            $product = Product::create([
-                'name' => $lineItem['name'],
-                'sku' => $sku,
-                'price' => $lineItem['price'],
-                'stock_quantity' => 0,
-                'is_active' => true,
-            ]);
-        }
-
-        return $product;
     }
 
     /**

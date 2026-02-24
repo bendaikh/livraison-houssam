@@ -91,10 +91,10 @@ class WebhookController extends Controller
                 $order->items()->create([
                     'product_id' => $product?->id,
                     'product_name' => $item['name'],
+                    'sku' => $item['sku'],
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
-                    'total' => $item['price'] * $item['quantity'],
-                    'sku' => $item['sku'],
+                    'subtotal' => $item['price'] * $item['quantity'],
                 ]);
             }
 

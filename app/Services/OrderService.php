@@ -58,7 +58,9 @@ class OrderService
             // Create order items
             foreach ($data['items'] as $item) {
                 $order->items()->create([
-                    'product_id' => $item['product_id'],
+                    'product_id' => $item['product_id'] ?? null,
+                    'product_name' => $item['product_name'] ?? null,
+                    'sku' => $item['sku'] ?? null,
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
                     'subtotal' => $item['price'] * $item['quantity'],
@@ -122,7 +124,9 @@ class OrderService
             // Create new order items
             foreach ($data['items'] as $item) {
                 $order->items()->create([
-                    'product_id' => $item['product_id'],
+                    'product_id' => $item['product_id'] ?? null,
+                    'product_name' => $item['product_name'] ?? null,
+                    'sku' => $item['sku'] ?? null,
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
                     'subtotal' => $item['price'] * $item['quantity'],
