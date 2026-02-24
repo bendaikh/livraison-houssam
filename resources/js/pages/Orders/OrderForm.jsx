@@ -237,7 +237,9 @@ export default function OrderForm() {
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Client Name <span className="text-red-500">*</span>
+                            </label>
                             <input
                                 type="text"
                                 value={formData.client_name}
@@ -250,12 +252,15 @@ export default function OrderForm() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Client Phone</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Client Phone <span className="text-red-500">*</span>
+                            </label>
                             <input
                                 type="text"
                                 value={formData.client_phone}
                                 onChange={(e) => setFormData({ ...formData, client_phone: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                required
                                 placeholder="Enter client phone"
                             />
                             {errors.client_phone && <p className="text-red-500 text-xs mt-1">{errors.client_phone[0]}</p>}
@@ -403,7 +408,9 @@ export default function OrderForm() {
                         {orderItems.map((item, index) => (
                             <div key={index} className="grid grid-cols-12 gap-3 items-end">
                                 <div className="col-span-5">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Product <span className="text-red-500">*</span>
+                                    </label>
                                     <select
                                         value={item.product_id}
                                         onChange={(e) => handleProductChange(index, e.target.value)}
@@ -420,7 +427,9 @@ export default function OrderForm() {
                                 </div>
 
                                 <div className="col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Quantity <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                         type="number"
                                         min="1"
@@ -432,7 +441,9 @@ export default function OrderForm() {
                                 </div>
 
                                 <div className="col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Price <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                         type="number"
                                         step="0.01"

@@ -74,7 +74,7 @@ class OrderController extends Controller
         $validated = $request->validate([
             'client_id' => 'nullable|exists:clients,id',
             'client_name' => 'required_without:client_id|string|max:255',
-            'client_phone' => 'nullable|string|max:20',
+            'client_phone' => 'required|string|max:20',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
             'delivery_person_id' => 'nullable|exists:users,id',
@@ -97,12 +97,12 @@ class OrderController extends Controller
         if (!isset($validated['client_id'])) {
             $client = \App\Models\Client::firstOrCreate(
                 [
-                    'phone' => $validated['client_phone'] ?? null,
+                    'phone' => $validated['client_phone'],
                     'name' => $validated['client_name'],
                 ],
                 [
                     'name' => $validated['client_name'],
-                    'phone' => $validated['client_phone'] ?? null,
+                    'phone' => $validated['client_phone'],
                     'address' => $validated['shipping_address'] ?? null,
                     'is_active' => true,
                 ]
@@ -133,7 +133,7 @@ class OrderController extends Controller
         $validated = $request->validate([
             'client_id' => 'nullable|exists:clients,id',
             'client_name' => 'required_without:client_id|string|max:255',
-            'client_phone' => 'nullable|string|max:20',
+            'client_phone' => 'required|string|max:20',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
             'delivery_person_id' => 'nullable|exists:users,id',
@@ -156,12 +156,12 @@ class OrderController extends Controller
         if (!isset($validated['client_id']) && isset($validated['client_name'])) {
             $client = \App\Models\Client::firstOrCreate(
                 [
-                    'phone' => $validated['client_phone'] ?? null,
+                    'phone' => $validated['client_phone'],
                     'name' => $validated['client_name'],
                 ],
                 [
                     'name' => $validated['client_name'],
-                    'phone' => $validated['client_phone'] ?? null,
+                    'phone' => $validated['client_phone'],
                     'address' => $validated['shipping_address'] ?? null,
                     'is_active' => true,
                 ]
