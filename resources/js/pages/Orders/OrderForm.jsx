@@ -325,41 +325,40 @@ export default function OrderForm() {
                                 </select>
                             </div>
                         )}
-                        {/* Debug: Show when seller field is hidden */}
-                        {user?.vendor && (
-                            <div className="text-sm text-gray-500 italic">
-                                Seller field hidden - You are logged in as seller: {user.vendor.name}
-                            </div>
+
+                        {/* Hide Agent Confirmation and Delivery Person for sellers - only admin assigns these */}
+                        {!user?.vendor && (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Agent Confirmation</label>
+                                    <select
+                                        value={formData.confirmation_agent_id}
+                                        onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">Select Agent</option>
+                                        {confirmationAgents.map(agent => (
+                                            <option key={agent.id} value={agent.id}>{agent.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Person</label>
+                                    <select
+                                        value={formData.delivery_person_id}
+                                        onChange={(e) => setFormData({ ...formData, delivery_person_id: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                        <option value="">Select Delivery Person</option>
+                                        {deliveryPersons.map(person => (
+                                            <option key={person.id} value={person.id}>{person.name}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">Person who physically delivers the product</p>
+                                </div>
+                            </>
                         )}
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Agent Confirmation</label>
-                            <select
-                                value={formData.confirmation_agent_id}
-                                onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">Select Agent</option>
-                                {confirmationAgents.map(agent => (
-                                    <option key={agent.id} value={agent.id}>{agent.name}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Person</label>
-                            <select
-                                value={formData.delivery_person_id}
-                                onChange={(e) => setFormData({ ...formData, delivery_person_id: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">Select Delivery Person</option>
-                                {deliveryPersons.map(person => (
-                                    <option key={person.id} value={person.id}>{person.name}</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-gray-500 mt-1">Person who physically delivers the product</p>
-                        </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
