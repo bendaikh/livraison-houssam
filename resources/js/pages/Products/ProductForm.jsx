@@ -115,21 +115,21 @@ export default function ProductForm() {
                 submitData.append(`images[${index}]`, image);
             });
 
+            // For editing, add _method field to simulate PUT request (required for multipart/form-data)
+            if (isEditing) {
+                submitData.append('_method', 'PUT');
+            }
+
             // Debug: Log what we're sending
             console.log('Form Data being sent:');
             for (let [key, value] of submitData.entries()) {
                 console.log(key, ':', value);
             }
 
-            if (isEditing) {
-                await api.post(`/products/${id}`, submitData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-            } else {
-                await api.post('/products', submitData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-            }
+            // Always use POST when sending FormData (Laravel handles _method internally)
+            await api.post(isEditing ? `/products/${id}` : '/products', submitData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
 
             navigate('/products');
         } catch (error) {
