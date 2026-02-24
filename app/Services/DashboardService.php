@@ -327,7 +327,7 @@ class DashboardService
                 'products.price',
                 'products.stock_quantity',
                 'products.category_id',
-                'products.image',
+                'products.images',
                 'products.is_active',
                 DB::raw('SUM(order_items.quantity) as total_sold')
             )
@@ -340,7 +340,7 @@ class DashboardService
             $query->where('orders.vendor_id', $vendorId);
         }
         
-        return $query->groupBy('products.id', 'products.name', 'products.price', 'products.stock_quantity', 'products.category_id', 'products.image', 'products.is_active')
+        return $query->groupBy('products.id', 'products.name', 'products.price', 'products.stock_quantity', 'products.category_id', 'products.images', 'products.is_active')
             ->orderBy('total_sold', 'desc')
             ->limit(5)
             ->get();
