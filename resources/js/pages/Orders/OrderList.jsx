@@ -13,6 +13,14 @@ export default function OrderList({ status = '' }) {
     const [loading, setLoading] = useState(true);
     const [updatingStatus, setUpdatingStatus] = useState(null);
     const [isWebhookOnly, setIsWebhookOnly] = useState(false);
+    const [pagination, setPagination] = useState({
+        current_page: 1,
+        last_page: 1,
+        per_page: 15,
+        total: 0,
+        from: 0,
+        to: 0
+    });
     const [stats, setStats] = useState({
         total: 0,
         manual: 0,
@@ -25,12 +33,13 @@ export default function OrderList({ status = '' }) {
         status: status, // Set initial status from prop
         source: '',
         date_from: '',
-        date_to: ''
+        date_to: '',
+        page: 1
     });
     
     // Update filters when status prop changes (when navigating between pages)
     useEffect(() => {
-        setFilters(prev => ({ ...prev, status: status }));
+        setFilters(prev => ({ ...prev, status: status, page: 1 }));
     }, [status]);
     
     useEffect(() => {
@@ -47,14 +56,26 @@ export default function OrderList({ status = '' }) {
             if (filters.source) params.append('source', filters.source);
             if (filters.date_from) params.append('date_from', filters.date_from);
             if (filters.date_to) params.append('date_to', filters.date_to);
+            params.append('page', filters.page);
+            params.append('per_page', pagination.per_page);
             
             const response = await api.get(`/orders?${params.toString()}`);
             const fetchedOrders = response.data.data;
             setOrders(fetchedOrders);
 
-            // Calculate statistics
+            // Update pagination info
+            setPagination({
+                current_page: response.data.current_page,
+                last_page: response.data.last_page,
+                per_page: response.data.per_page,
+                total: response.data.total,
+                from: response.data.from,
+                to: response.data.to
+            });
+
+            // Calculate statistics from all orders (not just current page)
             const orderStats = {
-                total: fetchedOrders.length,
+                total: response.data.total,
                 manual: fetchedOrders.filter(o => o.source === 'manual').length,
                 shopify: fetchedOrders.filter(o => o.source === 'shopify').length,
                 delivery_company: fetchedOrders.filter(o => o.source === 'delivery_company').length,
@@ -453,6 +474,74 @@ export default function OrderList({ status = '' }) {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination */}
+                {!loading && orders.length > 0 && (
+                    <div className="px-6 py-4 border-t border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm text-gray-700">
+                                Showing <span className="font-medium">{pagination.from}</span> to{' '}
+                                <span className="font-medium">{pagination.to}</span> of{' '}
+                                <span className="font-medium">{pagination.total}</span> results
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
+                                    disabled={pagination.current_page === 1}
+                                    className={`px-3 py-1 text-sm rounded-lg border ${
+                                        pagination.current_page === 1
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                                    }`}
+                                >
+                                    Previous
+                                </button>
+                                
+                                {/* Page numbers */}
+                                <div className="flex items-center space-x-1">
+                                    {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
+                                        .filter(page => {
+                                            // Show first page, last page, current page, and pages around current
+                                            return (
+                                                page === 1 ||
+                                                page === pagination.last_page ||
+                                                (page >= pagination.current_page - 1 && page <= pagination.current_page + 1)
+                                            );
+                                        })
+                                        .map((page, index, array) => (
+                                            <React.Fragment key={page}>
+                                                {index > 0 && array[index - 1] !== page - 1 && (
+                                                    <span className="px-2 text-gray-500">...</span>
+                                                )}
+                                                <button
+                                                    onClick={() => setFilters({ ...filters, page })}
+                                                    className={`px-3 py-1 text-sm rounded-lg ${
+                                                        pagination.current_page === page
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                                                    }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            </React.Fragment>
+                                        ))}
+                                </div>
+
+                                <button
+                                    onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
+                                    disabled={pagination.current_page === pagination.last_page}
+                                    className={`px-3 py-1 text-sm rounded-lg border ${
+                                        pagination.current_page === pagination.last_page
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                                    }`}
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
