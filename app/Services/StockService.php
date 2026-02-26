@@ -102,13 +102,73 @@ class StockService
 
         DB::transaction(function () use ($order) {
             foreach ($order->items as $item) {
-                $this->removeStock(
-                    $item->product_id,
-                    $item->quantity,
-                    "Stock deduction for order #{$order->order_number}",
-                    $order->order_number,
-                    $order->id
-                );
+                // Skip items without a product_id (manual items with only product name)
+                if (!$item->product_id) {
+                    \Log::warning('Skipping stock deduction for order item without product_id', [
+                        'order_id' => $order->id,
+                        'order_item_id' => $item->id,
+                        'product_name' => $item->product_name
+                    ]);
+                    continue;
+                }
+
+                try {
+                    $this->removeStock(
+                        $item->product_id,
+                        $item->quantity,
+                        "Stock deduction for order #{$order->order_number}",
+                        $order->order_number,
+                        $order->id
+                    );
+                } catch (\Exception $e) {
+                    \Log::error('Failed to remove stock for order item', [
+                        'order_id' => $order->id,
+                        'order_item_id' => $item->id,
+                        'product_id' => $item->product_id,
+                        'error' => $e->getMessage()
+                    ]);
+                    
+                    // Re-throw exception if it's an insufficient stock error
+                    if (strpos($e->getMessage(), 'Insufficient stock') !== false) {
+                        throw $e;
+                    }
+                }
+            }
+        });
+    }
+
+    public function restoreStockForOrder(int $orderId)
+    {
+        $order = \App\Models\Order::with('items.product')->findOrFail($orderId);
+
+        DB::transaction(function () use ($order) {
+            foreach ($order->items as $item) {
+                // Skip items without a product_id (manual items with only product name)
+                if (!$item->product_id) {
+                    \Log::warning('Skipping stock restoration for order item without product_id', [
+                        'order_id' => $order->id,
+                        'order_item_id' => $item->id,
+                        'product_name' => $item->product_name
+                    ]);
+                    continue;
+                }
+
+                try {
+                    $this->addStock(
+                        $item->product_id,
+                        $item->quantity,
+                        null,
+                        "Stock restored for cancelled order #{$order->order_number}",
+                        $order->order_number
+                    );
+                } catch (\Exception $e) {
+                    \Log::error('Failed to restore stock for order item', [
+                        'order_id' => $order->id,
+                        'order_item_id' => $item->id,
+                        'product_id' => $item->product_id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
         });
     }

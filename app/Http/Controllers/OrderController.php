@@ -138,6 +138,7 @@ class OrderController extends Controller
             'delivery_agent_id' => 'nullable|exists:users,id',
             'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
+            'status' => 'nullable|in:pending,confirmed,shipped,delivered,cancelled',
             'source' => 'string|in:manual,shopify,delivery_company,marketplace',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
@@ -169,7 +170,21 @@ class OrderController extends Controller
             $validated['client_id'] = $client->id;
         }
 
+        // Check if status is being changed
+        $oldStatus = $order->status;
+        $newStatus = $validated['status'] ?? $oldStatus;
+        
+        // Update the order first
         $order = $this->orderService->updateOrder($order->id, $validated);
+        
+        // If status changed, trigger status update logic (stock deduction, notifications, etc.)
+        if ($oldStatus !== $newStatus) {
+            $order = $this->orderService->updateOrderStatus(
+                $order->id,
+                $newStatus,
+                "Order status changed from {$oldStatus} to {$newStatus}"
+            );
+        }
 
         return response()->json($order);
     }

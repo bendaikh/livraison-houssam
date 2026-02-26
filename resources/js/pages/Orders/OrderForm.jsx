@@ -26,6 +26,7 @@ export default function OrderForm() {
         delivery_agent_id: '',
         delivery_person_id: '',
         confirmation_agent_id: '',
+        status: 'pending',
         source: 'manual',
         shipping_address: '',
         city: '',
@@ -129,6 +130,7 @@ export default function OrderForm() {
                 delivery_agent_id: order.delivery_agent_id || '',
                 delivery_person_id: order.delivery_person_id || '',
                 confirmation_agent_id: order.confirmation_agent_id || '',
+                status: order.status || 'pending',
                 source: order.source || 'manual',
                 shipping_address: order.shipping_address || '',
                 city: order.city || '',
@@ -314,6 +316,24 @@ export default function OrderForm() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {/* Order Status - only show when editing */}
+                        {isEditing && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Order Status</label>
+                                <select
+                                    value={formData.status}
+                                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent capitalize"
+                                >
+                                    <option value="pending">Pending</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="shipped">Shipped</option>
+                                    <option value="delivered">Delivered</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                        )}
+
                         {/* Hide seller selection for users who are sellers */}
                         {!user?.vendor && (
                             <div>

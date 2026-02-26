@@ -99,8 +99,8 @@ class OrderService
                 }
             }
 
-            // Update order
-            $order->update([
+            // Update order (but don't update status here - let updateOrderStatus handle that)
+            $updateData = [
                 'client_id' => $data['client_id'],
                 'vendor_id' => $data['vendor_id'] ?? null,
                 'delivery_agent_id' => $data['delivery_agent_id'] ?? null,
@@ -116,7 +116,14 @@ class OrderService
                 'shipping_address' => $data['shipping_address'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'whatsapp' => $data['whatsapp'] ?? null,
-            ]);
+            ];
+            
+            // Only update status if it's explicitly provided and different from current
+            if (isset($data['status']) && $data['status'] !== $order->status) {
+                $updateData['status'] = $data['status'];
+            }
+            
+            $order->update($updateData);
 
             // Delete existing items
             $order->items()->delete();
@@ -157,9 +164,30 @@ class OrderService
                 default => null
             };
 
-            // Deduct stock when order is confirmed
-            if ($status === 'confirmed' && $oldStatus !== 'confirmed') {
-                $this->stockService->deductStockForOrder($orderId);
+            // Deduct stock when order is delivered (not confirmed)
+            if ($status === 'delivered' && $oldStatus !== 'delivered') {
+                try {
+                    $this->stockService->deductStockForOrder($orderId);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to deduct stock for order: ' . $e->getMessage(), [
+                        'order_id' => $orderId,
+                        'exception' => $e
+                    ]);
+                    // Continue with the order status update even if stock deduction fails
+                }
+            }
+
+            // Restore stock when order is cancelled (only if it was previously delivered)
+            if ($status === 'cancelled' && $oldStatus === 'delivered') {
+                try {
+                    $this->stockService->restoreStockForOrder($orderId);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to restore stock for cancelled order: ' . $e->getMessage(), [
+                        'order_id' => $orderId,
+                        'exception' => $e
+                    ]);
+                    // Continue with the order status update even if stock restoration fails
+                }
             }
 
             // Update vendor stats if delivered
