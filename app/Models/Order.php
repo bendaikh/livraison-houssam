@@ -15,10 +15,13 @@ class Order extends Model
         'delivery_agent_id',
         'delivery_person_id',
         'confirmation_agent_id',
+        'delivery_integration_id',
         'status',
         'payment_status',
         'source',
         'external_order_id',
+        'delivery_tracking_code',
+        'delivery_status',
         'subtotal',
         'shipping_cost',
         'tax',
@@ -32,6 +35,7 @@ class Order extends Model
         'notes',
         'whatsapp',
         'confirmed_at',
+        'sent_to_delivery_at',
         'shipped_at',
         'delivered_at',
         'cancelled_at',
@@ -45,6 +49,7 @@ class Order extends Model
         'total' => 'decimal:2',
         'commission_amount' => 'decimal:2',
         'confirmed_at' => 'datetime',
+        'sent_to_delivery_at' => 'datetime',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
@@ -73,6 +78,11 @@ class Order extends Model
     public function confirmationAgent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmation_agent_id');
+    }
+
+    public function deliveryIntegration(): BelongsTo
+    {
+        return $this->belongsTo(ApiIntegration::class, 'delivery_integration_id');
     }
 
     public function items(): HasMany

@@ -26,6 +26,8 @@ Route::post('/register', [AuthController::class, 'register']);
 
 // Webhook routes (public - no authentication required)
 Route::post('/webhooks/shopify/orders/create', [WebhookController::class, 'handleShopifyOrderCreate']);
+Route::post('/webhooks/bmdelivery/status-update', [WebhookController::class, 'handleBMDeliveryWebhook']);
+Route::post('/webhooks/tawsilex/status-update', [WebhookController::class, 'handleTawsilexWebhook']);
 Route::post('/webhooks/test', [WebhookController::class, 'testWebhook']);
 
 // Protected routes
@@ -45,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('categories', CategoryController::class);
 
     // Orders
+    Route::get('/orders/delivery-companies/available', [OrderController::class, 'getAvailableDeliveryCompanies']);
     Route::apiResource('orders', OrderController::class);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
     Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);

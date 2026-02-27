@@ -14,7 +14,7 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'items.product']);
+        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'deliveryIntegration', 'items.product']);
 
         // If user is a vendor, only show their orders
         $user = $request->user();
@@ -123,6 +123,7 @@ class OrderController extends Controller
             'deliveryAgent',
             'deliveryPerson',
             'confirmationAgent',
+            'deliveryIntegration',
             'items.product',
             'history.user'
         ]));
@@ -194,12 +195,14 @@ class OrderController extends Controller
         $validated = $request->validate([
             'status' => 'required|in:pending,confirmed,shipped,delivered,cancelled',
             'note' => 'nullable|string',
+            'delivery_integration_id' => 'nullable|exists:api_integrations,id',
         ]);
 
         $order = $this->orderService->updateOrderStatus(
             $order->id,
             $validated['status'],
-            $validated['note'] ?? null
+            $validated['note'] ?? null,
+            $validated['delivery_integration_id'] ?? null
         );
 
         return response()->json($order);
@@ -220,5 +223,14 @@ class OrderController extends Controller
     {
         $order->delete();
         return response()->json(['message' => 'Order deleted successfully']);
+    }
+
+    public function getAvailableDeliveryCompanies()
+    {
+        $integrations = \App\Models\ApiIntegration::where('type', 'delivery')
+            ->where('is_active', true)
+            ->get(['id', 'name', 'provider']);
+
+        return response()->json($integrations);
     }
 }

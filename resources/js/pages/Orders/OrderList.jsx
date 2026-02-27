@@ -4,6 +4,7 @@ import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw } from 'lucide-react';
+import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
 
 export default function OrderList({ status = '' }) {
     const { formatCurrency } = useSettings();
@@ -13,6 +14,8 @@ export default function OrderList({ status = '' }) {
     const [loading, setLoading] = useState(true);
     const [updatingStatus, setUpdatingStatus] = useState(null);
     const [isWebhookOnly, setIsWebhookOnly] = useState(false);
+    const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+    const [pendingStatusChange, setPendingStatusChange] = useState(null);
     const [pagination, setPagination] = useState({
         current_page: 1,
         last_page: 1,
@@ -133,6 +136,14 @@ export default function OrderList({ status = '' }) {
     };
 
     const handleStatusChange = async (orderId, newStatus) => {
+        // If changing to confirmed, show delivery company modal
+        if (newStatus === 'confirmed') {
+            setPendingStatusChange({ orderId, newStatus });
+            setShowDeliveryModal(true);
+            return;
+        }
+
+        // For other status changes, update directly
         try {
             setUpdatingStatus(orderId);
             await api.patch(`/orders/${orderId}/status`, { status: newStatus });
@@ -148,6 +159,33 @@ export default function OrderList({ status = '' }) {
         }
     };
 
+    const handleDeliveryCompanyConfirm = async (deliveryIntegrationId) => {
+        if (!pendingStatusChange) return;
+
+        const { orderId, newStatus } = pendingStatusChange;
+        
+        try {
+            setUpdatingStatus(orderId);
+            await api.patch(`/orders/${orderId}/status`, { 
+                status: newStatus,
+                delivery_integration_id: deliveryIntegrationId 
+            });
+            
+            // Update local state
+            setOrders(orders.map(order => 
+                order.id === orderId ? { ...order, status: newStatus } : order
+            ));
+            
+            setShowDeliveryModal(false);
+            setPendingStatusChange(null);
+        } catch (error) {
+            console.error('Error updating order status:', error);
+            throw error; // Re-throw to be handled by the modal
+        } finally {
+            setUpdatingStatus(null);
+        }
+    };
+
     const getPageTitle = () => {
         if (!status) return 'Orders Management';
         return `${status.charAt(0).toUpperCase() + status.slice(1)} Orders`;
@@ -155,6 +193,16 @@ export default function OrderList({ status = '' }) {
 
     return (
         <div className="space-y-6">
+            <DeliveryCompanyModal
+                isOpen={showDeliveryModal}
+                onClose={() => {
+                    setShowDeliveryModal(false);
+                    setPendingStatusChange(null);
+                }}
+                onConfirm={handleDeliveryCompanyConfirm}
+                orderId={pendingStatusChange?.orderId}
+            />
+
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-900">{getPageTitle()}</h1>
                 <button
@@ -347,6 +395,7 @@ export default function OrderList({ status = '' }) {
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery Person</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Conf.</th>
                                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -355,11 +404,11 @@ export default function OrderList({ status = '' }) {
                         <tbody className="bg-white divide-y divide-gray-200">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="13" className="px-6 py-4 text-center text-gray-500">Loading...</td>
+                                    <td colSpan="14" className="px-6 py-4 text-center text-gray-500">Loading...</td>
                                 </tr>
                             ) : orders.length === 0 ? (
                                 <tr>
-                                    <td colSpan="13" className="px-6 py-4 text-center text-gray-500">No orders found</td>
+                                    <td colSpan="14" className="px-6 py-4 text-center text-gray-500">No orders found</td>
                                 </tr>
                             ) : (
                                 orders.map(order => (
@@ -412,6 +461,27 @@ export default function OrderList({ status = '' }) {
                                                 <option value="delivered">Delivered</option>
                                                 <option value="cancelled">Cancelled</option>
                                             </select>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                            {order.delivery_tracking_code ? (
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-medium text-blue-600 truncate max-w-[100px]" title={order.delivery_tracking_code}>
+                                                        {order.delivery_tracking_code}
+                                                    </span>
+                                                    {order.delivery_integration && (
+                                                        <span className="text-xs text-gray-400 capitalize">
+                                                            {order.delivery_integration.provider}
+                                                        </span>
+                                                    )}
+                                                    {order.delivery_status && (
+                                                        <span className="text-xs text-purple-600 capitalize mt-1">
+                                                            {order.delivery_status.replace('_', ' ')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                '-'
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                             {order.delivery_person?.name || '-'}

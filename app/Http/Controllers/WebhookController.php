@@ -203,4 +203,175 @@ class WebhookController extends Controller
             'received_at' => now()->toISOString(),
         ], 200);
     }
+
+    /**
+     * Handle BMDelivery webhook for order status updates
+     */
+    public function handleBMDeliveryWebhook(Request $request)
+    {
+        try {
+            Log::info('BMDelivery webhook received', [
+                'data' => $request->all(),
+            ]);
+
+            $webhookData = $request->all();
+            
+            // Get tracking code and status from webhook
+            $trackingCode = $webhookData['code'] ?? $webhookData['tracking_code'] ?? null;
+            $newStatus = $webhookData['status'] ?? null;
+            
+            if (!$trackingCode) {
+                Log::warning('BMDelivery webhook missing tracking code');
+                return response()->json(['message' => 'Missing tracking code'], 400);
+            }
+
+            // Find order by tracking code
+            $order = Order::where('delivery_tracking_code', $trackingCode)->first();
+            
+            if (!$order) {
+                Log::warning('Order not found for tracking code', ['tracking_code' => $trackingCode]);
+                return response()->json(['message' => 'Order not found'], 404);
+            }
+
+            // Update delivery status
+            $order->update([
+                'delivery_status' => $newStatus,
+            ]);
+
+            // Map delivery company status to order status
+            $orderStatus = $this->mapDeliveryStatusToOrderStatus($newStatus);
+            
+            if ($orderStatus && $orderStatus !== $order->status) {
+                $orderService = app(\App\Services\OrderService::class);
+                $orderService->updateOrderStatus(
+                    $order->id,
+                    $orderStatus,
+                    "Status updated from BMDelivery: {$newStatus}"
+                );
+            }
+
+            Log::info('Order updated from BMDelivery webhook', [
+                'order_id' => $order->id,
+                'delivery_status' => $newStatus,
+                'order_status' => $orderStatus,
+            ]);
+
+            return response()->json(['message' => 'Webhook processed successfully'], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to process BMDelivery webhook', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to process webhook',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle Tawsilex webhook for order status updates
+     */
+    public function handleTawsilexWebhook(Request $request)
+    {
+        try {
+            Log::info('Tawsilex webhook received', [
+                'data' => $request->all(),
+            ]);
+
+            $webhookData = $request->all();
+            
+            // Get tracking code and status from webhook
+            $trackingCode = $webhookData['code'] ?? $webhookData['tracking_code'] ?? null;
+            $newStatus = $webhookData['status'] ?? null;
+            
+            if (!$trackingCode) {
+                Log::warning('Tawsilex webhook missing tracking code');
+                return response()->json(['message' => 'Missing tracking code'], 400);
+            }
+
+            // Find order by tracking code
+            $order = Order::where('delivery_tracking_code', $trackingCode)->first();
+            
+            if (!$order) {
+                Log::warning('Order not found for tracking code', ['tracking_code' => $trackingCode]);
+                return response()->json(['message' => 'Order not found'], 404);
+            }
+
+            // Update delivery status
+            $order->update([
+                'delivery_status' => $newStatus,
+            ]);
+
+            // Map delivery company status to order status
+            $orderStatus = $this->mapDeliveryStatusToOrderStatus($newStatus);
+            
+            if ($orderStatus && $orderStatus !== $order->status) {
+                $orderService = app(\App\Services\OrderService::class);
+                $orderService->updateOrderStatus(
+                    $order->id,
+                    $orderStatus,
+                    "Status updated from Tawsilex: {$newStatus}"
+                );
+            }
+
+            Log::info('Order updated from Tawsilex webhook', [
+                'order_id' => $order->id,
+                'delivery_status' => $newStatus,
+                'order_status' => $orderStatus,
+            ]);
+
+            return response()->json(['message' => 'Webhook processed successfully'], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to process Tawsilex webhook', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to process webhook',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Map delivery company status to internal order status
+     */
+    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus): ?string
+    {
+        if (!$deliveryStatus) {
+            return null;
+        }
+
+        $statusMap = [
+            // Common delivery statuses
+            'pending' => 'pending',
+            'confirmed' => 'confirmed',
+            'picked_up' => 'shipped',
+            'in_transit' => 'shipped',
+            'out_for_delivery' => 'shipped',
+            'delivered' => 'delivered',
+            'cancelled' => 'cancelled',
+            'returned' => 'cancelled',
+            'failed' => 'cancelled',
+            
+            // BMDelivery specific
+            'ramassage' => 'confirmed',
+            'en_cours' => 'shipped',
+            'livre' => 'delivered',
+            'annule' => 'cancelled',
+            'retour' => 'cancelled',
+            
+            // Tawsilex specific
+            'preparation' => 'confirmed',
+            'expedie' => 'shipped',
+            'livraison' => 'delivered',
+        ];
+
+        return $statusMap[strtolower($deliveryStatus)] ?? null;
+    }
 }

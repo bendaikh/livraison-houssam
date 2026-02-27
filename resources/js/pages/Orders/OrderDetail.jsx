@@ -589,6 +589,46 @@ export default function OrderDetail() {
                             {order.source || 'Manual'}
                         </span>
                     </div>
+
+                    {/* Delivery Tracking */}
+                    {order.delivery_tracking_code && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                <Truck className="mr-2" size={20} />
+                                Delivery Tracking
+                            </h2>
+                            <div className="space-y-3">
+                                <div>
+                                    <p className="text-sm text-gray-500">Delivery Company</p>
+                                    <p className="font-semibold text-gray-900 capitalize">
+                                        {order.delivery_integration?.name || 'N/A'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Tracking Code</p>
+                                    <p className="font-mono text-sm font-medium text-blue-600">
+                                        {order.delivery_tracking_code}
+                                    </p>
+                                </div>
+                                {order.delivery_status && (
+                                    <div>
+                                        <p className="text-sm text-gray-500">Delivery Status</p>
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 capitalize mt-1">
+                                            {order.delivery_status.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                )}
+                                {order.sent_to_delivery_at && (
+                                    <div>
+                                        <p className="text-sm text-gray-500">Sent to Delivery</p>
+                                        <p className="text-sm text-gray-900">
+                                            {formatDate(order.sent_to_delivery_at)}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

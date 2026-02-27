@@ -147,9 +147,9 @@ class OrderService
         });
     }
 
-    public function updateOrderStatus(int $orderId, string $status, ?string $note = null)
+    public function updateOrderStatus(int $orderId, string $status, ?string $note = null, ?int $deliveryIntegrationId = null)
     {
-        return DB::transaction(function () use ($orderId, $status, $note) {
+        return DB::transaction(function () use ($orderId, $status, $note, $deliveryIntegrationId) {
             $order = Order::findOrFail($orderId);
             $oldStatus = $order->status;
 
@@ -163,6 +163,20 @@ class OrderService
                 'cancelled' => $order->update(['cancelled_at' => now()]),
                 default => null
             };
+
+            // Send to delivery company when confirmed
+            if ($status === 'confirmed' && $deliveryIntegrationId) {
+                try {
+                    $this->sendOrderToDeliveryCompany($order, $deliveryIntegrationId);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to send order to delivery company: ' . $e->getMessage(), [
+                        'order_id' => $orderId,
+                        'delivery_integration_id' => $deliveryIntegrationId,
+                        'exception' => $e
+                    ]);
+                    // Continue with the order status update even if sending to delivery company fails
+                }
+            }
 
             // Deduct stock when order is delivered (not confirmed)
             if ($status === 'delivered' && $oldStatus !== 'delivered') {
@@ -206,8 +220,44 @@ class OrderService
             // Create notification
             $this->createOrderNotification($order, $status);
 
-            return $order->fresh(['items.product', 'client', 'history']);
+            return $order->fresh(['items.product', 'client', 'history', 'deliveryIntegration']);
         });
+    }
+
+    private function sendOrderToDeliveryCompany(Order $order, int $deliveryIntegrationId)
+    {
+        $integration = \App\Models\ApiIntegration::findOrFail($deliveryIntegrationId);
+        
+        if (!$integration->is_active) {
+            throw new \Exception('Selected delivery integration is not active');
+        }
+
+        $response = null;
+
+        // Send to the appropriate delivery service
+        if ($integration->provider === 'bmdelivery') {
+            $bmService = new BMDeliveryService();
+            $bmService->setApiToken($integration->credentials['api_token']);
+            $response = $bmService->createShipmentFromOrder($order);
+        } elseif ($integration->provider === 'tawsilex') {
+            $tawsilexService = new TawsilexService();
+            $tawsilexService->setApiToken($integration->credentials['api_token']);
+            $response = $tawsilexService->createShipmentFromOrder($order);
+        } else {
+            throw new \Exception('Unsupported delivery provider: ' . $integration->provider);
+        }
+
+        // Update order with tracking info
+        $trackingCode = $response['data']['code'] ?? $response['code'] ?? null;
+        
+        $order->update([
+            'delivery_integration_id' => $deliveryIntegrationId,
+            'delivery_tracking_code' => $trackingCode,
+            'sent_to_delivery_at' => now(),
+            'delivery_status' => 'sent',
+        ]);
+
+        $this->addHistory($order->id, $order->status, "Order sent to {$integration->name}. Tracking code: {$trackingCode}");
     }
 
     private function addHistory(int $orderId, string $status, ?string $note = null)

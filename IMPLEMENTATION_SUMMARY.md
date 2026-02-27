@@ -1,387 +1,206 @@
-# Implementation Summary: Vendor Role System
+# Implementation Summary: Delivery Company Integration
 
-## Overview
-Implemented a complete vendor role system where sellers can only see their own data across the entire application.
+## What Was Implemented
 
-## ✅ What Was Implemented
+I've successfully implemented a comprehensive delivery company integration feature for your order management system. Here's what was done:
 
-### 1. **Restricted Navigation Menu** ✅
-- **File:** `resources/js/layouts/MainLayout.jsx`
-- **Changes:**
-  - Added `adminOnly: true` flag to Products, Stock, Vendors, and Expenses menu items
-  - Modified API Integrations submenu to show only Shopify for vendors
-  - Hidden admin-only sections based on `user.role.slug`
+## 1. Database Changes
 
-**Vendor Menu:**
+**New Migration Created:**
+- `database/migrations/2026_02_27_000000_add_delivery_integration_fields_to_orders_table.php`
+
+**New Fields Added to Orders Table:**
+- `delivery_integration_id` - Links order to the delivery company used
+- `delivery_tracking_code` - Tracking code from delivery company
+- `delivery_status` - Current delivery status from the company
+- `sent_to_delivery_at` - Timestamp when order was sent
+
+## 2. Backend Changes
+
+### Models Updated:
+- **app/Models/Order.php**
+  - Added new fillable fields
+  - Added `deliveryIntegration()` relationship
+  - Added new timestamp cast for `sent_to_delivery_at`
+
+### Services Updated:
+- **app/Services/OrderService.php**
+  - Enhanced `updateOrderStatus()` to accept delivery integration ID
+  - Added `sendOrderToDeliveryCompany()` method to send orders to BMDelivery or Tawsilex
+  - Integrated automatic order sending when status changes to "confirmed"
+
+### Controllers Updated:
+- **app/Http/Controllers/OrderController.php**
+  - Updated `updateStatus()` to accept delivery integration ID
+  - Added `getAvailableDeliveryCompanies()` endpoint
+  - Updated `index()` and `show()` to load delivery integration relationship
+
+- **app/Http/Controllers/WebhookController.php**
+  - Added `handleBMDeliveryWebhook()` for BMDelivery status updates
+  - Added `handleTawsilexWebhook()` for Tawsilex status updates
+  - Added `mapDeliveryStatusToOrderStatus()` for automatic status mapping
+
+### Routes Updated:
+- **routes/api.php**
+  - Added `GET /orders/delivery-companies/available`
+  - Added `POST /webhooks/bmdelivery/status-update`
+  - Added `POST /webhooks/tawsilex/status-update`
+
+## 3. Frontend Changes
+
+### New Components:
+- **resources/js/components/DeliveryCompanyModal.jsx**
+  - Beautiful modal popup for selecting delivery company
+  - Shows available active delivery companies
+  - Displays company logos and provider information
+  - Loading states and error handling
+  - Confirmation functionality
+
+### Updated Components:
+- **resources/js/pages/Orders/OrderList.jsx**
+  - Integrated delivery company modal
+  - Shows modal when status changes to "confirmed"
+  - Added delivery tracking column in orders table
+  - Displays tracking code, provider, and delivery status
+
+- **resources/js/pages/Orders/OrderDetail.jsx**
+  - Added "Delivery Tracking" section
+  - Shows delivery company name
+  - Displays tracking code
+  - Shows current delivery status
+  - Shows when order was sent to delivery company
+
+## 4. Feature Flow
+
+### When Confirming an Order:
+1. User changes order status to "confirmed" from dropdown
+2. Modal popup appears showing available delivery companies (BMDelivery, Tawsilex)
+3. User selects desired delivery company
+4. User clicks "Confirm & Send"
+5. Order is sent to selected delivery company via API
+6. Tracking code is received and stored
+7. Order status is updated to "confirmed"
+8. Order history is updated with delivery company details
+
+### When Delivery Company Updates Status:
+1. Delivery company sends webhook to your app
+2. Webhook handler receives status update
+3. Order's delivery_status is updated
+4. System maps delivery status to internal order status
+5. If mapped status differs, order status is automatically updated
+6. Order history is updated with status change details
+
+## 5. Status Mapping
+
+The system automatically maps delivery company statuses to internal order statuses:
+
+- **pending** → pending
+- **confirmed, ramassage, preparation** → confirmed
+- **picked_up, in_transit, out_for_delivery, en_cours, expedie** → shipped
+- **delivered, livre, livraison** → delivered
+- **cancelled, returned, failed, annule, retour** → cancelled
+
+## 6. Webhook Configuration
+
+To receive automatic updates, configure these webhook URLs in your delivery company dashboards:
+
+**BMDelivery:**
 ```
-✅ Dashboard
-✅ Marketplace (only their products)
-✅ Orders (only their orders)
-✅ API Integrations → Shopify only
-✅ Settings
-```
-
-**Hidden from Vendors:**
-```
-❌ Products
-❌ Stock
-❌ Sellers
-❌ Expenses
-❌ User Management
-❌ Tawsilex Integration
-❌ BMDelivery Integration
-```
-
----
-
-### 2. **Orders Filtering** ✅
-- **File:** `app/Http/Controllers/OrderController.php`
-- **Changes:**
-  - Added vendor role check in `index()` method
-  - Automatically filters orders by `vendor_id` for vendor users
-  - Gets vendor ID from `user_id` relationship
-
-**Code:**
-```php
-// If user is a vendor, only show their orders
-$user = $request->user();
-if ($user && $user->role && $user->role->slug === 'vendor') {
-    $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
-    if ($vendor) {
-        $query->where('vendor_id', $vendor->id);
-    }
-}
-```
-
----
-
-### 3. **Marketplace Filtering** ✅
-- **File:** `app/Http/Controllers/MarketplaceController.php`
-- **Changes:**
-  - Added vendor role check in `index()` method
-  - Shows only products assigned to the vendor via marketplace
-  - Uses `marketplaceProducts()` relationship
-
-**Code:**
-```php
-// If user is a vendor, only show their assigned products
-if ($user && $user->role && $user->role->slug === 'vendor') {
-    $vendor = Vendor::where('user_id', $user->id)->first();
-    
-    // Get only products assigned to this vendor
-    $query = $vendor->marketplaceProducts()
-        ->with(['category', 'vendor']);
-}
-```
-
----
-
-### 4. **API Integrations Filtering** ✅
-- **File:** `app/Http/Controllers/ApiIntegrationController.php`
-- **Changes:**
-  - Added vendor role check in `index()` method
-  - Filters to show only Shopify integrations
-  - Shows integrations linked to the vendor or general Shopify
-
-**Code:**
-```php
-// If user is a vendor, only show Shopify integration
-if ($user && $user->role && $user->role->slug === 'vendor') {
-    $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
-    
-    if ($vendor) {
-        $query->where('type', 'shopify')
-              ->where(function ($q) use ($vendor) {
-                  $q->where('vendor_id', $vendor->id)
-                    ->orWhereNull('vendor_id');
-              });
-    }
-}
-```
-
----
-
-### 5. **Dashboard Statistics Filtering** ✅
-- **Files:**
-  - `app/Http/Controllers/DashboardController.php`
-  - `app/Services/DashboardService.php`
-
-- **Changes:**
-  - Added `$vendorId` parameter to all methods
-  - Filters all statistics by vendor
-  - Hides irrelevant data (expenses, low stock, other vendors)
-
-**Methods Updated:**
-- `getStatistics()` - Added vendor ID parameter
-- `getSalesStats()` - Filters sales by vendor
-- `getOrdersStats()` - Filters orders by vendor
-- `getRevenueStats()` - Filters revenue by vendor
-- `getRecentOrders()` - Shows only vendor's orders
-- `getChartsData()` - Filters chart data by vendor
-- `getHourlyChartData()` - Vendor-specific hourly data
-- `getDailyChartData()` - Vendor-specific daily data
-- `getMonthlyChartData()` - Vendor-specific monthly data
-- `getClientsStats()` - Shows only clients who ordered from vendor
-- `getProductsStats()` - Shows vendor's marketplace products
-- `getTopProducts()` - Top products sold by vendor
-- `getTopClients()` - Top clients of vendor
-
-**Dashboard Controller:**
-```php
-public function index(Request $request)
-{
-    $period = $request->get('period', 'daily');
-    $user = $request->user();
-    $vendorId = null;
-    
-    // If user is a vendor, get their vendor ID
-    if ($user && $user->role && $user->role->slug === 'vendor') {
-        $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
-        $vendorId = $vendor?->id;
-    }
-    
-    $statistics = $this->dashboardService->getStatistics($period, $vendorId);
-    return response()->json($statistics);
-}
+https://yourdomain.com/api/webhooks/bmdelivery/status-update
 ```
 
----
-
-### 6. **Database Migration** ✅
-- **File:** `database/migrations/2026_02_21_180531_add_user_id_to_vendors_table.php`
-- **Changes:**
-  - Added `user_id` foreign key to `vendors` table
-  - Links vendors to user accounts for authentication
-
-**Migration:**
-```php
-Schema::table('vendors', function (Blueprint $table) {
-    $table->foreignId('user_id')->nullable()
-          ->after('id')
-          ->constrained('users')
-          ->onDelete('cascade');
-});
+**Tawsilex:**
+```
+https://yourdomain.com/api/webhooks/tawsilex/status-update
 ```
 
----
+## 7. Testing the Feature
 
-### 7. **Vendor Model Update** ✅
-- **File:** `app/Models/Vendor.php`
-- **Changes:**
-  - Added `user_id` to `$fillable` array
-  - Added `user()` relationship method
+### Prerequisites:
+1. Have at least one active delivery integration configured (BMDelivery or Tawsilex)
+2. Ensure API token is valid and tested
 
-**Relationship:**
-```php
-public function user(): BelongsTo
-{
-    return $this->belongsTo(User::class);
-}
-```
+### Test Steps:
+1. Create a new order or use existing pending order
+2. Change order status to "confirmed"
+3. Modal should appear with available delivery companies
+4. Select a delivery company
+5. Click "Confirm & Send"
+6. Check order details page - should show delivery tracking info
+7. Check order list - should show tracking code in delivery column
+8. Simulate webhook from delivery company to test automatic updates
 
----
+## 8. Files Modified
 
-### 8. **Vendor Controller Updates** ✅
-- **File:** `app/Http/Controllers/VendorController.php`
-- **Changes:**
-  - Modified `store()` to create user account with vendor role
-  - Modified `update()` to update associated user account
-  - Added password validation and management
-  - Uses database transactions for data integrity
+### Backend (PHP/Laravel):
+1. `database/migrations/2026_02_27_000000_add_delivery_integration_fields_to_orders_table.php` (NEW)
+2. `app/Models/Order.php` (MODIFIED)
+3. `app/Services/OrderService.php` (MODIFIED)
+4. `app/Http/Controllers/OrderController.php` (MODIFIED)
+5. `app/Http/Controllers/WebhookController.php` (MODIFIED)
+6. `routes/api.php` (MODIFIED)
 
-**Store Method:**
-```php
-// Create user account
-$user = User::create([
-    'name' => $validated['name'],
-    'email' => $validated['email'],
-    'password' => Hash::make($validated['password']),
-    'is_active' => true,
-]);
+### Frontend (React):
+1. `resources/js/components/DeliveryCompanyModal.jsx` (NEW)
+2. `resources/js/pages/Orders/OrderList.jsx` (MODIFIED)
+3. `resources/js/pages/Orders/OrderDetail.jsx` (MODIFIED)
 
-// Assign vendor role
-$vendorRole = Role::where('slug', 'vendor')->first();
-$user->role()->associate($vendorRole);
-$user->save();
+### Documentation:
+1. `DELIVERY_INTEGRATION_GUIDE.md` (NEW)
+2. `IMPLEMENTATION_SUMMARY.md` (THIS FILE)
 
-// Create vendor linked to user
-$vendor = Vendor::create([
-    'user_id' => $user->id,
-    // ... other vendor data
-]);
-```
+## 9. Key Features
 
----
+✅ **Popup Modal** - Beautiful modal for selecting delivery company when confirming orders
+✅ **Dual Integration** - Support for both BMDelivery and Tawsilex
+✅ **Automatic Sending** - Orders automatically sent to selected delivery company
+✅ **Tracking Code Storage** - Tracking codes stored and displayed
+✅ **Real-time Updates** - Webhooks automatically sync status updates
+✅ **Status Mapping** - Intelligent mapping of delivery statuses to internal statuses
+✅ **Visual Feedback** - Complete tracking information displayed in UI
+✅ **Error Handling** - Graceful error handling with user-friendly messages
+✅ **Logging** - Comprehensive logging for troubleshooting
 
-### 9. **Frontend Vendor Form** ✅
-- **File:** `resources/js/pages/Vendors/VendorList.jsx`
-- **Changes:**
-  - Added password and confirm password fields to vendor form
-  - Added login credentials section in modal
-  - Shows appropriate notes for new vs. editing vendors
+## 10. Next Steps
 
-**Form Fields Added:**
-```javascript
-{/* Login Credentials Section */}
-<div className="mb-6">
-    <h3>Login Credentials</h3>
-    <input 
-        type="password"
-        name="password"
-        placeholder="Password"
-        required={!editingVendor} // Required for new vendors
-    />
-    <input 
-        type="password"
-        name="password_confirmation"
-        placeholder="Confirm Password"
-        required={!editingVendor}
-    />
-    {editingVendor && (
-        <p className="note">Leave empty to keep current password</p>
-    )}
-</div>
-```
-
----
-
-## Files Modified
-
-### Backend (PHP/Laravel)
-1. ✅ `app/Http/Controllers/OrderController.php`
-2. ✅ `app/Http/Controllers/MarketplaceController.php`
-3. ✅ `app/Http/Controllers/ApiIntegrationController.php`
-4. ✅ `app/Http/Controllers/DashboardController.php`
-5. ✅ `app/Http/Controllers/VendorController.php`
-6. ✅ `app/Services/DashboardService.php`
-7. ✅ `app/Models/Vendor.php`
-8. ✅ `database/migrations/2026_02_21_180531_add_user_id_to_vendors_table.php` (NEW)
-
-### Frontend (React)
-1. ✅ `resources/js/layouts/MainLayout.jsx`
-2. ✅ `resources/js/pages/Vendors/VendorList.jsx`
-
-### Documentation
-1. ✅ `VENDOR_ROLE_SYSTEM.md` (NEW)
-2. ✅ `IMPLEMENTATION_SUMMARY.md` (THIS FILE - NEW)
-
----
-
-## How It Works
-
-### 1. Admin Creates Vendor
-1. Admin goes to Sellers page
-2. Clicks "Add Seller"
-3. Fills form with vendor details + email + password
-4. System creates:
-   - User account with role `vendor`
-   - Vendor profile linked to user via `user_id`
-
-### 2. Vendor Logs In
-1. Vendor goes to login page
-2. Enters email and password
-3. System authenticates and identifies role as `vendor`
-
-### 3. Backend Filters Data
-1. All API endpoints check `$user->role->slug`
-2. If role is `vendor`, get vendor ID from `user_id`
-3. Filter all queries by `vendor_id`
-4. Return only vendor's data
-
-### 4. Frontend Adapts UI
-1. MainLayout checks `user.role.slug`
-2. Hides admin-only menu items
-3. Shows only Shopify in API Integrations
-4. Displays personalized dashboard
-
----
-
-## Security Features
-
-✅ **Query-Level Filtering:** Every backend query checks vendor role and filters data  
-✅ **No Direct Access:** Vendors cannot access other vendors' data via API  
-✅ **UI Restrictions:** Admin pages hidden from vendor menu  
-✅ **Role Validation:** Backend validates role before returning data  
-✅ **Database Constraints:** Foreign key ensures data integrity  
-✅ **Transaction Safety:** User and vendor created in database transaction  
-
----
-
-## Testing Checklist
-
-### ✅ Create Vendor Account
-- [ ] Admin can create vendor with password
-- [ ] User account created with role `vendor`
-- [ ] Vendor linked to user via `user_id`
-
-### ✅ Vendor Login
-- [ ] Vendor can login with email and password
-- [ ] Vendor sees simplified menu
-- [ ] Vendor cannot access admin pages
-
-### ✅ Dashboard
-- [ ] Vendor sees only their statistics
-- [ ] Charts show only vendor's data
-- [ ] No expenses or low stock shown
-
-### ✅ Orders
-- [ ] Vendor sees only their orders
-- [ ] Cannot see other vendors' orders
-- [ ] Can manage their own orders
-
-### ✅ Marketplace
-- [ ] Vendor sees only assigned products
-- [ ] Cannot see unassigned products
-
-### ✅ API Integrations
-- [ ] Vendor sees only Shopify
-- [ ] Can connect their Shopify store
-- [ ] Cannot see Tawsilex or BMDelivery
-
----
-
-## Next Steps
-
-The vendor role system is now fully implemented. You can:
-
-1. **Run the migration:**
+1. **Run Migration:**
    ```bash
    php artisan migrate
    ```
+   (Already done during implementation)
 
-2. **Create a test vendor:**
-   - Login as admin
-   - Go to Sellers
-   - Create a new vendor with login credentials
+2. **Configure Delivery Integrations:**
+   - Go to API Integrations in your app
+   - Add BMDelivery or Tawsilex integration
+   - Enter your API token
+   - Test connection
+   - Set as active
 
-3. **Test the vendor login:**
-   - Logout
-   - Login with vendor credentials
-   - Verify restricted access
+3. **Setup Webhooks:**
+   - Login to delivery company dashboard
+   - Configure webhook URLs
+   - Test webhook delivery
 
-4. **Verify data isolation:**
-   - Check that vendor only sees their data
-   - Try accessing admin pages (should be hidden/blocked)
+4. **Test the Feature:**
+   - Create test order
+   - Confirm order with delivery company
+   - Verify tracking information appears
+   - Test webhook updates (if possible)
 
----
+## 11. Benefits
 
-## Summary
+- **Streamlined Workflow**: No need to manually enter orders in delivery company systems
+- **Real-time Tracking**: Always know the current status of deliveries
+- **Reduced Errors**: Automatic data transfer eliminates manual entry mistakes
+- **Better Customer Service**: Quick access to delivery status for customer inquiries
+- **Centralized Management**: All order and delivery information in one place
+- **Scalability**: Easy to add more delivery companies in the future
 
-✅ **Complete vendor role system implemented**  
-✅ **All data filtered by vendor**  
-✅ **Secure and isolated vendor experience**  
-✅ **Simple and intuitive vendor UI**  
-✅ **Full documentation provided**  
+## Support
 
-The vendor can now:
-- Login with their own credentials
-- See their own dashboard
-- Manage their marketplace products
-- View their orders
-- Connect their Shopify store
-
-And cannot:
-- See other vendors' data
-- Access admin features
-- View system expenses or stock
-- Manage users or roles
+For questions or issues:
+1. Check `DELIVERY_INTEGRATION_GUIDE.md` for detailed usage instructions
+2. Review Laravel logs for error messages
+3. Verify API tokens are valid
+4. Test webhook configuration
+5. Check network connectivity to delivery company APIs
