@@ -205,7 +205,14 @@ class OrderController extends Controller
             $validated['delivery_integration_id'] ?? null
         );
 
-        return response()->json($order);
+        $response = $order->toArray();
+        
+        // Include delivery error if present
+        if (isset($order->delivery_error)) {
+            $response['delivery_error'] = $order->delivery_error;
+        }
+
+        return response()->json($response);
     }
 
     public function assignDeliveryAgent(Request $request, Order $order)

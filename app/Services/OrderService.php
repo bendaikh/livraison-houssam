@@ -165,6 +165,7 @@ class OrderService
             };
 
             // Send to delivery company when confirmed
+            $deliveryError = null;
             if ($status === 'confirmed' && $deliveryIntegrationId) {
                 try {
                     $this->sendOrderToDeliveryCompany($order, $deliveryIntegrationId);
@@ -174,8 +175,12 @@ class OrderService
                         'delivery_integration_id' => $deliveryIntegrationId,
                         'exception' => $e->getTraceAsString()
                     ]);
-                    // Re-throw the exception so the user knows there was an error
-                    throw new \Exception('Failed to send order to delivery company: ' . $e->getMessage());
+                    
+                    // Store the error but don't throw - let the order be confirmed anyway
+                    $deliveryError = $e->getMessage();
+                    
+                    // Add history note about the failure
+                    $this->addHistory($orderId, $status, "Order confirmed but failed to send to delivery company: " . $deliveryError);
                 }
             }
 
@@ -221,7 +226,14 @@ class OrderService
             // Create notification
             $this->createOrderNotification($order, $status);
 
-            return $order->fresh(['items.product', 'client', 'history', 'deliveryIntegration']);
+            $freshOrder = $order->fresh(['items.product', 'client', 'history', 'deliveryIntegration']);
+            
+            // If there was a delivery error, add it to the response
+            if ($deliveryError) {
+                $freshOrder->delivery_error = $deliveryError;
+            }
+            
+            return $freshOrder;
         });
     }
 

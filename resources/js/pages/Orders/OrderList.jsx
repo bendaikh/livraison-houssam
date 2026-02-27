@@ -169,18 +169,23 @@ export default function OrderList({ status = '' }) {
         
         try {
             setUpdatingStatus(orderId);
-            await api.patch(`/orders/${orderId}/status`, { 
+            const response = await api.patch(`/orders/${orderId}/status`, { 
                 status: newStatus,
                 delivery_integration_id: deliveryIntegrationId 
             });
             
-            // Update local state
+            // Update local state with the response data
             setOrders(orders.map(order => 
-                order.id === orderId ? { ...order, status: newStatus } : order
+                order.id === orderId ? { ...order, ...response.data } : order
             ));
             
             setShowDeliveryModal(false);
             setPendingStatusChange(null);
+            
+            // Show warning if there was a delivery error (order was confirmed but delivery failed)
+            if (response.data.delivery_error) {
+                alert(`Order confirmed but failed to send to delivery company:\n\n${response.data.delivery_error}\n\nPlease check the client's city and try again.`);
+            }
         } catch (error) {
             console.error('Error updating order status:', error);
             throw error; // Re-throw to be handled by the modal

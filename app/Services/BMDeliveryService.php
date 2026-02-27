@@ -95,7 +95,7 @@ class BMDeliveryService
     {
         // Common Arabic to French city mappings for Morocco
         $cityMapping = [
-            // Arabic names
+            // Arabic names - exact matches
             'الدار البيضاء' => 'Casablanca',
             'كازابلانكا' => 'Casablanca',
             'الرباط' => 'Rabat',
@@ -158,16 +158,67 @@ class BMDeliveryService
             'al-hoceima' => 'Al Hoceima',
         ];
 
+        // Partial matches - city contains this keyword
+        $partialMatches = [
+            'الدار البيضاء' => 'Casablanca',
+            'البيضاء' => 'Casablanca',
+            'كازا' => 'Casablanca',
+            'casablanca' => 'Casablanca',
+            'casa' => 'Casablanca',
+            'الرباط' => 'Rabat',
+            'rabat' => 'Rabat',
+            'مراكش' => 'Marrakech',
+            'marrakech' => 'Marrakech',
+            'طنجة' => 'Tanger',
+            'tanger' => 'Tanger',
+            'فاس' => 'Fes',
+            'fes' => 'Fes',
+            'أكادير' => 'Agadir',
+            'agadir' => 'Agadir',
+            'مكناس' => 'Meknes',
+            'meknes' => 'Meknes',
+            'وجدة' => 'Oujda',
+            'oujda' => 'Oujda',
+            'القنيطرة' => 'Kenitra',
+            'kenitra' => 'Kenitra',
+            'سلا' => 'Sale',
+            'sale' => 'Sale',
+            'المحمدية' => 'Mohammedia',
+            'mohammedia' => 'Mohammedia',
+            'تمارة' => 'Temara',
+            'temara' => 'Temara',
+            'الناظور' => 'Nador',
+            'nador' => 'Nador',
+            'العيون' => 'Laayoune',
+            'laayoune' => 'Laayoune',
+            'الداخلة' => 'Dakhla',
+            'dakhla' => 'Dakhla',
+        ];
+
+        $city = trim($city);
+
         // Try exact match first
         if (isset($cityMapping[$city])) {
             return $cityMapping[$city];
         }
 
-        // Try lowercase match
-        $cityLower = mb_strtolower(trim($city));
+        // Try lowercase exact match
+        $cityLower = mb_strtolower($city);
         foreach ($cityMapping as $key => $value) {
             if (mb_strtolower($key) === $cityLower) {
                 return $value;
+            }
+        }
+
+        // Try partial match (city contains keyword)
+        foreach ($partialMatches as $keyword => $mappedCity) {
+            if (mb_stripos($city, $keyword) !== false) {
+                Log::info('City partial match found', [
+                    'original' => $city,
+                    'keyword' => $keyword,
+                    'mapped' => $mappedCity,
+                ]);
+                return $mappedCity;
             }
         }
 
