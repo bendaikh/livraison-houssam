@@ -136,8 +136,11 @@ export default function OrderList({ status = '' }) {
     };
 
     const handleStatusChange = async (orderId, newStatus) => {
-        // If changing to confirmed, show delivery company modal
-        if (newStatus === 'confirmed') {
+        // Find the current order
+        const currentOrder = orders.find(o => o.id === orderId);
+        
+        // If changing to confirmed AND order doesn't already have a tracking code, show delivery company modal
+        if (newStatus === 'confirmed' && !currentOrder?.delivery_tracking_code) {
             setPendingStatusChange({ orderId, newStatus });
             setShowDeliveryModal(true);
             return;
