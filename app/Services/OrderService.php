@@ -299,11 +299,18 @@ class OrderService
         }
 
         // Update order with tracking info
-        $trackingCode = $response['data']['code'] ?? $response['code'] ?? $response['tracking_code'] ?? null;
+        // BMDelivery returns: code_shippment, Tawsilex may return: code or tracking_code
+        $trackingCode = $response['code_shippment'] 
+            ?? $response['code_shipment'] 
+            ?? $response['tracking_code'] 
+            ?? $response['data']['code'] 
+            ?? $response['data']['code_shippment']
+            ?? null;
         
         \Log::info('Updating order with tracking info', [
             'order_id' => $order->id,
             'tracking_code' => $trackingCode,
+            'full_response' => $response,
         ]);
         
         $order->update([
