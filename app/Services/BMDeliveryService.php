@@ -61,11 +61,24 @@ class BMDeliveryService
                 'Api-Token' => $this->apiToken,
             ])->post("{$this->baseUrl}/client/post/colis/add-colis", $payload);
 
+            $responseData = $response->json();
+            
+            Log::info('BMDelivery API response', [
+                'status' => $response->status(),
+                'response' => $responseData,
+            ]);
+
+            // Check for error in response (BMDelivery returns code: "ko" for errors)
+            if (isset($responseData['code']) && $responseData['code'] === 'ko') {
+                $errorMessage = $responseData['error'] ?? 'Unknown error from BMDelivery';
+                throw new \Exception('BMDelivery Error: ' . $errorMessage);
+            }
+
             if (!$response->successful()) {
                 throw new \Exception('Failed to create shipment: ' . $response->body());
             }
 
-            return $response->json();
+            return $responseData;
         } catch (\Exception $e) {
             Log::error('BMDelivery createShipment error', [
                 'error' => $e->getMessage(),
@@ -73,6 +86,93 @@ class BMDeliveryService
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Map Arabic/alternative city names to BMDelivery accepted French names
+     */
+    private function mapCityName(string $city): string
+    {
+        // Common Arabic to French city mappings for Morocco
+        $cityMapping = [
+            // Arabic names
+            'الدار البيضاء' => 'Casablanca',
+            'كازابلانكا' => 'Casablanca',
+            'الرباط' => 'Rabat',
+            'فاس' => 'Fes',
+            'مراكش' => 'Marrakech',
+            'طنجة' => 'Tanger',
+            'أكادير' => 'Agadir',
+            'مكناس' => 'Meknes',
+            'وجدة' => 'Oujda',
+            'القنيطرة' => 'Kenitra',
+            'تطوان' => 'Tetouan',
+            'سلا' => 'Sale',
+            'الجديدة' => 'El Jadida',
+            'بني ملال' => 'Beni Mellal',
+            'خريبكة' => 'Khouribga',
+            'الناظور' => 'Nador',
+            'سطات' => 'Settat',
+            'آسفي' => 'Safi',
+            'المحمدية' => 'Mohammedia',
+            'تازة' => 'Taza',
+            'العيون' => 'Laayoune',
+            'خنيفرة' => 'Khenifra',
+            'الراشيدية' => 'Errachidia',
+            'ورزازات' => 'Ouarzazate',
+            'برشيد' => 'Berrechid',
+            'تمارة' => 'Temara',
+            'بوجدور' => 'Boujdour',
+            'الداخلة' => 'Dakhla',
+            'طرفاية' => 'Tarfaya',
+            'السمارة' => 'Smara',
+            'تيزنيت' => 'Tiznit',
+            'طاطا' => 'Tata',
+            'كلميم' => 'Guelmim',
+            'سيدي إفني' => 'Sidi Ifni',
+            'أصيلة' => 'Asilah',
+            'شفشاون' => 'Chefchaouen',
+            'الحسيمة' => 'Al Hoceima',
+            'ميدلت' => 'Midelt',
+            'إفران' => 'Ifrane',
+            'أزرو' => 'Azrou',
+            'الصويرة' => 'Essaouira',
+            'زاكورة' => 'Zagora',
+            'تنغير' => 'Tinghir',
+            'فكيك' => 'Figuig',
+            'جرادة' => 'Jerada',
+            'بركان' => 'Berkane',
+            'تاوريرت' => 'Taourirt',
+            
+            // French variations (normalize spelling)
+            'casa' => 'Casablanca',
+            'casa blanca' => 'Casablanca',
+            'marrakesh' => 'Marrakech',
+            'tangier' => 'Tanger',
+            'fez' => 'Fes',
+            'meknas' => 'Meknes',
+            'el jadida' => 'El Jadida',
+            'el-jadida' => 'El Jadida',
+            'beni-mellal' => 'Beni Mellal',
+            'al hoceima' => 'Al Hoceima',
+            'al-hoceima' => 'Al Hoceima',
+        ];
+
+        // Try exact match first
+        if (isset($cityMapping[$city])) {
+            return $cityMapping[$city];
+        }
+
+        // Try lowercase match
+        $cityLower = mb_strtolower(trim($city));
+        foreach ($cityMapping as $key => $value) {
+            if (mb_strtolower($key) === $cityLower) {
+                return $value;
+            }
+        }
+
+        // Return original if no mapping found (maybe it's already in correct format)
+        return $city;
     }
 
     /**
@@ -102,10 +202,19 @@ class BMDeliveryService
             $quantities[] = 1;
         }
 
+        // Get city and map to BMDelivery format
+        $originalCity = $order->client->city ?? $order->city ?? 'Casablanca';
+        $mappedCity = $this->mapCityName($originalCity);
+
+        Log::info('City mapping', [
+            'original' => $originalCity,
+            'mapped' => $mappedCity,
+        ]);
+
         $data = [
             'fullname' => $order->client->name ?? 'Customer',
             'phone' => $order->client->phone ?? '',
-            'city' => $order->client->city ?? $order->city ?? 'Casablanca',
+            'city' => $mappedCity,
             'address' => $order->shipping_address ?? $order->client->address ?? '',
             'price' => (float) $order->total,
             'product' => implode(',', $products),
