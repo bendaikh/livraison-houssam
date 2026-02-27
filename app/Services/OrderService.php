@@ -172,9 +172,10 @@ class OrderService
                     \Log::error('Failed to send order to delivery company: ' . $e->getMessage(), [
                         'order_id' => $orderId,
                         'delivery_integration_id' => $deliveryIntegrationId,
-                        'exception' => $e
+                        'exception' => $e->getTraceAsString()
                     ]);
-                    // Continue with the order status update even if sending to delivery company fails
+                    // Re-throw the exception so the user knows there was an error
+                    throw new \Exception('Failed to send order to delivery company: ' . $e->getMessage());
                 }
             }
 
@@ -228,27 +229,82 @@ class OrderService
     {
         $integration = \App\Models\ApiIntegration::findOrFail($deliveryIntegrationId);
         
+        \Log::info('Attempting to send order to delivery company', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'integration_id' => $deliveryIntegrationId,
+            'integration_name' => $integration->name,
+            'provider' => $integration->provider,
+            'is_active' => $integration->is_active,
+        ]);
+        
         if (!$integration->is_active) {
             throw new \Exception('Selected delivery integration is not active');
         }
+
+        // Get API token - check different possible keys
+        $apiToken = $integration->credentials['api_token'] 
+            ?? $integration->credentials['apiToken'] 
+            ?? $integration->credentials['token'] 
+            ?? null;
+        
+        if (!$apiToken) {
+            \Log::error('No API token found in integration credentials', [
+                'integration_id' => $deliveryIntegrationId,
+                'credentials_keys' => array_keys($integration->credentials ?? []),
+            ]);
+            throw new \Exception('API token not found in integration credentials');
+        }
+
+        \Log::info('API token found, proceeding with delivery request', [
+            'token_length' => strlen($apiToken),
+            'token_preview' => substr($apiToken, 0, 10) . '...',
+        ]);
 
         $response = null;
 
         // Send to the appropriate delivery service
         if ($integration->provider === 'bmdelivery') {
             $bmService = new BMDeliveryService();
-            $bmService->setApiToken($integration->credentials['api_token']);
+            $bmService->setApiToken($apiToken);
+            
+            \Log::info('Sending order to BMDelivery', [
+                'order_id' => $order->id,
+                'client_name' => $order->client->name ?? 'N/A',
+                'client_phone' => $order->client->phone ?? 'N/A',
+                'client_city' => $order->client->city ?? 'N/A',
+                'total' => $order->total,
+            ]);
+            
             $response = $bmService->createShipmentFromOrder($order);
+            
+            \Log::info('BMDelivery response received', [
+                'response' => $response,
+            ]);
         } elseif ($integration->provider === 'tawsilex') {
             $tawsilexService = new TawsilexService();
-            $tawsilexService->setApiToken($integration->credentials['api_token']);
+            $tawsilexService->setApiToken($apiToken);
+            
+            \Log::info('Sending order to Tawsilex', [
+                'order_id' => $order->id,
+            ]);
+            
             $response = $tawsilexService->createShipmentFromOrder($order);
+            
+            \Log::info('Tawsilex response received', [
+                'response' => $response,
+            ]);
         } else {
             throw new \Exception('Unsupported delivery provider: ' . $integration->provider);
         }
 
         // Update order with tracking info
-        $trackingCode = $response['data']['code'] ?? $response['code'] ?? null;
+        $trackingCode = $response['data']['code'] ?? $response['code'] ?? $response['tracking_code'] ?? null;
+        
+        \Log::info('Updating order with tracking info', [
+            'order_id' => $order->id,
+            'tracking_code' => $trackingCode,
+        ]);
         
         $order->update([
             'delivery_integration_id' => $deliveryIntegrationId,

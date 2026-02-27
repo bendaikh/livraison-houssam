@@ -90,15 +90,23 @@ class BMDeliveryService
         $quantities = [];
         
         foreach ($order->items as $item) {
-            $products[] = $item->product->name;
+            // Use product name from product relation, or fallback to product_name field
+            $productName = $item->product->name ?? $item->product_name ?? 'Product';
+            $products[] = $productName;
             $quantities[] = $item->quantity;
         }
 
+        // Ensure we have at least one product
+        if (empty($products)) {
+            $products[] = 'Order Items';
+            $quantities[] = 1;
+        }
+
         $data = [
-            'fullname' => $order->client->name,
-            'phone' => $order->client->phone,
-            'city' => $order->client->city ?? 'Casablanca',
-            'address' => $order->shipping_address ?? $order->client->address,
+            'fullname' => $order->client->name ?? 'Customer',
+            'phone' => $order->client->phone ?? '',
+            'city' => $order->client->city ?? $order->city ?? 'Casablanca',
+            'address' => $order->shipping_address ?? $order->client->address ?? '',
             'price' => (float) $order->total,
             'product' => implode(',', $products),
             'qty' => implode(',', $quantities),
@@ -108,6 +116,11 @@ class BMDeliveryService
             'from_stock' => 0,
             'internal_id' => $order->order_number,
         ];
+
+        Log::info('BMDelivery createShipmentFromOrder payload', [
+            'order_id' => $order->id,
+            'payload' => $data,
+        ]);
 
         return $this->createShipment($data);
     }
