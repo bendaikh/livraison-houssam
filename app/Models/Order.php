@@ -35,10 +35,15 @@ class Order extends Model
         'notes',
         'whatsapp',
         'confirmed_at',
+        'picked_up_at',
+        'ready_for_shipping_at',
         'sent_to_delivery_at',
+        'out_for_delivery_at',
         'shipped_at',
         'delivered_at',
         'cancelled_at',
+        'refused_at',
+        'returned_at',
     ];
 
     protected $casts = [
@@ -49,10 +54,15 @@ class Order extends Model
         'total' => 'decimal:2',
         'commission_amount' => 'decimal:2',
         'confirmed_at' => 'datetime',
+        'picked_up_at' => 'datetime',
+        'ready_for_shipping_at' => 'datetime',
         'sent_to_delivery_at' => 'datetime',
+        'out_for_delivery_at' => 'datetime',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'refused_at' => 'datetime',
+        'returned_at' => 'datetime',
     ];
 
     public function client(): BelongsTo

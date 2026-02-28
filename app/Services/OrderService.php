@@ -158,9 +158,15 @@ class OrderService
             // Update timestamp fields
             match($status) {
                 'confirmed' => $order->update(['confirmed_at' => now()]),
+                'picked_up' => $order->update(['picked_up_at' => now()]),
+                'ready_for_shipping' => $order->update(['ready_for_shipping_at' => now()]),
                 'shipped' => $order->update(['shipped_at' => now()]),
+                'out_for_delivery' => $order->update(['out_for_delivery_at' => now()]),
                 'delivered' => $order->update(['delivered_at' => now()]),
                 'cancelled' => $order->update(['cancelled_at' => now()]),
+                'refused' => $order->update(['refused_at' => now()]),
+                'returned' => $order->update(['returned_at' => now()]),
+                'return_requested' => $order->update(['returned_at' => now()]),
                 default => null
             };
 
