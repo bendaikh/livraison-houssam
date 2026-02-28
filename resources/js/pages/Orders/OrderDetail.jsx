@@ -39,6 +39,12 @@ export default function OrderDetail() {
             return;
         }
 
+        // Check for invalid tracking codes
+        if (order.delivery_tracking_code.toLowerCase() === 'ko') {
+            alert('This order has an invalid tracking code.\n\nThe order was not successfully sent to BMDelivery.\n\nPlease try sending the order to BMDelivery again by updating the order status to "confirmed".');
+            return;
+        }
+
         try {
             setSyncing(true);
             const response = await api.post(`/orders/${id}/sync-delivery-status`);
@@ -53,7 +59,17 @@ export default function OrderDetail() {
             await fetchOrder();
         } catch (error) {
             console.error('Error syncing delivery status:', error);
-            alert('Failed to sync delivery status: ' + (error.response?.data?.error || error.message));
+            
+            let errorMessage = error.response?.data?.error || error.message;
+            
+            // Provide helpful context for common errors
+            if (errorMessage.includes('Invalid tracking code')) {
+                errorMessage = 'This order has an invalid tracking code.\n\nThe order was not successfully sent to BMDelivery.\n\nPlease try sending the order again.';
+            } else if (errorMessage.includes('not found in BMDelivery system')) {
+                errorMessage = 'Tracking code not found in BMDelivery.\n\nThe order may not have been successfully sent.\n\nPlease check the order in BMDelivery dashboard or try sending it again.';
+            }
+            
+            alert('Failed to sync delivery status:\n\n' + errorMessage);
         } finally {
             setSyncing(false);
         }
@@ -637,15 +653,17 @@ export default function OrderDetail() {
                                     <Truck className="mr-2" size={20} />
                                     Delivery Tracking
                                 </h2>
-                                <button
-                                    onClick={handleSyncDeliveryStatus}
-                                    disabled={syncing}
-                                    className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
-                                    title="Sync status from delivery company"
-                                >
-                                    <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-                                    <span>{syncing ? 'Syncing...' : 'Sync Status'}</span>
-                                </button>
+                                {order.delivery_tracking_code.toLowerCase() !== 'ko' && (
+                                    <button
+                                        onClick={handleSyncDeliveryStatus}
+                                        disabled={syncing}
+                                        className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                                        title="Sync status from delivery company"
+                                    >
+                                        <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+                                        <span>{syncing ? 'Syncing...' : 'Sync Status'}</span>
+                                    </button>
+                                )}
                             </div>
                             <div className="space-y-3">
                                 <div>
@@ -656,9 +674,20 @@ export default function OrderDetail() {
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-500">Tracking Code</p>
-                                    <p className="font-mono text-sm font-medium text-blue-600">
-                                        {order.delivery_tracking_code}
-                                    </p>
+                                    {order.delivery_tracking_code.toLowerCase() === 'ko' ? (
+                                        <div className="mt-1">
+                                            <span className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-200">
+                                                ⚠️ Invalid Tracking Code
+                                            </span>
+                                            <p className="text-xs text-red-600 mt-2">
+                                                This order was not successfully sent to BMDelivery. Please try sending it again.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <p className="font-mono text-sm font-medium text-blue-600">
+                                            {order.delivery_tracking_code}
+                                        </p>
+                                    )}
                                 </div>
                                 {order.delivery_status && (
                                     <div>

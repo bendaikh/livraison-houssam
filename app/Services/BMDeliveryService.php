@@ -487,6 +487,11 @@ class BMDeliveryService
             throw new \Exception('Order does not have a tracking code');
         }
 
+        // Check for invalid tracking codes (BMDelivery error responses)
+        if (strtolower($order->delivery_tracking_code) === 'ko') {
+            throw new \Exception('Invalid tracking code: Order was not successfully sent to BMDelivery');
+        }
+
         try {
             $shipmentDetails = $this->getShipmentDetails($order->delivery_tracking_code);
             
@@ -504,6 +509,15 @@ class BMDeliveryService
                     'status' => $newStatus,
                 ]);
             } else {
+                // Check if data array is empty (no tracking info available)
+                if (isset($shipmentDetails['data']) && empty($shipmentDetails['data'])) {
+                    Log::warning('BMDelivery returned empty data array - tracking code not found', [
+                        'tracking_code' => $order->delivery_tracking_code,
+                        'response' => $shipmentDetails,
+                    ]);
+                    throw new \Exception('Tracking code not found in BMDelivery system. The order may not have been successfully sent to BMDelivery.');
+                }
+                
                 // Fallback: try other possible keys
                 $newStatus = $shipmentDetails['status'] 
                     ?? $shipmentDetails['etat'] 
