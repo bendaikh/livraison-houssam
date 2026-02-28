@@ -490,12 +490,27 @@ class BMDeliveryService
         try {
             $shipmentDetails = $this->getShipmentDetails($order->delivery_tracking_code);
             
-            // Extract status from response (BMDelivery may return it in different keys)
-            $newStatus = $shipmentDetails['status'] 
-                ?? $shipmentDetails['etat'] 
-                ?? $shipmentDetails['data']['status'] 
-                ?? $shipmentDetails['data']['etat']
-                ?? null;
+            $newStatus = null;
+            
+            // BMDelivery returns status history in data array, get the most recent status
+            if (isset($shipmentDetails['data']) && is_array($shipmentDetails['data']) && !empty($shipmentDetails['data'])) {
+                // The first item in the array is the most recent status
+                $latestEvent = $shipmentDetails['data'][0];
+                $newStatus = $latestEvent['status'] ?? null;
+                
+                Log::info('Extracted status from BMDelivery data array', [
+                    'tracking_code' => $order->delivery_tracking_code,
+                    'latest_event' => $latestEvent,
+                    'status' => $newStatus,
+                ]);
+            } else {
+                // Fallback: try other possible keys
+                $newStatus = $shipmentDetails['status'] 
+                    ?? $shipmentDetails['etat'] 
+                    ?? $shipmentDetails['data']['status'] 
+                    ?? $shipmentDetails['data']['etat']
+                    ?? null;
+            }
 
             if (!$newStatus) {
                 Log::warning('Could not extract status from BMDelivery response', [
