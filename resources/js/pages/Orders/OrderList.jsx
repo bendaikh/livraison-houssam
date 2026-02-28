@@ -162,7 +162,7 @@ export default function OrderList({ status = '' }) {
         }
     };
 
-    const handleDeliveryCompanyConfirm = async (deliveryIntegrationId) => {
+    const handleDeliveryCompanyConfirm = async (deliveryIntegrationId, deliveryCity) => {
         if (!pendingStatusChange) return;
 
         const { orderId, newStatus } = pendingStatusChange;
@@ -171,7 +171,8 @@ export default function OrderList({ status = '' }) {
             setUpdatingStatus(orderId);
             const response = await api.patch(`/orders/${orderId}/status`, { 
                 status: newStatus,
-                delivery_integration_id: deliveryIntegrationId 
+                delivery_integration_id: deliveryIntegrationId,
+                delivery_city: deliveryCity
             });
             
             // Update local state with the response data

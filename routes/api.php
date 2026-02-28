@@ -48,6 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Orders
     Route::get('/orders/delivery-companies/available', [OrderController::class, 'getAvailableDeliveryCompanies']);
+    Route::get('/orders/delivery-companies/{integration}/cities', [OrderController::class, 'getDeliveryCities']);
     Route::apiResource('orders', OrderController::class);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
     Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);

@@ -196,13 +196,15 @@ class OrderController extends Controller
             'status' => 'required|in:pending,confirmed,shipped,delivered,cancelled',
             'note' => 'nullable|string',
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
+            'delivery_city' => 'nullable|string', // The city selected from the delivery company's list
         ]);
 
         $order = $this->orderService->updateOrderStatus(
             $order->id,
             $validated['status'],
             $validated['note'] ?? null,
-            $validated['delivery_integration_id'] ?? null
+            $validated['delivery_integration_id'] ?? null,
+            $validated['delivery_city'] ?? null
         );
 
         $response = $order->toArray();
@@ -239,5 +241,95 @@ class OrderController extends Controller
             ->get(['id', 'name', 'provider']);
 
         return response()->json($integrations);
+    }
+
+    /**
+     * Get available cities for a specific delivery integration
+     */
+    public function getDeliveryCities(Request $request, $integrationId)
+    {
+        $integration = \App\Models\ApiIntegration::findOrFail($integrationId);
+        
+        if (!$integration->is_active) {
+            return response()->json(['error' => 'Integration is not active'], 400);
+        }
+
+        try {
+            $cities = [];
+            
+            if ($integration->provider === 'bmdelivery') {
+                $bmService = new \App\Services\BMDeliveryService();
+                $apiToken = $integration->credentials['api_token'] 
+                    ?? $integration->credentials['apiToken'] 
+                    ?? $integration->credentials['token'] 
+                    ?? null;
+                
+                if (!$apiToken) {
+                    return response()->json(['error' => 'API token not configured'], 400);
+                }
+                
+                $bmService->setApiToken($apiToken);
+                $cities = $bmService->listCities();
+                
+            } elseif ($integration->provider === 'tawsilex') {
+                $tawsilexService = new \App\Services\TawsilexService();
+                $apiToken = $integration->credentials['api_token'] 
+                    ?? $integration->credentials['apiToken'] 
+                    ?? $integration->credentials['token'] 
+                    ?? null;
+                
+                if (!$apiToken) {
+                    return response()->json(['error' => 'API token not configured'], 400);
+                }
+                
+                $tawsilexService->setApiToken($apiToken);
+                // Assuming Tawsilex has a similar method
+                if (method_exists($tawsilexService, 'listCities')) {
+                    $cities = $tawsilexService->listCities();
+                } else {
+                    // Fallback to a predefined list if Tawsilex doesn't have API endpoint
+                    $cities = $this->getTawsilexDefaultCities();
+                }
+            }
+            
+            return response()->json($cities);
+            
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch delivery cities', [
+                'integration_id' => $integrationId,
+                'error' => $e->getMessage(),
+            ]);
+            
+            return response()->json(['error' => 'Failed to fetch cities: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Fallback cities for Tawsilex if they don't have an API endpoint
+     */
+    private function getTawsilexDefaultCities(): array
+    {
+        return [
+            ['name' => 'Casablanca'],
+            ['name' => 'Rabat'],
+            ['name' => 'Tanger'],
+            ['name' => 'Fes'],
+            ['name' => 'Marrakech'],
+            ['name' => 'Agadir'],
+            ['name' => 'Meknes'],
+            ['name' => 'Oujda'],
+            ['name' => 'Kenitra'],
+            ['name' => 'Tetouan'],
+            ['name' => 'Safi'],
+            ['name' => 'Temara'],
+            ['name' => 'Sale'],
+            ['name' => 'Mohammedia'],
+            ['name' => 'Khouribga'],
+            ['name' => 'El Jadida'],
+            ['name' => 'Beni Mellal'],
+            ['name' => 'Nador'],
+            ['name' => 'Taza'],
+            ['name' => 'Settat'],
+        ];
     }
 }

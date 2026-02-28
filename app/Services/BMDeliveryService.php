@@ -230,9 +230,10 @@ class BMDeliveryService
      * Create shipment from an Order model
      * 
      * @param Order $order
+     * @param string|null $deliveryCity The city selected from BMDelivery's city list
      * @return array Response from BMDelivery API
      */
-    public function createShipmentFromOrder(Order $order): array
+    public function createShipmentFromOrder(Order $order, ?string $deliveryCity = null): array
     {
         $order->load(['client', 'items.product']);
 
@@ -253,19 +254,19 @@ class BMDeliveryService
             $quantities[] = 1;
         }
 
-        // Get city and map to BMDelivery format
-        $originalCity = $order->client->city ?? $order->city ?? 'Casablanca';
-        $mappedCity = $this->mapCityName($originalCity);
+        // Use the provided delivery city, or fallback to client's city
+        $city = $deliveryCity ?? $order->client->city ?? $order->city ?? 'Casablanca';
 
-        Log::info('City mapping', [
-            'original' => $originalCity,
-            'mapped' => $mappedCity,
+        Log::info('Using city for BMDelivery', [
+            'provided_city' => $deliveryCity,
+            'client_city' => $order->client->city ?? null,
+            'final_city' => $city,
         ]);
 
         $data = [
             'fullname' => $order->client->name ?? 'Customer',
             'phone' => $order->client->phone ?? '',
-            'city' => $mappedCity,
+            'city' => $city,
             'address' => $order->shipping_address ?? $order->client->address ?? '',
             'price' => (float) $order->total,
             'product' => implode(',', $products),

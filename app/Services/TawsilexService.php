@@ -80,9 +80,10 @@ class TawsilexService
      * Create shipment from an Order model
      * 
      * @param Order $order
+     * @param string|null $deliveryCity The city selected from Tawsilex's city list
      * @return array Response from Tawsilex API
      */
-    public function createShipmentFromOrder(Order $order): array
+    public function createShipmentFromOrder(Order $order, ?string $deliveryCity = null): array
     {
         $order->load(['client', 'items.product']);
 
@@ -91,15 +92,31 @@ class TawsilexService
         $quantities = [];
         
         foreach ($order->items as $item) {
-            $products[] = $item->product->name;
+            $productName = $item->product->name ?? $item->product_name ?? 'Product';
+            $products[] = $productName;
             $quantities[] = $item->quantity;
         }
 
+        // Ensure we have at least one product
+        if (empty($products)) {
+            $products[] = 'Order Items';
+            $quantities[] = 1;
+        }
+
+        // Use the provided delivery city, or fallback to client's city
+        $city = $deliveryCity ?? $order->client->city ?? $order->city ?? 'Casablanca';
+
+        Log::info('Using city for Tawsilex', [
+            'provided_city' => $deliveryCity,
+            'client_city' => $order->client->city ?? null,
+            'final_city' => $city,
+        ]);
+
         $data = [
-            'fullname' => $order->client->name,
-            'phone' => $order->client->phone,
-            'city' => $order->client->city ?? 'Casablanca',
-            'address' => $order->shipping_address ?? $order->client->address,
+            'fullname' => $order->client->name ?? 'Customer',
+            'phone' => $order->client->phone ?? '',
+            'city' => $city,
+            'address' => $order->shipping_address ?? $order->client->address ?? '',
             'price' => (float) $order->total,
             'product' => implode(',', $products),
             'qty' => implode(',', $quantities),

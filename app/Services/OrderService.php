@@ -147,9 +147,9 @@ class OrderService
         });
     }
 
-    public function updateOrderStatus(int $orderId, string $status, ?string $note = null, ?int $deliveryIntegrationId = null)
+    public function updateOrderStatus(int $orderId, string $status, ?string $note = null, ?int $deliveryIntegrationId = null, ?string $deliveryCity = null)
     {
-        return DB::transaction(function () use ($orderId, $status, $note, $deliveryIntegrationId) {
+        return DB::transaction(function () use ($orderId, $status, $note, $deliveryIntegrationId, $deliveryCity) {
             $order = Order::findOrFail($orderId);
             $oldStatus = $order->status;
 
@@ -168,7 +168,7 @@ class OrderService
             $deliveryError = null;
             if ($status === 'confirmed' && $deliveryIntegrationId) {
                 try {
-                    $this->sendOrderToDeliveryCompany($order, $deliveryIntegrationId);
+                    $this->sendOrderToDeliveryCompany($order, $deliveryIntegrationId, $deliveryCity);
                 } catch (\Exception $e) {
                     \Log::error('Failed to send order to delivery company: ' . $e->getMessage(), [
                         'order_id' => $orderId,
@@ -237,7 +237,7 @@ class OrderService
         });
     }
 
-    private function sendOrderToDeliveryCompany(Order $order, int $deliveryIntegrationId)
+    private function sendOrderToDeliveryCompany(Order $order, int $deliveryIntegrationId, ?string $deliveryCity = null)
     {
         $integration = \App\Models\ApiIntegration::findOrFail($deliveryIntegrationId);
         
@@ -248,6 +248,7 @@ class OrderService
             'integration_name' => $integration->name,
             'provider' => $integration->provider,
             'is_active' => $integration->is_active,
+            'delivery_city' => $deliveryCity,
         ]);
         
         if (!$integration->is_active) {
@@ -285,10 +286,11 @@ class OrderService
                 'client_name' => $order->client->name ?? 'N/A',
                 'client_phone' => $order->client->phone ?? 'N/A',
                 'client_city' => $order->client->city ?? 'N/A',
+                'selected_city' => $deliveryCity,
                 'total' => $order->total,
             ]);
             
-            $response = $bmService->createShipmentFromOrder($order);
+            $response = $bmService->createShipmentFromOrder($order, $deliveryCity);
             
             \Log::info('BMDelivery response received', [
                 'response' => $response,
@@ -299,9 +301,10 @@ class OrderService
             
             \Log::info('Sending order to Tawsilex', [
                 'order_id' => $order->id,
+                'selected_city' => $deliveryCity,
             ]);
             
-            $response = $tawsilexService->createShipmentFromOrder($order);
+            $response = $tawsilexService->createShipmentFromOrder($order, $deliveryCity);
             
             \Log::info('Tawsilex response received', [
                 'response' => $response,
