@@ -472,9 +472,15 @@ export default function OrderList({ status = '' }) {
                                             >
                                                 <option value="pending">Pending</option>
                                                 <option value="confirmed">Confirmed</option>
+                                                <option value="picked_up">Picked Up</option>
+                                                <option value="ready_for_shipping">Ready for Shipping</option>
                                                 <option value="shipped">Shipped</option>
+                                                <option value="out_for_delivery">Out for Delivery</option>
                                                 <option value="delivered">Delivered</option>
                                                 <option value="cancelled">Cancelled</option>
+                                                <option value="refused">Refused</option>
+                                                <option value="returned">Returned</option>
+                                                <option value="return_requested">Return Requested</option>
                                             </select>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">

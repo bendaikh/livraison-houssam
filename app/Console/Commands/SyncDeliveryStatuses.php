@@ -196,6 +196,15 @@ class SyncDeliveryStatuses extends Command
             'annule' => 'cancelled',
             'demande de retour' => 'return_requested',
             'demande_de_retour' => 'return_requested',
+            'injoignable' => 'cancelled',
+            'injoignable client' => 'cancelled',
+            'hors zone' => 'cancelled',
+            'adresse incomplète' => 'cancelled',
+            'adresse incomplete' => 'cancelled',
+            'reporté' => 'confirmed',
+            'reporte' => 'confirmed',
+            'en cours de préparation' => 'ready_for_shipping',
+            'en cours de preparation' => 'ready_for_shipping',
             
             // BMDelivery statuses (normalized)
             'ramassage' => 'picked_up',
