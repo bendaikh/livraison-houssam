@@ -433,4 +433,112 @@ class BMDeliveryService
             return false;
         }
     }
+
+    /**
+     * Get detailed shipment information by tracking code
+     * 
+     * @param string $trackingCode Tracking code from BMDelivery
+     * @return array Shipment details including current status
+     * @throws \Exception
+     */
+    public function getShipmentDetails(string $trackingCode): array
+    {
+        $this->validateApiToken();
+
+        try {
+            $response = Http::withHeaders([
+                'Accept' => 'application/json',
+                'Api-Token' => $this->apiToken,
+            ])->get("{$this->baseUrl}/client/colis/details/{$trackingCode}");
+
+            if (!$response->successful()) {
+                // Try alternative endpoint
+                $response = Http::withHeaders([
+                    'Accept' => 'application/json',
+                    'Api-Token' => $this->apiToken,
+                ])->get("{$this->baseUrl}/client/colis/track/{$trackingCode}");
+
+                if (!$response->successful()) {
+                    throw new \Exception('Failed to fetch shipment details: ' . $response->body());
+                }
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('BMDelivery getShipmentDetails error', [
+                'error' => $e->getMessage(),
+                'tracking_code' => $trackingCode,
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Sync order status from BMDelivery
+     * Updates the order with the latest status from BMDelivery API
+     * 
+     * @param Order $order Order to sync
+     * @return array Status update result
+     * @throws \Exception
+     */
+    public function syncOrderStatus(Order $order): array
+    {
+        if (!$order->delivery_tracking_code) {
+            throw new \Exception('Order does not have a tracking code');
+        }
+
+        try {
+            $shipmentDetails = $this->getShipmentDetails($order->delivery_tracking_code);
+            
+            // Extract status from response (BMDelivery may return it in different keys)
+            $newStatus = $shipmentDetails['status'] 
+                ?? $shipmentDetails['etat'] 
+                ?? $shipmentDetails['data']['status'] 
+                ?? $shipmentDetails['data']['etat']
+                ?? null;
+
+            if (!$newStatus) {
+                Log::warning('Could not extract status from BMDelivery response', [
+                    'tracking_code' => $order->delivery_tracking_code,
+                    'response' => $shipmentDetails,
+                ]);
+                throw new \Exception('Status not found in BMDelivery response');
+            }
+
+            $oldDeliveryStatus = $order->delivery_status;
+            $hasChanged = $oldDeliveryStatus !== $newStatus;
+
+            // Update delivery status
+            $order->update([
+                'delivery_status' => $newStatus,
+            ]);
+
+            Log::info('Order delivery status synced from BMDelivery', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'old_status' => $oldDeliveryStatus,
+                'new_status' => $newStatus,
+                'status_changed' => $hasChanged,
+            ]);
+
+            return [
+                'success' => true,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'old_delivery_status' => $oldDeliveryStatus,
+                'new_delivery_status' => $newStatus,
+                'status_changed' => $hasChanged,
+                'shipment_details' => $shipmentDetails,
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Failed to sync order status from BMDelivery', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'tracking_code' => $order->delivery_tracking_code,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
 }

@@ -52,6 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('orders', OrderController::class);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
     Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);
+    Route::post('/orders/{order}/sync-delivery-status', [OrderController::class, 'syncDeliveryStatus']);
 
     // Clients
     Route::apiResource('clients', ClientController::class);

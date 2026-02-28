@@ -359,12 +359,25 @@ class WebhookController extends Controller
             'returned' => 'cancelled',
             'failed' => 'cancelled',
             
-            // BMDelivery specific
+            // BMDelivery specific statuses (French)
             'ramassage' => 'confirmed',
+            'en attente' => 'confirmed',
+            'en_attente' => 'confirmed',
+            'en cours' => 'shipped',
             'en_cours' => 'shipped',
+            'en route' => 'shipped',
+            'en_route' => 'shipped',
             'livre' => 'delivered',
+            'livré' => 'delivered',
+            'execute' => 'delivered',
+            'exécuté' => 'delivered',
             'annule' => 'cancelled',
+            'annulé' => 'cancelled',
             'retour' => 'cancelled',
+            'demande de retour' => 'cancelled',
+            'demande_de_retour' => 'cancelled',
+            'interesse' => 'confirmed',
+            'intéressé' => 'confirmed',
             
             // Tawsilex specific
             'preparation' => 'confirmed',

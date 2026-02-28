@@ -5,7 +5,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Package, User, MapPin, Phone, Calendar, DollarSign, 
     Truck, UserCheck, ArrowLeft, Edit, Printer, CheckCircle,
-    Clock, XCircle, AlertCircle
+    Clock, XCircle, AlertCircle, RefreshCw
 } from 'lucide-react';
 
 export default function OrderDetail() {
@@ -14,6 +14,7 @@ export default function OrderDetail() {
     const { formatCurrency, settings } = useSettings();
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
     const printRef = useRef(null);
 
     useEffect(() => {
@@ -29,6 +30,32 @@ export default function OrderDetail() {
             console.error('Error fetching order:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSyncDeliveryStatus = async () => {
+        if (!order.delivery_tracking_code) {
+            alert('This order does not have a tracking code.');
+            return;
+        }
+
+        try {
+            setSyncing(true);
+            const response = await api.post(`/orders/${id}/sync-delivery-status`);
+            
+            if (response.data.result.status_changed) {
+                alert(`Status synced successfully!\n\nDelivery Status: ${response.data.result.old_delivery_status} → ${response.data.result.new_delivery_status}`);
+            } else {
+                alert(`Status is up to date.\n\nCurrent Delivery Status: ${response.data.result.new_delivery_status}`);
+            }
+            
+            // Refresh order data
+            await fetchOrder();
+        } catch (error) {
+            console.error('Error syncing delivery status:', error);
+            alert('Failed to sync delivery status: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setSyncing(false);
         }
     };
 
@@ -593,10 +620,21 @@ export default function OrderDetail() {
                     {/* Delivery Tracking */}
                     {order.delivery_tracking_code && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                <Truck className="mr-2" size={20} />
-                                Delivery Tracking
-                            </h2>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                                    <Truck className="mr-2" size={20} />
+                                    Delivery Tracking
+                                </h2>
+                                <button
+                                    onClick={handleSyncDeliveryStatus}
+                                    disabled={syncing}
+                                    className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                                    title="Sync status from delivery company"
+                                >
+                                    <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+                                    <span>{syncing ? 'Syncing...' : 'Sync Status'}</span>
+                                </button>
+                            </div>
                             <div className="space-y-3">
                                 <div>
                                     <p className="text-sm text-gray-500">Delivery Company</p>

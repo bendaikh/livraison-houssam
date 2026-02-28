@@ -244,6 +244,150 @@ class OrderController extends Controller
     }
 
     /**
+     * Sync order status from delivery company
+     */
+    public function syncDeliveryStatus(Order $order)
+    {
+        try {
+            if (!$order->delivery_integration_id) {
+                return response()->json([
+                    'error' => 'Order is not assigned to any delivery company'
+                ], 400);
+            }
+
+            if (!$order->delivery_tracking_code) {
+                return response()->json([
+                    'error' => 'Order does not have a tracking code'
+                ], 400);
+            }
+
+            $integration = $order->deliveryIntegration;
+            
+            if (!$integration->is_active) {
+                return response()->json([
+                    'error' => 'Delivery integration is not active'
+                ], 400);
+            }
+
+            $apiToken = $integration->credentials['api_token'] 
+                ?? $integration->credentials['apiToken'] 
+                ?? $integration->credentials['token'] 
+                ?? null;
+            
+            if (!$apiToken) {
+                return response()->json([
+                    'error' => 'API token not configured for this integration'
+                ], 400);
+            }
+
+            $result = null;
+
+            // Sync based on provider
+            if ($integration->provider === 'bmdelivery') {
+                $bmService = new \App\Services\BMDeliveryService();
+                $bmService->setApiToken($apiToken);
+                $result = $bmService->syncOrderStatus($order);
+                
+            } elseif ($integration->provider === 'tawsilex') {
+                $tawsilexService = new \App\Services\TawsilexService();
+                $tawsilexService->setApiToken($apiToken);
+                
+                if (method_exists($tawsilexService, 'syncOrderStatus')) {
+                    $result = $tawsilexService->syncOrderStatus($order);
+                } else {
+                    return response()->json([
+                        'error' => 'Status sync not implemented for Tawsilex'
+                    ], 501);
+                }
+            } else {
+                return response()->json([
+                    'error' => 'Unsupported delivery provider: ' . $integration->provider
+                ], 400);
+            }
+
+            // Update order status based on delivery status if it changed
+            if ($result['status_changed']) {
+                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
+                
+                if ($orderStatus && $orderStatus !== $order->status) {
+                    $this->orderService->updateOrderStatus(
+                        $order->id,
+                        $orderStatus,
+                        "Status synced from {$integration->name}: {$result['new_delivery_status']}"
+                    );
+                    $result['order_status_updated'] = true;
+                    $result['new_order_status'] = $orderStatus;
+                }
+            }
+
+            // Reload order to get fresh data
+            $order->refresh();
+
+            return response()->json([
+                'message' => 'Order status synced successfully',
+                'result' => $result,
+                'order' => $order->load(['client', 'deliveryIntegration', 'history']),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to sync delivery status', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to sync status: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Map delivery company status to internal order status
+     * (Moved here to be accessible from syncDeliveryStatus)
+     */
+    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus): ?string
+    {
+        if (!$deliveryStatus) {
+            return null;
+        }
+
+        $statusMap = [
+            'pending' => 'pending',
+            'confirmed' => 'confirmed',
+            'picked_up' => 'shipped',
+            'in_transit' => 'shipped',
+            'out_for_delivery' => 'shipped',
+            'delivered' => 'delivered',
+            'cancelled' => 'cancelled',
+            'returned' => 'cancelled',
+            'failed' => 'cancelled',
+            'ramassage' => 'confirmed',
+            'en attente' => 'confirmed',
+            'en_attente' => 'confirmed',
+            'en cours' => 'shipped',
+            'en_cours' => 'shipped',
+            'en route' => 'shipped',
+            'en_route' => 'shipped',
+            'livre' => 'delivered',
+            'livré' => 'delivered',
+            'execute' => 'delivered',
+            'exécuté' => 'delivered',
+            'annule' => 'cancelled',
+            'annulé' => 'cancelled',
+            'retour' => 'cancelled',
+            'demande de retour' => 'cancelled',
+            'demande_de_retour' => 'cancelled',
+            'interesse' => 'confirmed',
+            'intéressé' => 'confirmed',
+            'preparation' => 'confirmed',
+            'expedie' => 'shipped',
+            'livraison' => 'delivered',
+        ];
+
+        return $statusMap[strtolower($deliveryStatus)] ?? null;
+    }
+
+    /**
      * Get available cities for a specific delivery integration
      */
     public function getDeliveryCities(Request $request, $integrationId)
