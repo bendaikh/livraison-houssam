@@ -309,6 +309,37 @@ class OrderController extends Controller
             if ($result['status_changed']) {
                 $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
                 
+                \Log::info('Attempting to map delivery status to order status', [
+                    'delivery_status' => $result['new_delivery_status'],
+                    'mapped_order_status' => $orderStatus,
+                    'current_order_status' => $order->status,
+                ]);
+                
+                if ($orderStatus && $orderStatus !== $order->status) {
+                    $this->orderService->updateOrderStatus(
+                        $order->id,
+                        $orderStatus,
+                        "Status synced from {$integration->name}: {$result['new_delivery_status']}"
+                    );
+                    $result['order_status_updated'] = true;
+                    $result['new_order_status'] = $orderStatus;
+                } else {
+                    \Log::info('Order status not updated', [
+                        'reason' => !$orderStatus ? 'No mapped status found' : 'Order status already matches',
+                        'order_status' => $orderStatus,
+                        'current_status' => $order->status,
+                    ]);
+                }
+            } else {
+                // Even if delivery status didn't change, check if order status needs updating
+                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
+                
+                \Log::info('Delivery status unchanged, checking if order status needs update', [
+                    'delivery_status' => $result['new_delivery_status'],
+                    'mapped_order_status' => $orderStatus,
+                    'current_order_status' => $order->status,
+                ]);
+                
                 if ($orderStatus && $orderStatus !== $order->status) {
                     $this->orderService->updateOrderStatus(
                         $order->id,

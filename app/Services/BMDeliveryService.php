@@ -507,6 +507,7 @@ class BMDeliveryService
                     'tracking_code' => $order->delivery_tracking_code,
                     'latest_event' => $latestEvent,
                     'status' => $newStatus,
+                    'status_lowercase' => $newStatus ? strtolower($newStatus) : null,
                 ]);
             } else {
                 // Check if data array is empty (no tracking info available)

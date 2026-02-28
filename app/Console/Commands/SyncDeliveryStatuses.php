@@ -118,7 +118,20 @@ class SyncDeliveryStatuses extends Command
                         $statusChangedCount++;
                     }
                 } else {
-                    $this->info("  No status change (current: {$result['new_delivery_status']})");
+                    $this->info("  No delivery status change (current: {$result['new_delivery_status']})");
+                    
+                    // Even if delivery status didn't change, check if order status needs updating
+                    $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
+                    
+                    if ($orderStatus && $orderStatus !== $order->status) {
+                        $this->orderService->updateOrderStatus(
+                            $order->id,
+                            $orderStatus,
+                            "Status synced from {$integration->name}: {$result['new_delivery_status']}"
+                        );
+                        $this->info("  Order status updated: {$order->status} → {$orderStatus}");
+                        $statusChangedCount++;
+                    }
                 }
 
                 $successCount++;
