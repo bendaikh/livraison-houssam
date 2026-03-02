@@ -7,6 +7,7 @@ export default function TawsilexIntegrationPage() {
     const [loading, setLoading] = useState(true);
     const [isTesting, setIsTesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isFetchingStatuses, setIsFetchingStatuses] = useState(false);
     const [formData, setFormData] = useState({
         name: 'Tawsilex',
         api_token: '',
@@ -102,14 +103,43 @@ export default function TawsilexIntegrationPage() {
     const handleFetchStatuses = async () => {
         if (!integration) return;
 
+        setIsFetchingStatuses(true);
+        setMessage({ type: '', text: '' });
+
         try {
             const response = await api.get(`/api-integrations/${integration.id}/statuses`);
-            setStatuses(response.data.data || []);
+            
+            console.log('Raw Response:', response.data);
+            
+            // The API returns {message: "...", data: {...}}
+            // And inside data is {data: [...]} from Tawsilex
+            // So we need response.data.data.data OR response.data.data if it's an array
+            let statusesData = [];
+            
+            if (Array.isArray(response.data.data)) {
+                // If data.data is already an array, use it
+                statusesData = response.data.data;
+            } else if (response.data.data?.data && Array.isArray(response.data.data.data)) {
+                // If data.data has a nested data property, use that
+                statusesData = response.data.data.data;
+            }
+            
+            console.log('Parsed Statuses:', statusesData);
+            console.log('Count:', statusesData.length);
+            
+            setStatuses(statusesData);
+            setMessage({
+                type: 'success',
+                text: `Successfully fetched ${statusesData.length || 0} statuses!`,
+            });
         } catch (error) {
+            console.error('Fetch statuses error:', error);
             setMessage({
                 type: 'error',
                 text: error.response?.data?.message || 'Failed to fetch statuses',
             });
+        } finally {
+            setIsFetchingStatuses(false);
         }
     };
 
@@ -293,6 +323,30 @@ export default function TawsilexIntegrationPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Statuses Display */}
+                    {Array.isArray(statuses) && statuses.length > 0 && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                                Available Statuses ({statuses.length})
+                            </h2>
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                                {statuses.map((status, index) => (
+                                    <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                        <p className="font-medium text-gray-900">
+                                            {typeof status === 'object' ? (status.name || status.title || `Status ${status.id}`) : status}
+                                        </p>
+                                        {typeof status === 'object' && status.description && (
+                                            <p className="text-sm text-gray-600 mt-1">{status.description}</p>
+                                        )}
+                                        {typeof status === 'object' && status.id && (
+                                            <p className="text-xs text-gray-500 mt-1">ID: {status.id}</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Actions Section */}
@@ -310,10 +364,10 @@ export default function TawsilexIntegrationPage() {
                             </button>
                             <button
                                 onClick={handleFetchStatuses}
-                                disabled={!integration}
+                                disabled={!integration || isFetchingStatuses}
                                 className="w-full px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Fetch Statuses
+                                {isFetchingStatuses ? 'Fetching...' : 'Fetch Statuses'}
                             </button>
                         </div>
                     </div>

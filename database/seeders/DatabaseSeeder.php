@@ -230,5 +230,10 @@ class DatabaseSeeder extends Seeder
         Setting::set('enable_low_stock_alerts', true, 'boolean', 'notification');
         Setting::set('default_shipping_cost', 30, 'number', 'delivery');
         Setting::set('tax_rate', 20, 'number', 'general');
+
+        // Call other seeders
+        $this->call([
+            DefaultApiIntegrationsSeeder::class,
+        ]);
     }
 }
