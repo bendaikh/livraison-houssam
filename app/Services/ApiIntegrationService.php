@@ -165,6 +165,7 @@ class ApiIntegrationService
         // Create order
         return $this->orderService->createOrder([
             'client_id' => $client->id,
+            'client_phone' => $client->phone,
             'source' => 'shopify',
             'external_order_id' => $shopifyOrder['id'],
             'status' => $status,
@@ -173,6 +174,7 @@ class ApiIntegrationService
             'tax' => $shopifyOrder['total_tax'] ?? 0,
             'discount' => $shopifyOrder['total_discounts'] ?? 0,
             'shipping_address' => json_encode($shopifyOrder['shipping_address'] ?? []),
+            'city' => $shopifyOrder['shipping_address']['city'] ?? $client->city,
             'notes' => $shopifyOrder['note'] ?? null,
         ]);
     }
@@ -397,6 +399,8 @@ class ApiIntegrationService
     private function getOrCreateClient(array $data)
     {
         // Try to find existing client by phone or email
+        $data['phone'] = $this->normalizeMoroccanPhone($data['phone'] ?? null);
+
         $client = Client::where('phone', $data['phone'])
             ->orWhere('email', $data['email'])
             ->first();
@@ -406,6 +410,39 @@ class ApiIntegrationService
         }
 
         return $client;
+    }
+
+    private function normalizeMoroccanPhone(?string $phone): ?string
+    {
+        if (empty($phone)) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone);
+
+        if (empty($digits)) {
+            return null;
+        }
+
+        // Remove leading international prefix
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+
+        if (str_starts_with($digits, '212')) {
+            $digits = '0' . substr($digits, 3);
+        }
+
+        // Ensure we keep the leading zero when possible
+        if (!str_starts_with($digits, '0')) {
+            if (strlen($digits) === 9) {
+                $digits = '0' . $digits;
+            } elseif (strlen($digits) > 0) {
+                $digits = '0' . $digits;
+            }
+        }
+
+        return $digits;
     }
 
     /**

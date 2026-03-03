@@ -59,7 +59,34 @@ class BMDeliveryService
             $response = Http::withHeaders([
                 'Accept' => 'application/json',
                 'Api-Token' => $this->apiToken,
-            ])->post("{$this->baseUrl}/client/post/colis/add-colis", $payload);
+            ])
+                ->asForm()
+                ->withOptions(['allow_redirects' => false])
+                ->post("{$this->baseUrl}/client/post/colis/add-colis/", $payload);
+
+            if (in_array($response->status(), [301, 302, 307, 308], true)) {
+                $location = $response->header('Location');
+
+                if (!empty($location)) {
+                    $response = Http::withHeaders([
+                        'Accept' => 'application/json',
+                        'Api-Token' => $this->apiToken,
+                    ])
+                        ->asForm()
+                        ->withOptions(['allow_redirects' => false])
+                        ->post($location, $payload);
+                }
+            }
+
+            if (!$response->successful() && str_contains($response->body(), 'GET method is not supported')) {
+                $response = Http::withHeaders([
+                    'Accept' => 'application/json',
+                    'Api-Token' => $this->apiToken,
+                ])
+                    ->asForm()
+                    ->withOptions(['allow_redirects' => false])
+                    ->post("{$this->baseUrl}/client/post/colis/add-colis", $payload);
+            }
 
             $responseData = $response->json();
             

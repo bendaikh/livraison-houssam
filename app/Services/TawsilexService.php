@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\Order;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class TawsilexService
 {
     private string $baseUrl = 'https://tawsilex.com/api';
+    private string $fallbackBaseUrl = 'https://tawsilex.com/public/api';
     private string $apiToken;
 
     public function __construct(?string $apiToken = null)
@@ -38,7 +40,7 @@ class TawsilexService
 
         $payload = [
             'fullname' => $data['fullname'],
-            'phone' => $data['phone'],
+            'phone' => $this->normalizeMoroccanPhone($data['phone'] ?? ''),
             'city' => $data['city'],
             'address' => $data['address'] ?? '',
             'price' => $data['price'],
@@ -57,16 +59,30 @@ class TawsilexService
         $payload = array_filter($payload, fn($value) => $value !== null);
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->post("{$this->baseUrl}/client/post/colis/add-colis/", $payload);
+            $response = $this->postFormWithFallback('/client/post/colis/add-colis/', $payload);
+
+            $responseData = $response->json();
+
+            Log::info('Tawsilex API response', [
+                'status' => $response->status(),
+                'response' => $responseData,
+            ]);
+
+            if (isset($responseData['code']) && $responseData['code'] === 'ko') {
+                $errorMessage = $responseData['error'] ?? 'Unknown error from Tawsilex';
+                throw new \Exception('Tawsilex Error: ' . $errorMessage);
+            }
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to create shipment: ' . $response->body());
             }
 
-            return $response->json();
+            // Guard against false-positive "success" without shipment code.
+            if (empty($responseData['code_shippment']) && empty($responseData['code_shipment']) && empty($responseData['tracking_code']) && empty($responseData['code'])) {
+                throw new \Exception('Tawsilex did not return a tracking code');
+            }
+
+            return $responseData;
         } catch (\Exception $e) {
             Log::error('Tawsilex createShipment error', [
                 'error' => $e->getMessage(),
@@ -114,7 +130,7 @@ class TawsilexService
 
         $data = [
             'fullname' => $order->client->name ?? 'Customer',
-            'phone' => $order->client->phone ?? '',
+            'phone' => $this->normalizeMoroccanPhone($order->client->phone ?? $order->phone ?? ''),
             'city' => $city,
             'address' => $order->shipping_address ?? $order->client->address ?? '',
             'price' => (float) $order->total,
@@ -131,6 +147,33 @@ class TawsilexService
         return $this->createShipment($data);
     }
 
+    private function normalizeMoroccanPhone(?string $phone): string
+    {
+        if (empty($phone)) {
+            return '';
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone);
+
+        if (empty($digits)) {
+            return '';
+        }
+
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+
+        if (str_starts_with($digits, '212')) {
+            $digits = '0' . substr($digits, 3);
+        }
+
+        if (!str_starts_with($digits, '0')) {
+            $digits = '0' . $digits;
+        }
+
+        return $digits;
+    }
+
     /**
      * Get list of all shipments
      * 
@@ -142,10 +185,7 @@ class TawsilexService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/colis/list-colis");
+            $response = $this->getWithFallback('/client/colis/list-colis');
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to fetch shipments: ' . $response->body());
@@ -171,10 +211,7 @@ class TawsilexService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/colis/list-colis-ramassage/");
+            $response = $this->getWithFallback('/client/colis/list-colis-ramassage/');
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to fetch shipments for pickup: ' . $response->body());
@@ -201,10 +238,7 @@ class TawsilexService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/coli/track/{$code}");
+            $response = $this->getWithFallback("/client/coli/track/{$code}");
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to track shipment: ' . $response->body());
@@ -271,10 +305,7 @@ class TawsilexService
         $payload = array_filter($payload, fn($value) => $value !== null);
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->post("{$this->baseUrl}/post/colis/edit/", $payload);
+            $response = $this->postFormWithFallback('/post/colis/edit/', $payload);
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to update shipment status: ' . $response->body());
@@ -301,10 +332,7 @@ class TawsilexService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/list-status");
+            $response = $this->getWithFallback('/client/list-status');
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to fetch statuses: ' . $response->body());
@@ -330,10 +358,7 @@ class TawsilexService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/stock/list");
+            $response = $this->getWithFallback('/client/stock/list');
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to fetch stock: ' . $response->body());
@@ -376,5 +401,90 @@ class TawsilexService
             ]);
             return false;
         }
+    }
+
+    private function getWithFallback(string $path): Response
+    {
+        $lastResponse = null;
+
+        foreach ($this->candidateBaseUrls() as $baseUrl) {
+            $response = Http::withHeaders([
+                'Accept' => 'application/json',
+                'Api-Token' => $this->apiToken,
+            ])->get($this->buildUrl($baseUrl, $path));
+
+            $lastResponse = $response;
+
+            if ($response->successful()) {
+                return $response;
+            }
+        }
+
+        return $lastResponse;
+    }
+
+    private function postFormWithFallback(string $path, array $payload): Response
+    {
+        $lastResponse = null;
+
+        foreach ($this->candidateBaseUrls() as $baseUrl) {
+            // Tawsilex behaves differently with/without trailing slash on some routes, so try both.
+            $paths = [$path, rtrim($path, '/')];
+
+            foreach (array_unique($paths) as $candidatePath) {
+                $response = Http::withHeaders([
+                    'Accept' => 'application/json',
+                    'Api-Token' => $this->apiToken,
+                ])
+                    ->asForm()
+                    ->withOptions(['allow_redirects' => false])
+                    ->post($this->buildUrl($baseUrl, $candidatePath), $payload);
+
+                if (in_array($response->status(), [301, 302, 307, 308], true)) {
+                    $location = $response->header('Location');
+
+                    if (!empty($location)) {
+                        $response = Http::withHeaders([
+                            'Accept' => 'application/json',
+                            'Api-Token' => $this->apiToken,
+                        ])
+                            ->asForm()
+                            ->withOptions(['allow_redirects' => false])
+                            ->post($this->resolveLocation($baseUrl, $location), $payload);
+                    }
+                }
+
+                $lastResponse = $response;
+
+                if ($response->successful() && !str_contains($response->body(), 'GET method is not supported')) {
+                    return $response;
+                }
+            }
+        }
+
+        return $lastResponse;
+    }
+
+    private function candidateBaseUrls(): array
+    {
+        return [$this->baseUrl, $this->fallbackBaseUrl];
+    }
+
+    private function buildUrl(string $baseUrl, string $path): string
+    {
+        return rtrim($baseUrl, '/') . '/' . ltrim($path, '/');
+    }
+
+    private function resolveLocation(string $baseUrl, string $location): string
+    {
+        if (str_starts_with($location, 'http://') || str_starts_with($location, 'https://')) {
+            return $location;
+        }
+
+        if (str_starts_with($location, '/')) {
+            return 'https://tawsilex.com' . $location;
+        }
+
+        return $this->buildUrl($baseUrl, $location);
     }
 }

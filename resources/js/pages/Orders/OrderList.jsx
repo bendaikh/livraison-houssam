@@ -141,6 +141,17 @@ export default function OrderList({ status = '' }) {
         });
     };
 
+    const formatDeliveryStatus = (status) => {
+        if (!status) return '';
+
+        // Backward compatibility for records created during the temporary label change.
+        if (status === 'sent_to_pickup') {
+            return 'sent';
+        }
+
+        return status.replace(/_/g, ' ');
+    };
+
     const handleStatusChange = async (orderId, newStatus) => {
         // Find the current order
         const currentOrder = orders.find(o => o.id === orderId);
@@ -443,10 +454,10 @@ export default function OrderList({ status = '' }) {
                                             {order.client?.name}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {order.client?.phone}
+                                            {order.phone || order.client?.phone}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {order.client?.city || '-'}
+                                            {order.city || order.client?.city || '-'}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
                                             {order.shipping_address || order.client?.address || '-'}
@@ -496,7 +507,7 @@ export default function OrderList({ status = '' }) {
                                                     )}
                                                     {order.delivery_status && (
                                                         <span className="text-xs text-purple-600 capitalize mt-1">
-                                                            {order.delivery_status.replace('_', ' ')}
+                                                            {formatDeliveryStatus(order.delivery_status)}
                                                         </span>
                                                     )}
                                                 </div>

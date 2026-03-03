@@ -51,6 +51,8 @@ class OrderService
                 'total' => $total,
                 'commission_amount' => $commissionAmount,
                 'shipping_address' => $data['shipping_address'] ?? null,
+                'city' => $data['city'] ?? null,
+                'phone' => $data['client_phone'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'whatsapp' => $data['whatsapp'] ?? null,
             ]);
@@ -114,6 +116,8 @@ class OrderService
                 'total' => $total,
                 'commission_amount' => $commissionAmount,
                 'shipping_address' => $data['shipping_address'] ?? null,
+                'city' => $data['city'] ?? null,
+                'phone' => $data['client_phone'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'whatsapp' => $data['whatsapp'] ?? null,
             ];
@@ -281,6 +285,7 @@ class OrderService
         ]);
 
         $response = null;
+        $tawsilexService = null;
 
         // Send to the appropriate delivery service
         if ($integration->provider === 'bmdelivery') {
@@ -319,14 +324,20 @@ class OrderService
             throw new \Exception('Unsupported delivery provider: ' . $integration->provider);
         }
 
-        // Update order with tracking info
-        // BMDelivery returns: code_shippment, Tawsilex may return: code or tracking_code
-        $trackingCode = $response['code_shippment'] 
-            ?? $response['code_shipment'] 
-            ?? $response['tracking_code'] 
-            ?? $response['data']['code'] 
-            ?? $response['data']['code_shippment']
-            ?? null;
+        $trackingCode = $this->extractDeliveryTrackingCode($response);
+
+        if (!$trackingCode) {
+            throw new \Exception('Delivery API did not return a tracking code');
+        }
+
+        // Extra guard for Tawsilex: verify the shipment exists before marking it as sent locally.
+        if ($integration->provider === 'tawsilex' && $tawsilexService) {
+            try {
+                $tawsilexService->trackShipment($trackingCode);
+            } catch (\Exception $e) {
+                throw new \Exception("Tawsilex accepted the request but shipment {$trackingCode} is not traceable yet: {$e->getMessage()}");
+            }
+        }
         
         \Log::info('Updating order with tracking info', [
             'order_id' => $order->id,
@@ -342,6 +353,16 @@ class OrderService
         ]);
 
         $this->addHistory($order->id, $order->status, "Order sent to {$integration->name}. Tracking code: {$trackingCode}");
+    }
+
+    private function extractDeliveryTrackingCode(array $response): ?string
+    {
+        return $response['code_shippment']
+            ?? $response['code_shipment']
+            ?? $response['tracking_code']
+            ?? $response['data']['code']
+            ?? $response['data']['code_shippment']
+            ?? null;
     }
 
     private function addHistory(int $orderId, string $status, ?string $note = null)

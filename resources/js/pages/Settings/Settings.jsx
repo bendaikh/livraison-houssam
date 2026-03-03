@@ -668,77 +668,6 @@ export default function Settings() {
                                     </div>
                                 )}
 
-                                {/* City Modal */}
-                                {showCityModal && (
-                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                        <div className="bg-white rounded-xl p-6 w-full max-w-md">
-                                            <h3 className="text-lg font-bold text-gray-900 mb-4">
-                                                {editingCity ? 'Edit City' : 'Add New City'}
-                                            </h3>
-                                            <form onSubmit={handleCitySubmit} className="space-y-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        City Name *
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={cityForm.name}
-                                                        onChange={(e) => setCityForm({ ...cityForm, name: e.target.value })}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                                        required
-                                                        placeholder="Enter city name"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Delivery Cost *
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={cityForm.delivery_cost}
-                                                        onChange={(e) => setCityForm({ ...cityForm, delivery_cost: parseFloat(e.target.value) })}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                                        required
-                                                        min="0"
-                                                        placeholder="0.00"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="flex items-center space-x-2">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={cityForm.is_active}
-                                                            onChange={(e) => setCityForm({ ...cityForm, is_active: e.target.checked })}
-                                                            className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500"
-                                                        />
-                                                        <span className="text-sm text-gray-700">Active</span>
-                                                    </label>
-                                                </div>
-                                                <div className="flex justify-end space-x-3 pt-4">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setShowCityModal(false);
-                                                            setEditingCity(null);
-                                                            setCityForm({ name: '', delivery_cost: 0, is_active: true });
-                                                        }}
-                                                        className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                    <button
-                                                        type="submit"
-                                                        disabled={saving}
-                                                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        {saving ? 'Saving...' : (editingCity ? 'Update' : 'Add')}
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         )}
 
@@ -908,6 +837,76 @@ export default function Settings() {
                             </div>
                         )}
                     </form>
+                    {showCityModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4">
+                                    {editingCity ? 'Edit City' : 'Add New City'}
+                                </h3>
+                                <form onSubmit={handleCitySubmit} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            City Name *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={cityForm.name}
+                                            onChange={(e) => setCityForm({ ...cityForm, name: e.target.value })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                            required
+                                            placeholder="Enter city name"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Delivery Cost *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={cityForm.delivery_cost}
+                                            onChange={(e) => setCityForm({ ...cityForm, delivery_cost: parseFloat(e.target.value) })}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                            required
+                                            min="0"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={cityForm.is_active}
+                                                onChange={(e) => setCityForm({ ...cityForm, is_active: e.target.checked })}
+                                                className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500"
+                                            />
+                                            <span className="text-sm text-gray-700">Active</span>
+                                        </label>
+                                    </div>
+                                    <div className="flex justify-end space-x-3 pt-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowCityModal(false);
+                                                setEditingCity(null);
+                                                setCityForm({ name: '', delivery_cost: 0, is_active: true });
+                                            }}
+                                            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={saving}
+                                            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {saving ? 'Saving...' : (editingCity ? 'Update' : 'Add')}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -120,6 +120,17 @@ export default function OrderDetail() {
         });
     };
 
+    const formatDeliveryStatus = (status) => {
+        if (!status) return '';
+
+        // Backward compatibility for records created during the temporary label change.
+        if (status === 'sent_to_pickup') {
+            return 'sent';
+        }
+
+        return status.replace(/_/g, ' ');
+    };
+
     const handlePrint = () => {
         const printWindow = window.open('', '_blank');
         const currencySymbol = settings.currency_symbol || 'MAD';
@@ -693,7 +704,7 @@ export default function OrderDetail() {
                                     <div>
                                         <p className="text-sm text-gray-500">Delivery Status</p>
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 capitalize mt-1">
-                                            {order.delivery_status.replace('_', ' ')}
+                                            {formatDeliveryStatus(order.delivery_status)}
                                         </span>
                                     </div>
                                 )}
