@@ -475,22 +475,28 @@ class OrderController extends Controller
                 $cities = $bmService->listCities();
                 
             } elseif ($integration->provider === 'tawsilex') {
-                $tawsilexService = new \App\Services\TawsilexService();
-                $apiToken = $integration->credentials['api_token'] 
-                    ?? $integration->credentials['apiToken'] 
-                    ?? $integration->credentials['token'] 
-                    ?? null;
-                
-                if (!$apiToken) {
-                    return response()->json(['error' => 'API token not configured'], 400);
+                // Tawsilex doesn't provide a reliable cities endpoint in this integration.
+                // Reuse BMDelivery cities to offer the full list in the order confirmation modal.
+                $bmIntegration = \App\Models\ApiIntegration::where('provider', 'bmdelivery')
+                    ->where('type', 'delivery')
+                    ->where('is_active', true)
+                    ->first();
+
+                if ($bmIntegration) {
+                    $bmApiToken = $bmIntegration->credentials['api_token']
+                        ?? $bmIntegration->credentials['apiToken']
+                        ?? $bmIntegration->credentials['token']
+                        ?? null;
+
+                    if ($bmApiToken) {
+                        $bmService = new \App\Services\BMDeliveryService();
+                        $bmService->setApiToken($bmApiToken);
+                        $cities = $bmService->listCities();
+                    }
                 }
-                
-                $tawsilexService->setApiToken($apiToken);
-                // Assuming Tawsilex has a similar method
-                if (method_exists($tawsilexService, 'listCities')) {
-                    $cities = $tawsilexService->listCities();
-                } else {
-                    // Fallback to a predefined list if Tawsilex doesn't have API endpoint
+
+                // Keep a static fallback in case BMDelivery is not available/configured.
+                if (empty($cities)) {
                     $cities = $this->getTawsilexDefaultCities();
                 }
             }
