@@ -158,7 +158,11 @@ export default function OrderList({ status = '' }) {
         
         // If changing to confirmed AND order doesn't already have a tracking code, show delivery company modal
         if (newStatus === 'confirmed' && !currentOrder?.delivery_tracking_code) {
-            setPendingStatusChange({ orderId, newStatus });
+            setPendingStatusChange({
+                orderId,
+                newStatus,
+                preferredCompanyId: currentOrder?.delivery_integration_id || null,
+            });
             setShowDeliveryModal(true);
             return;
         }
@@ -227,6 +231,7 @@ export default function OrderList({ status = '' }) {
                 }}
                 onConfirm={handleDeliveryCompanyConfirm}
                 orderId={pendingStatusChange?.orderId}
+                preferredCompanyId={pendingStatusChange?.preferredCompanyId}
             />
 
             <div className="flex justify-between items-center">

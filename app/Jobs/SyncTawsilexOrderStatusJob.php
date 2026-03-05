@@ -97,10 +97,10 @@ class SyncTawsilexOrderStatusJob implements ShouldQueue
 
         $statusMap = [
             'sent' => 'shipped',
-            'livree' => 'shipped',
-            'livrée' => 'shipped',
-            'livre' => 'shipped',
-            'livré' => 'shipped',
+            'livree' => 'delivered',
+            'livrée' => 'delivered',
+            'livre' => 'delivered',
+            'livré' => 'delivered',
             'livraison' => 'out_for_delivery',
             'en livraison' => 'out_for_delivery',
             'ramassé' => 'picked_up',

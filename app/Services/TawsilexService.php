@@ -38,35 +38,30 @@ class TawsilexService
     {
         $this->validateApiToken();
 
-        $payload = [
-            'fullname' => $data['fullname'],
-            'phone' => $this->normalizeMoroccanPhone($data['phone'] ?? ''),
-            'city' => $data['city'],
-            'address' => $data['address'] ?? '',
-            'price' => $data['price'],
-            'product' => $data['product'],
-            'qty' => $data['qty'],
-            'note' => $data['note'] ?? '',
-            'change' => $data['change'] ?? 0,
-            'coli_exchange' => $data['coli_exchange'] ?? null,
-            'openpackage' => $data['openpackage'] ?? 0,
-            'try_product' => $data['try_product'] ?? 0,
-            'from_stock' => $data['from_stock'] ?? 0,
-            'internal_id' => $data['internal_id'] ?? null,
-        ];
-
-        // Remove null values
-        $payload = array_filter($payload, fn($value) => $value !== null);
+        $payload = $this->buildShipmentPayload($data);
+        $this->validateShipmentPayload($payload);
 
         try {
             $response = $this->postFormWithFallback('/client/post/colis/add-colis/', $payload);
+            $responseData = $response->json() ?? [];
 
-            $responseData = $response->json();
-
-            Log::info('Tawsilex API response', [
+            Log::info('Tawsilex API response (primary payload)', [
                 'status' => $response->status(),
                 'response' => $responseData,
             ]);
+
+            // Retry with minimal payload for providers that reject optional fields with 500.
+            if (!$response->successful() && $this->isServerErrorResponse($responseData, $response->body())) {
+                $minimalPayload = $this->buildShipmentPayload($data, true);
+                $response = $this->postFormWithFallback('/client/post/colis/add-colis/', $minimalPayload);
+                $responseData = $response->json() ?? [];
+
+                Log::warning('Tawsilex createShipment retried with minimal payload', [
+                    'status' => $response->status(),
+                    'response' => $responseData,
+                    'minimal_payload' => $minimalPayload,
+                ]);
+            }
 
             if (isset($responseData['code']) && $responseData['code'] === 'ko') {
                 $errorMessage = $responseData['error'] ?? 'Unknown error from Tawsilex';
@@ -90,6 +85,67 @@ class TawsilexService
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Build shipment payload.
+     * When $minimal is true, optional flags are removed (BMDelivery-like payload)
+     * to improve compatibility with strict Tawsilex tenants.
+     */
+    private function buildShipmentPayload(array $data, bool $minimal = false): array
+    {
+        $payload = [
+            'fullname' => $this->normalizeText($data['fullname'] ?? ''),
+            'phone' => $this->normalizeMoroccanPhone($data['phone'] ?? ''),
+            'city' => $this->normalizeText($data['city'] ?? ''),
+            'address' => $this->normalizeAddress($data['address'] ?? ''),
+            'price' => $data['price'],
+            'product' => $this->normalizeText($data['product'] ?? ''),
+            'qty' => $data['qty'],
+            'note' => $this->normalizeText($data['note'] ?? ''),
+            'internal_id' => $data['internal_id'] ?? null,
+        ];
+
+        if (!$minimal) {
+            $payload['change'] = $data['change'] ?? 0;
+            $payload['coli_exchange'] = $data['coli_exchange'] ?? null;
+            $payload['openpackage'] = $data['openpackage'] ?? 0;
+            $payload['from_stock'] = $data['from_stock'] ?? 0;
+        }
+
+        return array_filter($payload, fn($value) => $value !== null);
+    }
+
+    private function validateShipmentPayload(array $payload): void
+    {
+        if (empty($payload['fullname']) || mb_strlen($payload['fullname']) < 3) {
+            throw new \InvalidArgumentException('Client name must be at least 3 characters for Tawsilex.');
+        }
+
+        if (!$this->isValidMoroccanPhone($payload['phone'] ?? '')) {
+            throw new \InvalidArgumentException('Client phone must be a valid Moroccan mobile number (10 digits, starts with 06 or 07).');
+        }
+
+        if (empty($payload['city'])) {
+            throw new \InvalidArgumentException('Delivery city is required for Tawsilex.');
+        }
+
+        if (empty($payload['product'])) {
+            throw new \InvalidArgumentException('Product description is required for Tawsilex.');
+        }
+
+        if (!isset($payload['price']) || !is_numeric($payload['price']) || (float) $payload['price'] < 0) {
+            throw new \InvalidArgumentException('Order total is invalid for Tawsilex.');
+        }
+    }
+
+    private function isServerErrorResponse(array $responseData, string $rawBody): bool
+    {
+        $message = strtolower((string) ($responseData['message'] ?? ''));
+        $body = strtolower($rawBody);
+
+        return str_contains($message, 'server error')
+            || str_contains($body, 'server error');
     }
 
     /**
@@ -121,6 +177,19 @@ class TawsilexService
 
         // Use the provided delivery city, or fallback to client's city
         $city = $deliveryCity ?? $order->client->city ?? $order->city ?? 'Casablanca';
+        $fallbackFullname = 'Client ' . ($order->order_number ?? $order->id);
+        $rawFullname = $order->client->name ?? null;
+        $fullname = $this->sanitizeFullname($rawFullname, $fallbackFullname);
+        $phone = $this->normalizeMoroccanPhone($order->client->phone ?? $order->phone ?? '');
+        $address = $this->normalizeAddress($order->shipping_address ?? $order->client->address ?? '');
+
+        if ($fullname !== $this->normalizeText($rawFullname ?? '')) {
+            Log::warning('Tawsilex fullname sanitized for shipment', [
+                'order_id' => $order->id,
+                'raw_fullname' => $rawFullname,
+                'sanitized_fullname' => $fullname,
+            ]);
+        }
 
         Log::info('Using city for Tawsilex', [
             'provided_city' => $deliveryCity,
@@ -129,17 +198,16 @@ class TawsilexService
         ]);
 
         $data = [
-            'fullname' => $order->client->name ?? 'Customer',
-            'phone' => $this->normalizeMoroccanPhone($order->client->phone ?? $order->phone ?? ''),
+            'fullname' => $fullname,
+            'phone' => $phone,
             'city' => $city,
-            'address' => $order->shipping_address ?? $order->client->address ?? '',
+            'address' => $address,
             'price' => (float) $order->total,
             'product' => implode(',', $products),
             'qty' => implode(',', $quantities),
             'note' => $order->notes ?? '',
             'change' => 0,
             'openpackage' => 1,
-            'try_product' => 0,
             'from_stock' => 0,
             'internal_id' => $order->order_number,
         ];
@@ -172,6 +240,36 @@ class TawsilexService
         }
 
         return $digits;
+    }
+
+    private function isValidMoroccanPhone(string $phone): bool
+    {
+        return preg_match('/^0[67]\d{8}$/', $phone) === 1;
+    }
+
+    private function sanitizeFullname(?string $fullname, string $fallback): string
+    {
+        $normalized = $this->normalizeText($fullname ?? '');
+
+        // Tawsilex can fail with generic 500 for too-short recipient names.
+        if (mb_strlen($normalized) < 3) {
+            return $this->normalizeText($fallback);
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeAddress(?string $address): string
+    {
+        $normalized = $this->normalizeText($address ?? '');
+
+        // Keep address non-empty to avoid provider-side validation edge cases.
+        return $normalized !== '' ? $normalized : '-';
+    }
+
+    private function normalizeText(string $value): string
+    {
+        return trim(preg_replace('/\s+/', ' ', $value) ?? '');
     }
 
     /**

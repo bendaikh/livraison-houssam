@@ -11,8 +11,8 @@ Artisan::command('inspire', function () {
 // Legacy sync command (BMDelivery) every 30 minutes.
 Schedule::command('orders:sync-delivery-statuses --provider=bmdelivery')->everyThirtyMinutes();
 
-// Tawsilex automatic sync dispatcher every 10 minutes.
-// It dispatches queued jobs to fetch status from /client/coli/track/{tracking_code}.
-Schedule::command('orders:dispatch-tawsilex-status-sync')
+// Tawsilex automatic sync every 10 minutes.
+// Uses direct sync command to avoid dependency on queue workers in hosted environments.
+Schedule::command('orders:sync-delivery-statuses --provider=tawsilex')
     ->everyTenMinutes()
     ->withoutOverlapping();

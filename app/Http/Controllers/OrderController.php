@@ -451,10 +451,10 @@ class OrderController extends Controller
         if ($normalizedProvider === 'tawsilex') {
             $tawsilexStatusMap = [
                 'sent' => 'shipped',
-                'livree' => 'shipped',
-                'livrée' => 'shipped',
-                'livre' => 'shipped',
-                'livré' => 'shipped',
+                'livree' => 'delivered',
+                'livrée' => 'delivered',
+                'livre' => 'delivered',
+                'livré' => 'delivered',
             ];
 
             if (isset($tawsilexStatusMap[$normalizedStatus])) {

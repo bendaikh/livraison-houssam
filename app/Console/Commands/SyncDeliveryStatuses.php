@@ -27,8 +27,9 @@ class SyncDeliveryStatuses extends Command
 
         // Build query for orders to sync
         $query = Order::whereNotNull('delivery_tracking_code')
+            ->where('delivery_tracking_code', '!=', '')
             ->whereNotNull('delivery_integration_id')
-            ->whereIn('status', ['confirmed', 'shipped']) // Only sync active orders
+            ->whereNotIn('status', ['delivered', 'cancelled'])
             ->with(['deliveryIntegration']);
 
         // Filter by specific order if provided
@@ -231,10 +232,10 @@ class SyncDeliveryStatuses extends Command
         if ($normalizedProvider === 'tawsilex') {
             $tawsilexStatusMap = [
                 'sent' => 'shipped',
-                'livree' => 'shipped',
-                'livrée' => 'shipped',
-                'livre' => 'shipped',
-                'livré' => 'shipped',
+                'livree' => 'delivered',
+                'livrée' => 'delivered',
+                'livre' => 'delivered',
+                'livré' => 'delivered',
             ];
 
             if (isset($tawsilexStatusMap[$normalizedStatus])) {

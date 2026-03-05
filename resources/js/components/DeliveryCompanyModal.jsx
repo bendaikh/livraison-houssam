@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Truck, AlertCircle, MapPin } from 'lucide-react';
 import api from '../utils/api';
 
-export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, orderId }) {
+export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, orderId, preferredCompanyId = null }) {
     const [step, setStep] = useState(1); // 1 = select company, 2 = select city
     const [deliveryCompanies, setDeliveryCompanies] = useState([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState(null);
@@ -16,15 +16,21 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
 
     useEffect(() => {
         if (isOpen) {
+            const selectedCompany = preferredCompanyId ? parseInt(preferredCompanyId, 10) : null;
+
             fetchDeliveryCompanies();
-            setStep(1);
-            setSelectedCompanyId(null);
+            setStep(selectedCompany ? 2 : 1);
+            setSelectedCompanyId(selectedCompany);
             setSelectedCity('');
             setCities([]);
             setCitySearch('');
             setError(null);
+
+            if (selectedCompany) {
+                fetchCities(selectedCompany);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, preferredCompanyId]);
 
     const fetchDeliveryCompanies = async () => {
         try {
@@ -116,6 +122,7 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
 
     const hasCompanies = deliveryCompanies.length > 0;
     const selectedCompany = deliveryCompanies.find(c => c.id === selectedCompanyId);
+    const hasPreferredCompany = !!preferredCompanyId;
     const filteredCities = cities.filter((city) =>
         getCityName(city).toLowerCase().includes(citySearch.toLowerCase())
     );
@@ -303,13 +310,23 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
 
                 {step === 2 && !loadingCities && (
                     <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
-                        <button
-                            onClick={handleBack}
-                            disabled={submitting}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                        >
-                            Back
-                        </button>
+                        {hasPreferredCompany ? (
+                            <button
+                                onClick={onClose}
+                                disabled={submitting}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                            >
+                                Close
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleBack}
+                                disabled={submitting}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                            >
+                                Back
+                            </button>
+                        )}
                         <button
                             onClick={handleConfirm}
                             disabled={!selectedCity || submitting}
