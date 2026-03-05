@@ -17,6 +17,7 @@ export default function OrderForm() {
     const [deliveryAgents, setDeliveryAgents] = useState([]);
     const [deliveryPersons, setDeliveryPersons] = useState([]);
     const [confirmationAgents, setConfirmationAgents] = useState([]);
+    const [deliveryCompanies, setDeliveryCompanies] = useState([]);
     const [cities, setCities] = useState([]);
     
     const [formData, setFormData] = useState({
@@ -24,6 +25,7 @@ export default function OrderForm() {
         client_phone: '',
         vendor_id: '',
         delivery_agent_id: '',
+        delivery_integration_id: '',
         delivery_person_id: '',
         confirmation_agent_id: '',
         status: 'pending',
@@ -50,6 +52,7 @@ export default function OrderForm() {
         fetchDeliveryAgents();
         fetchDeliveryPersons();
         fetchConfirmationAgents();
+        fetchDeliveryCompanies();
         fetchCities();
         
         if (isEditing) {
@@ -108,6 +111,15 @@ export default function OrderForm() {
         }
     };
 
+    const fetchDeliveryCompanies = async () => {
+        try {
+            const response = await api.get('/orders/delivery-companies/available');
+            setDeliveryCompanies(response.data || []);
+        } catch (error) {
+            console.error('Error fetching delivery companies:', error);
+        }
+    };
+
     const fetchCities = async () => {
         try {
             const response = await api.get('/cities');
@@ -128,6 +140,7 @@ export default function OrderForm() {
                 client_phone: order.client?.phone || '',
                 vendor_id: order.vendor_id || '',
                 delivery_agent_id: order.delivery_agent_id || '',
+                delivery_integration_id: order.delivery_integration_id || '',
                 delivery_person_id: order.delivery_person_id || '',
                 confirmation_agent_id: order.confirmation_agent_id || '',
                 status: order.status || 'pending',
@@ -396,6 +409,22 @@ export default function OrderForm() {
                                 <option value="shopify">Shopify</option>
                                 <option value="delivery_company">Delivery Company</option>
                                 <option value="marketplace">Marketplace</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Company</label>
+                            <select
+                                value={formData.delivery_integration_id}
+                                onChange={(e) => setFormData({ ...formData, delivery_integration_id: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                                <option value="">Select Delivery Company</option>
+                                {deliveryCompanies.map((company) => (
+                                    <option key={company.id} value={company.id}>
+                                        {company.name} ({company.provider})
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     </div>

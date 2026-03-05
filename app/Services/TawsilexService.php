@@ -255,6 +255,92 @@ class TawsilexService
     }
 
     /**
+     * Sync order status from Tawsilex tracking endpoint.
+     *
+     * @param Order $order
+     * @return array
+     * @throws \Exception
+     */
+    public function syncOrderStatus(Order $order): array
+    {
+        if (!$order->delivery_tracking_code) {
+            throw new \Exception('Order does not have a tracking code');
+        }
+
+        try {
+            $trackingData = $this->trackShipment($order->delivery_tracking_code);
+            $newStatus = $this->extractLatestStatus($trackingData);
+
+            if (!$newStatus) {
+                Log::warning('Could not extract status from Tawsilex response', [
+                    'tracking_code' => $order->delivery_tracking_code,
+                    'response' => $trackingData,
+                ]);
+                throw new \Exception('Status not found in Tawsilex response');
+            }
+
+            $oldDeliveryStatus = $order->delivery_status;
+            $hasChanged = $oldDeliveryStatus !== $newStatus;
+
+            $order->update([
+                'delivery_status' => $newStatus,
+            ]);
+
+            Log::info('Order delivery status synced from Tawsilex', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'old_status' => $oldDeliveryStatus,
+                'new_status' => $newStatus,
+                'status_changed' => $hasChanged,
+            ]);
+
+            return [
+                'success' => true,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'old_delivery_status' => $oldDeliveryStatus,
+                'new_delivery_status' => $newStatus,
+                'status_changed' => $hasChanged,
+                'tracking_data' => $trackingData,
+            ];
+        } catch (\Exception $e) {
+            Log::error('Failed to sync order status from Tawsilex', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'tracking_code' => $order->delivery_tracking_code,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Extract latest status label from Tawsilex track response.
+     */
+    private function extractLatestStatus(array $trackingData): ?string
+    {
+        if (isset($trackingData['data']) && is_array($trackingData['data']) && !empty($trackingData['data'])) {
+            $events = $trackingData['data'];
+
+            usort($events, function ($a, $b) {
+                return ($b['Date_Evenement'] ?? 0) <=> ($a['Date_Evenement'] ?? 0);
+            });
+
+            $latestEvent = $events[0];
+
+            return $latestEvent['Etat']
+                ?? $latestEvent['etat']
+                ?? $latestEvent['status']
+                ?? null;
+        }
+
+        return $trackingData['Etat']
+            ?? $trackingData['etat']
+            ?? $trackingData['status']
+            ?? null;
+    }
+
+    /**
      * Get shipment details for editing
      * 
      * @param string $code Tracking code
@@ -487,4 +573,5 @@ class TawsilexService
 
         return $this->buildUrl($baseUrl, $location);
     }
+
 }

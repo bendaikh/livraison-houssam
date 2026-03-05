@@ -77,6 +77,7 @@ class OrderController extends Controller
             'client_phone' => 'required|string|max:20',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
+            'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
             'source' => 'string|in:manual,shopify,delivery_company,marketplace',
@@ -137,6 +138,7 @@ class OrderController extends Controller
             'client_phone' => 'required|string|max:20',
             'vendor_id' => 'nullable|exists:vendors,id',
             'delivery_agent_id' => 'nullable|exists:users,id',
+            'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
             'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
@@ -307,7 +309,7 @@ class OrderController extends Controller
 
             // Update order status based on delivery status if it changed
             if ($result['status_changed']) {
-                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
+                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
                 
                 \Log::info('Attempting to map delivery status to order status', [
                     'delivery_status' => $result['new_delivery_status'],
@@ -332,7 +334,7 @@ class OrderController extends Controller
                 }
             } else {
                 // Even if delivery status didn't change, check if order status needs updating
-                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
+                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
                 
                 \Log::info('Delivery status unchanged, checking if order status needs update', [
                     'delivery_status' => $result['new_delivery_status'],
@@ -376,11 +378,14 @@ class OrderController extends Controller
      * Map delivery company status to internal order status
      * (Moved here to be accessible from syncDeliveryStatus)
      */
-    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus): ?string
+    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus, ?string $provider = null): ?string
     {
         if (!$deliveryStatus) {
             return null;
         }
+
+        $normalizedStatus = strtolower(trim($deliveryStatus));
+        $normalizedProvider = strtolower(trim((string) $provider));
 
         $statusMap = [
             'pending' => 'pending',
@@ -443,7 +448,21 @@ class OrderController extends Controller
             'livraison' => 'out_for_delivery',
         ];
 
-        return $statusMap[strtolower($deliveryStatus)] ?? null;
+        if ($normalizedProvider === 'tawsilex') {
+            $tawsilexStatusMap = [
+                'sent' => 'shipped',
+                'livree' => 'shipped',
+                'livrée' => 'shipped',
+                'livre' => 'shipped',
+                'livré' => 'shipped',
+            ];
+
+            if (isset($tawsilexStatusMap[$normalizedStatus])) {
+                return $tawsilexStatusMap[$normalizedStatus];
+            }
+        }
+
+        return $statusMap[$normalizedStatus] ?? null;
     }
 
     /**

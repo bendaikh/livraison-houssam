@@ -239,7 +239,7 @@ class WebhookController extends Controller
             ]);
 
             // Map delivery company status to order status
-            $orderStatus = $this->mapDeliveryStatusToOrderStatus($newStatus);
+            $orderStatus = $this->mapDeliveryStatusToOrderStatus($newStatus, 'bmdelivery');
             
             if ($orderStatus && $orderStatus !== $order->status) {
                 $orderService = app(\App\Services\OrderService::class);
@@ -306,7 +306,7 @@ class WebhookController extends Controller
             ]);
 
             // Map delivery company status to order status
-            $orderStatus = $this->mapDeliveryStatusToOrderStatus($newStatus);
+            $orderStatus = $this->mapDeliveryStatusToOrderStatus($newStatus, 'tawsilex');
             
             if ($orderStatus && $orderStatus !== $order->status) {
                 $orderService = app(\App\Services\OrderService::class);
@@ -341,11 +341,14 @@ class WebhookController extends Controller
     /**
      * Map delivery company status to internal order status
      */
-    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus): ?string
+    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus, ?string $provider = null): ?string
     {
         if (!$deliveryStatus) {
             return null;
         }
+
+        $normalizedStatus = strtolower(trim($deliveryStatus));
+        $normalizedProvider = strtolower(trim((string) $provider));
 
         $statusMap = [
             // Common delivery statuses
@@ -404,12 +407,27 @@ class WebhookController extends Controller
             'exécuté' => 'delivered',
             'retour' => 'returned',
             
-            // Tawsilex specific
+            // Tawsilex shared labels
             'preparation' => 'confirmed',
             'expedie' => 'shipped',
             'livraison' => 'out_for_delivery',
         ];
 
-        return $statusMap[strtolower($deliveryStatus)] ?? null;
+        // Provider-specific overrides.
+        if ($normalizedProvider === 'tawsilex') {
+            $tawsilexStatusMap = [
+                'sent' => 'shipped',
+                'livree' => 'shipped',
+                'livrée' => 'shipped',
+                'livre' => 'shipped',
+                'livré' => 'shipped',
+            ];
+
+            if (isset($tawsilexStatusMap[$normalizedStatus])) {
+                return $tawsilexStatusMap[$normalizedStatus];
+            }
+        }
+
+        return $statusMap[$normalizedStatus] ?? null;
     }
 }

@@ -106,7 +106,7 @@ class SyncDeliveryStatuses extends Command
                     $this->info("  Delivery status changed: {$result['old_delivery_status']} → {$result['new_delivery_status']}");
                     
                     // Update order status based on delivery status
-                    $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
+                    $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
                     
                     if ($orderStatus && $orderStatus !== $order->status) {
                         $this->orderService->updateOrderStatus(
@@ -121,7 +121,7 @@ class SyncDeliveryStatuses extends Command
                     $this->info("  No delivery status change (current: {$result['new_delivery_status']})");
                     
                     // Even if delivery status didn't change, check if order status needs updating
-                    $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status']);
+                    $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
                     
                     if ($orderStatus && $orderStatus !== $order->status) {
                         $this->orderService->updateOrderStatus(
@@ -158,11 +158,14 @@ class SyncDeliveryStatuses extends Command
     /**
      * Map delivery company status to internal order status
      */
-    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus): ?string
+    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus, ?string $provider = null): ?string
     {
         if (!$deliveryStatus) {
             return null;
         }
+
+        $normalizedStatus = strtolower(trim($deliveryStatus));
+        $normalizedProvider = strtolower(trim((string) $provider));
 
         $statusMap = [
             'pending' => 'pending',
@@ -225,6 +228,20 @@ class SyncDeliveryStatuses extends Command
             'livraison' => 'out_for_delivery',
         ];
 
-        return $statusMap[strtolower($deliveryStatus)] ?? null;
+        if ($normalizedProvider === 'tawsilex') {
+            $tawsilexStatusMap = [
+                'sent' => 'shipped',
+                'livree' => 'shipped',
+                'livrée' => 'shipped',
+                'livre' => 'shipped',
+                'livré' => 'shipped',
+            ];
+
+            if (isset($tawsilexStatusMap[$normalizedStatus])) {
+                return $tawsilexStatusMap[$normalizedStatus];
+            }
+        }
+
+        return $statusMap[$normalizedStatus] ?? null;
     }
 }

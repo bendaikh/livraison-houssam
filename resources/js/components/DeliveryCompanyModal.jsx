@@ -8,6 +8,7 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
     const [selectedCompanyId, setSelectedCompanyId] = useState(null);
     const [cities, setCities] = useState([]);
     const [selectedCity, setSelectedCity] = useState('');
+    const [citySearch, setCitySearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [loadingCities, setLoadingCities] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -20,6 +21,7 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
             setSelectedCompanyId(null);
             setSelectedCity('');
             setCities([]);
+            setCitySearch('');
             setError(null);
         }
     }, [isOpen]);
@@ -65,6 +67,7 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
 
     const handleCompanySelect = async (companyId) => {
         setSelectedCompanyId(companyId);
+        setCitySearch('');
         setError(null);
         setStep(2);
         await fetchCities(companyId);
@@ -74,6 +77,7 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
         setStep(1);
         setSelectedCity('');
         setCities([]);
+        setCitySearch('');
         setError(null);
     };
 
@@ -112,6 +116,9 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
 
     const hasCompanies = deliveryCompanies.length > 0;
     const selectedCompany = deliveryCompanies.find(c => c.id === selectedCompanyId);
+    const filteredCities = cities.filter((city) =>
+        getCityName(city).toLowerCase().includes(citySearch.toLowerCase())
+    );
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -224,6 +231,16 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
                                         Select the client's delivery city:
                                     </p>
 
+                                    <div className="mb-4">
+                                        <input
+                                            type="text"
+                                            value={citySearch}
+                                            onChange={(e) => setCitySearch(e.target.value)}
+                                            placeholder="Search city..."
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        />
+                                    </div>
+
                                     {error && (
                                         <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center space-x-2">
                                             <AlertCircle className="text-red-600 flex-shrink-0" size={16} />
@@ -232,7 +249,12 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
                                     )}
 
                                     <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
-                                        {cities.map((city, index) => {
+                                        {filteredCities.length === 0 && (
+                                            <div className="px-4 py-3 text-sm text-gray-500">
+                                                No cities found.
+                                            </div>
+                                        )}
+                                        {filteredCities.map((city, index) => {
                                             const cityName = getCityName(city);
                                             return (
                                                 <label

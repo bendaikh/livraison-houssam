@@ -8,6 +8,11 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Schedule automatic delivery status synchronization
-// Run every 30 minutes for active orders
-Schedule::command('orders:sync-delivery-statuses')->everyThirtyMinutes();
+// Legacy sync command (BMDelivery) every 30 minutes.
+Schedule::command('orders:sync-delivery-statuses --provider=bmdelivery')->everyThirtyMinutes();
+
+// Tawsilex automatic sync dispatcher every 10 minutes.
+// It dispatches queued jobs to fetch status from /client/coli/track/{tracking_code}.
+Schedule::command('orders:dispatch-tawsilex-status-sync')
+    ->everyTenMinutes()
+    ->withoutOverlapping();
