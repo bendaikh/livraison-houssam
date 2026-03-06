@@ -435,6 +435,7 @@ class ShopifyService
             'note' => $shopifyOrder['note'] ?? null,
             'created_at' => $shopifyOrder['created_at'] ?? null,
             'updated_at' => $shopifyOrder['updated_at'] ?? null,
+            'shopify_name' => $shopifyOrder['name'] ?? $shopifyOrder['order_number'] ?? null,
         ];
     }
 }

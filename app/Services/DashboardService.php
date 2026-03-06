@@ -90,13 +90,24 @@ class DashboardService
             $baseQuery->where('vendor_id', $vendorId);
         }
         
+        $totalOrders = (clone $baseQuery)->count();
+        $pending = (clone $baseQuery)->where('status', 'pending')->count();
+        $confirmed = (clone $baseQuery)->where('status', 'confirmed')->count();
+        $shipped = (clone $baseQuery)->where('status', 'shipped')->count();
+        $delivered = (clone $baseQuery)->where('status', 'delivered')->count();
+        $cancelled = (clone $baseQuery)->where('status', 'cancelled')->count();
+        
+        $confirmationCount = $confirmed + $shipped + $delivered;
+
         return [
-            'total' => (clone $baseQuery)->count(),
-            'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
-            'confirmed' => (clone $baseQuery)->where('status', 'confirmed')->count(),
-            'shipped' => (clone $baseQuery)->where('status', 'shipped')->count(),
-            'delivered' => (clone $baseQuery)->where('status', 'delivered')->count(),
-            'cancelled' => (clone $baseQuery)->where('status', 'cancelled')->count(),
+            'total' => $totalOrders,
+            'pending' => $pending,
+            'confirmed' => $confirmed,
+            'shipped' => $shipped,
+            'delivered' => $delivered,
+            'cancelled' => $cancelled,
+            'confirmation_rate' => $this->calculateRate($confirmationCount, $totalOrders),
+            'delivery_rate' => $this->calculateRate($delivered, $totalOrders),
             'by_source' => (clone $baseQuery)
                 ->select('source', DB::raw('count(*) as count'))
                 ->groupBy('source')
@@ -175,21 +186,25 @@ class DashboardService
     {
         $data = [];
         for ($i = 23; $i >= 0; $i--) {
-            $hour = Carbon::now()->subHours($i);
-            
-            $salesQuery = Order::whereBetween('created_at', [$hour, $hour->copy()->addHour()])
-                ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
-            $ordersQuery = Order::whereBetween('created_at', [$hour, $hour->copy()->addHour()]);
-            
+            $hourStart = Carbon::now()->subHours($i);
+            $hourEnd = $hourStart->copy()->addHour();
+
+            $ordersBase = Order::whereBetween('created_at', [$hourStart, $hourEnd]);
             if ($vendorId) {
-                $salesQuery->where('vendor_id', $vendorId);
-                $ordersQuery->where('vendor_id', $vendorId);
+                $ordersBase->where('vendor_id', $vendorId);
             }
-            
+
+            $salesQuery = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $totalOrders = (clone $ordersBase)->count();
+            $confirmedOrders = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered'])->count();
+            $deliveredOrders = (clone $ordersBase)->where('status', 'delivered')->count();
+
             $data[] = [
-                'label' => $hour->format('H:00'),
+                'label' => $hourStart->format('H:00'),
                 'sales' => $salesQuery->sum('total'),
-                'orders' => $ordersQuery->count(),
+                'orders' => $totalOrders,
+                'confirmationRate' => $this->calculateRate($confirmedOrders, $totalOrders),
+                'deliveryRate' => $this->calculateRate($deliveredOrders, $totalOrders),
             ];
         }
         return $data;
@@ -200,20 +215,22 @@ class DashboardService
         $data = [];
         for ($i = $days - 1; $i >= 0; $i--) {
             $day = Carbon::now()->subDays($i);
-            
-            $salesQuery = Order::whereDate('created_at', $day)
-                ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
-            $ordersQuery = Order::whereDate('created_at', $day);
-            
+            $ordersBase = Order::whereDate('created_at', $day);
             if ($vendorId) {
-                $salesQuery->where('vendor_id', $vendorId);
-                $ordersQuery->where('vendor_id', $vendorId);
+                $ordersBase->where('vendor_id', $vendorId);
             }
-            
+
+            $salesQuery = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $totalOrders = (clone $ordersBase)->count();
+            $confirmedOrders = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered'])->count();
+            $deliveredOrders = (clone $ordersBase)->where('status', 'delivered')->count();
+
             $data[] = [
                 'label' => $day->format('M d'),
                 'sales' => $salesQuery->sum('total'),
-                'orders' => $ordersQuery->count(),
+                'orders' => $totalOrders,
+                'confirmationRate' => $this->calculateRate($confirmedOrders, $totalOrders),
+                'deliveryRate' => $this->calculateRate($deliveredOrders, $totalOrders),
             ];
         }
         return $data;
@@ -224,25 +241,35 @@ class DashboardService
         $data = [];
         for ($i = 11; $i >= 0; $i--) {
             $month = Carbon::now()->subMonths($i);
-            
-            $salesQuery = Order::whereYear('created_at', $month->year)
-                ->whereMonth('created_at', $month->month)
-                ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
-            $ordersQuery = Order::whereYear('created_at', $month->year)
+            $ordersBase = Order::whereYear('created_at', $month->year)
                 ->whereMonth('created_at', $month->month);
-            
             if ($vendorId) {
-                $salesQuery->where('vendor_id', $vendorId);
-                $ordersQuery->where('vendor_id', $vendorId);
+                $ordersBase->where('vendor_id', $vendorId);
             }
-            
+
+            $salesQuery = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $totalOrders = (clone $ordersBase)->count();
+            $confirmedOrders = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered'])->count();
+            $deliveredOrders = (clone $ordersBase)->where('status', 'delivered')->count();
+
             $data[] = [
                 'label' => $month->format('M Y'),
                 'sales' => $salesQuery->sum('total'),
-                'orders' => $ordersQuery->count(),
+                'orders' => $totalOrders,
+                'confirmationRate' => $this->calculateRate($confirmedOrders, $totalOrders),
+                'deliveryRate' => $this->calculateRate($deliveredOrders, $totalOrders),
             ];
         }
         return $data;
+    }
+
+    private function calculateRate(int $numerator, int $denominator): float
+    {
+        if ($denominator === 0) {
+            return 0.0;
+        }
+
+        return round(($numerator / $denominator) * 100, 2);
     }
 
     private function getClientsStats(array $dateRange, $vendorId = null)

@@ -19,6 +19,7 @@ export default function OrderForm() {
     const [confirmationAgents, setConfirmationAgents] = useState([]);
     const [deliveryCompanies, setDeliveryCompanies] = useState([]);
     const [cities, setCities] = useState([]);
+    const [showCityDropdown, setShowCityDropdown] = useState(false);
     
     const [formData, setFormData] = useState({
         client_name: '',
@@ -123,7 +124,13 @@ export default function OrderForm() {
     const fetchCities = async () => {
         try {
             const response = await api.get('/cities');
-            setCities(response.data.filter(city => city.is_active));
+            // For edit mode, show all cities so Shopify cities can be matched
+            // For create mode, show only active cities
+            if (isEditing) {
+                setCities(response.data); // Show all cities when editing
+            } else {
+                setCities(response.data.filter(city => city.is_active));
+            }
         } catch (error) {
             console.error('Error fetching cities:', error);
         }
@@ -134,6 +141,7 @@ export default function OrderForm() {
             setLoading(true);
             const response = await api.get(`/orders/${id}`);
             const order = response.data;
+            const resolvedCity = String(order.city ?? order.client?.city ?? '').trim();
             
             setFormData({
                 client_name: order.client?.name || '',
@@ -146,7 +154,7 @@ export default function OrderForm() {
                 status: order.status || 'pending',
                 source: order.source || 'manual',
                 shipping_address: order.shipping_address || '',
-                city: order.city || '',
+                city: resolvedCity,
                 notes: order.notes || '',
                 whatsapp: order.whatsapp || '',
                 shipping_cost: order.shipping_cost || 0,
@@ -206,6 +214,26 @@ export default function OrderForm() {
         const discount = parseFloat(formData.discount || 0);
         return subtotal + shipping - discount;
     };
+
+    const baseCityOptions = isEditing ? cities : cities.filter(city => city.is_active);
+    const hasCurrentCityInList = !!formData.city && baseCityOptions.some(city => city.name === formData.city);
+    const cityOptions = hasCurrentCityInList || !formData.city
+        ? baseCityOptions
+        : [
+            {
+                id: 'current-city',
+                name: formData.city,
+                delivery_cost: null,
+                is_active: true,
+                isCurrentOrderCity: true,
+            },
+            ...baseCityOptions,
+        ];
+
+    // Filter cities based on search input
+    const filteredCityOptions = cityOptions.filter((city) =>
+        city.name.toLowerCase().includes(formData.city.toLowerCase())
+    );
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -294,25 +322,113 @@ export default function OrderForm() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                            <select
-                                value={formData.city}
-                                onChange={(e) => {
-                                    const selectedCity = cities.find(c => c.name === e.target.value);
-                                    setFormData({ 
-                                        ...formData, 
-                                        city: e.target.value,
-                                        shipping_cost: selectedCity ? selectedCity.delivery_cost : formData.shipping_cost
-                                    });
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">Select city</option>
-                                {cities.map(city => (
-                                    <option key={city.id} value={city.name}>
-                                        {city.name} - {city.delivery_cost} DH
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="relative space-y-2">
+                                {/* Search Input */}
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={formData.city}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, city: e.target.value });
+                                            setShowCityDropdown(true);
+                                        }}
+                                        onFocus={() => setShowCityDropdown(true)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="Search and select city..."
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCityDropdown(!showCityDropdown)}
+                                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                                    >
+                                        <svg className={`w-5 h-5 transition-transform ${showCityDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                {/* Dropdown List */}
+                                {showCityDropdown && (
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                        {filteredCityOptions.length > 0 ? (
+                                            <>
+                                                <div className="p-2 sticky top-0 bg-gray-50 border-b">
+                                                    <p className="text-xs text-gray-600 font-medium">
+                                                        {filteredCityOptions.length} city{filteredCityOptions.length !== 1 ? 'ies' : ''} found
+                                                    </p>
+                                                </div>
+                                                {filteredCityOptions.map((city) => (
+                                                    <button
+                                                        key={city.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({
+                                                                ...formData,
+                                                                city: city.name,
+                                                                shipping_cost: city.delivery_cost !== null ? city.delivery_cost : formData.shipping_cost
+                                                            });
+                                                            setShowCityDropdown(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b border-gray-100 transition-colors ${
+                                                            formData.city === city.name ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className="text-sm font-medium text-gray-900">{city.name}</p>
+                                                                <div className="flex gap-2 mt-0.5">
+                                                                    {city.delivery_cost !== null && (
+                                                                        <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
+                                                                            {city.delivery_cost} DH
+                                                                        </span>
+                                                                    )}
+                                                                    {city.isCurrentOrderCity && (
+                                                                        <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                                                                            From Shopify
+                                                                        </span>
+                                                                    )}
+                                                                    {!city.is_active && (
+                                                                        <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                                                                            Inactive
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {formData.city === city.name && (
+                                                                <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </>
+                                        ) : (
+                                            <div className="p-4 text-center text-gray-500">
+                                                <p className="text-sm">No cities found matching "{formData.city}"</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Close dropdown when clicking outside */}
+                                {showCityDropdown && (
+                                    <div 
+                                        className="fixed inset-0 z-40" 
+                                        onClick={() => setShowCityDropdown(false)}
+                                    />
+                                )}
+
+                                {/* Shopify City Warning */}
+                                {formData.city && !cities.find(c => c.name === formData.city) && (
+                                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                        <p className="text-xs text-yellow-800">
+                                            <strong>Note:</strong> The city "<strong>{formData.city}</strong>" from Shopify is not in the cities list. 
+                                            You can search and select a matching city above or keep this value.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                             {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city[0]}</p>}
                         </div>
 
@@ -382,11 +498,17 @@ export default function OrderForm() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Person</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Delivery Person
+                                        {formData.delivery_integration_id && <span className="text-xs text-gray-500"> (disabled - delivery company selected)</span>}
+                                    </label>
                                     <select
                                         value={formData.delivery_person_id}
                                         onChange={(e) => setFormData({ ...formData, delivery_person_id: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        disabled={!!formData.delivery_integration_id}
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                            formData.delivery_integration_id ? 'bg-gray-100 cursor-not-allowed' : ''
+                                        }`}
                                     >
                                         <option value="">Select Delivery Person</option>
                                         {deliveryPersons.map(person => (
@@ -413,11 +535,17 @@ export default function OrderForm() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Company</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Delivery Company
+                                {formData.delivery_person_id && <span className="text-xs text-gray-500"> (disabled - delivery person selected)</span>}
+                            </label>
                             <select
                                 value={formData.delivery_integration_id}
                                 onChange={(e) => setFormData({ ...formData, delivery_integration_id: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                disabled={!!formData.delivery_person_id}
+                                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                    formData.delivery_person_id ? 'bg-gray-100 cursor-not-allowed' : ''
+                                }`}
                             >
                                 <option value="">Select Delivery Company</option>
                                 {deliveryCompanies.map((company) => (

@@ -42,6 +42,21 @@ export default function Dashboard() {
         );
     }
 
+    const toRateNumber = (value) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    const formatRate = (value) => `${toRateNumber(value).toFixed(2)}%`;
+    const rateTooltipFormatter = (value) => `${toRateNumber(value).toFixed(2)}%`;
+    const chartTooltipStyle = {
+        backgroundColor: '#fff',
+        border: 'none',
+        borderRadius: '12px',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+        padding: '12px 16px',
+    };
+
     const statCards = [
         {
             title: 'Total Revenue',
@@ -74,6 +89,26 @@ export default function Dashboard() {
             change: '5 new',
             changeType: 'neutral'
         },
+        {
+            title: 'Confirmation Rate',
+            value: formatRate(stats?.orders?.confirmation_rate ?? 0),
+            icon: CheckCircle,
+            gradient: 'from-cyan-500 to-sky-600',
+            bgGradient: 'from-cyan-50 to-sky-50',
+            iconBg: 'bg-cyan-500',
+            change: 'Tracked',
+            changeType: 'neutral'
+        },
+        {
+            title: 'Delivery Rate',
+            value: formatRate(stats?.orders?.delivery_rate ?? 0),
+            icon: Package,
+            gradient: 'from-emerald-500 to-lime-600',
+            bgGradient: 'from-emerald-50 to-lime-50',
+            iconBg: 'bg-emerald-500',
+            change: 'Tracked',
+            changeType: 'neutral'
+        },
         ...(!isVendor ? [{
             title: 'Low Stock Items',
             value: stats?.low_stock_products?.length || 0,
@@ -96,6 +131,10 @@ export default function Dashboard() {
         };
         return colors[status] || 'bg-slate-100 text-slate-700 border-slate-200';
     };
+
+    const chartData = stats?.charts || [];
+    const confirmationRate = stats?.orders?.confirmation_rate ?? 0;
+    const deliveryRate = stats?.orders?.delivery_rate ?? 0;
 
     return (
         <div className="space-y-8">
@@ -123,7 +162,7 @@ export default function Dashboard() {
             </div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
                 {statCards.map((stat, index) => (
                     <div 
                         key={index} 
@@ -174,7 +213,7 @@ export default function Dashboard() {
                         </div>
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
-                        <AreaChart data={stats?.charts || []}>
+                        <AreaChart data={chartData}>
                             <defs>
                                 <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -184,15 +223,7 @@ export default function Dashboard() {
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                             <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                             <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                            <Tooltip 
-                                contentStyle={{ 
-                                    backgroundColor: '#fff', 
-                                    border: 'none', 
-                                    borderRadius: '12px', 
-                                    boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
-                                    padding: '12px 16px'
-                                }} 
-                            />
+                            <Tooltip contentStyle={chartTooltipStyle} />
                             <Area type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={3} fill="url(#salesGradient)" />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -213,7 +244,7 @@ export default function Dashboard() {
                         </div>
                     </div>
                     <ResponsiveContainer width="100%" height={320}>
-                        <BarChart data={stats?.charts || []} barSize={40}>
+                        <BarChart data={chartData} barSize={40}>
                             <defs>
                                 <linearGradient id="ordersGradient" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#10b981" stopOpacity={1}/>
@@ -223,17 +254,67 @@ export default function Dashboard() {
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                             <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                             <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                            <Tooltip 
-                                contentStyle={{ 
-                                    backgroundColor: '#fff', 
-                                    border: 'none', 
-                                    borderRadius: '12px', 
-                                    boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
-                                    padding: '12px 16px'
-                                }} 
-                            />
+                            <Tooltip contentStyle={chartTooltipStyle} />
                             <Bar dataKey="orders" fill="url(#ordersGradient)" radius={[8, 8, 0, 0]} />
                         </BarChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Confirmation Rate Chart */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6 hover:shadow-lg transition-shadow">
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+                        <div>
+                            <h3 className="text-lg font-semibold text-slate-800">Confirmation Rate</h3>
+                            <p className="text-sm text-slate-500 mt-1">Percent of orders that reached a confirmed status for the selected period.</p>
+                        </div>
+                        <div className="flex items-center space-x-4 text-right">
+                            <div>
+                                <p className="text-lg font-semibold text-slate-800">{formatRate(confirmationRate)}</p>
+                                <p className="text-xs uppercase tracking-wide text-slate-400">Current</p>
+                            </div>
+                            <span className="flex items-center space-x-1.5 text-sm text-slate-600">
+                                <span className="w-3 h-3 rounded-full bg-cyan-500"></span>
+                                <span>Confirmation</span>
+                            </span>
+                        </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={320}>
+                        <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `${value}%`} domain={[0, 100]} />
+                            <Tooltip contentStyle={chartTooltipStyle} formatter={rateTooltipFormatter} />
+                            <Line type="monotone" dataKey="confirmationRate" stroke="#0ea5e9" strokeWidth={3} dot={{ r: 4, strokeWidth: 3, fill: '#0ea5e9' }} activeDot={{ r: 6 }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Delivery Rate Chart */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6 hover:shadow-lg transition-shadow">
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+                        <div>
+                            <h3 className="text-lg font-semibold text-slate-800">Delivery Rate</h3>
+                            <p className="text-sm text-slate-500 mt-1">Percentage of orders successfully delivered during the chosen timeline.</p>
+                        </div>
+                        <div className="flex items-center space-x-4 text-right">
+                            <div>
+                                <p className="text-lg font-semibold text-slate-800">{formatRate(deliveryRate)}</p>
+                                <p className="text-xs uppercase tracking-wide text-slate-400">Current</p>
+                            </div>
+                            <span className="flex items-center space-x-1.5 text-sm text-slate-600">
+                                <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+                                <span>Delivery</span>
+                            </span>
+                        </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={320}>
+                        <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(value) => `${value}%`} domain={[0, 100]} />
+                            <Tooltip contentStyle={chartTooltipStyle} formatter={rateTooltipFormatter} />
+                            <Line type="monotone" dataKey="deliveryRate" stroke="#16a34a" strokeWidth={3} dot={{ r: 4, strokeWidth: 3, fill: '#16a34a' }} activeDot={{ r: 6 }} />
+                        </LineChart>
                     </ResponsiveContainer>
                 </div>
             </div>

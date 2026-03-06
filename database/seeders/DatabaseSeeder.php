@@ -234,6 +234,7 @@ class DatabaseSeeder extends Seeder
         // Call other seeders
         $this->call([
             DefaultApiIntegrationsSeeder::class,
+            CitiesSeeder::class,
         ]);
     }
 }

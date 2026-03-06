@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { X, Truck, AlertCircle, MapPin } from 'lucide-react';
 import api from '../utils/api';
 
-export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, orderId, preferredCompanyId = null }) {
+export default function DeliveryCompanyModal({
+    isOpen,
+    onClose,
+    onConfirm,
+    orderId,
+    preferredCompanyId = null,
+    preferredCity = '',
+}) {
     const [step, setStep] = useState(1); // 1 = select company, 2 = select city
     const [deliveryCompanies, setDeliveryCompanies] = useState([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState(null);
@@ -21,7 +28,7 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
             fetchDeliveryCompanies();
             setStep(selectedCompany ? 2 : 1);
             setSelectedCompanyId(selectedCompany);
-            setSelectedCity('');
+            setSelectedCity(preferredCity || '');
             setCities([]);
             setCitySearch('');
             setError(null);
@@ -30,7 +37,7 @@ export default function DeliveryCompanyModal({ isOpen, onClose, onConfirm, order
                 fetchCities(selectedCompany);
             }
         }
-    }, [isOpen, preferredCompanyId]);
+    }, [isOpen, preferredCompanyId, preferredCity]);
 
     const fetchDeliveryCompanies = async () => {
         try {

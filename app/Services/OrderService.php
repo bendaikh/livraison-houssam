@@ -45,6 +45,7 @@ class OrderService
                 'status' => $data['status'] ?? 'pending',
                 'source' => $data['source'] ?? 'manual',
                 'external_order_id' => $data['external_order_id'] ?? null,
+                'shopify_name' => $data['shopify_name'] ?? null,
                 'subtotal' => $subtotal,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,
                 'tax' => $data['tax'] ?? 0,
@@ -111,6 +112,7 @@ class OrderService
                 'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
                 'source' => $data['source'] ?? 'manual',
+                'shopify_name' => $data['shopify_name'] ?? null,
                 'subtotal' => $subtotal,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,
                 'tax' => $data['tax'] ?? 0,
@@ -349,6 +351,7 @@ class OrderService
         
         $order->update([
             'delivery_integration_id' => $deliveryIntegrationId,
+            'city' => $deliveryCity ?: $order->city,
             'delivery_tracking_code' => $trackingCode,
             'sent_to_delivery_at' => now(),
             'delivery_status' => 'sent',
@@ -439,13 +442,40 @@ class OrderService
         }
     }
 
-    public function assignDeliveryAgent(int $orderId, int $deliveryAgentId)
+    public function assignDeliveryAgent(int $orderId, array $attributes)
     {
         $order = Order::findOrFail($orderId);
-        $order->update(['delivery_agent_id' => $deliveryAgentId]);
+        $updatable = [];
 
-        $this->addHistory($orderId, $order->status, "Delivery agent assigned");
+        if (array_key_exists('delivery_agent_id', $attributes)) {
+            $updatable['delivery_agent_id'] = $attributes['delivery_agent_id'];
+        }
+        if (array_key_exists('delivery_person_id', $attributes)) {
+            $updatable['delivery_person_id'] = $attributes['delivery_person_id'];
+        }
+        if (array_key_exists('delivery_integration_id', $attributes)) {
+            $updatable['delivery_integration_id'] = $attributes['delivery_integration_id'];
+        }
+        if (array_key_exists('delivery_city', $attributes)) {
+            $updatable['city'] = $attributes['delivery_city'];
+        }
 
-        return $order;
+        // Keep assignment mutually exclusive:
+        // company assignment clears delivery people, person assignment clears company assignment.
+        if (array_key_exists('delivery_integration_id', $attributes) && $attributes['delivery_integration_id']) {
+            $updatable['delivery_person_id'] = null;
+            $updatable['delivery_agent_id'] = null;
+        }
+
+        if (array_key_exists('delivery_person_id', $attributes) && $attributes['delivery_person_id']) {
+            $updatable['delivery_integration_id'] = null;
+        }
+
+        if (!empty($updatable)) {
+            $order->update($updatable);
+            $this->addHistory($orderId, $order->status, 'Delivery assignment updated');
+        }
+
+        return $order->fresh(['deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'deliveryIntegration']);
     }
 }

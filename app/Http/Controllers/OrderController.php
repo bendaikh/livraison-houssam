@@ -28,6 +28,7 @@ class OrderController extends Controller
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
                 $q->where('order_number', 'like', '%' . $request->search . '%')
+                  ->orWhere('external_order_id', 'like', '%' . $request->search . '%')
                   ->orWhereHas('client', function ($q) use ($request) {
                       $q->where('name', 'like', '%' . $request->search . '%')
                         ->orWhere('phone', 'like', '%' . $request->search . '%');
@@ -222,12 +223,33 @@ class OrderController extends Controller
     public function assignDeliveryAgent(Request $request, Order $order)
     {
         $validated = $request->validate([
-            'delivery_agent_id' => 'required|exists:users,id',
+            'delivery_agent_id' => 'nullable|exists:users,id',
+            'delivery_person_id' => 'nullable|exists:users,id',
+            'delivery_integration_id' => 'nullable|exists:api_integrations,id',
+            'delivery_city' => 'required_with:delivery_integration_id|string|max:255',
         ]);
 
-        $order = $this->orderService->assignDeliveryAgent($order->id, $validated['delivery_agent_id']);
+        $payload = [];
+        if ($request->exists('delivery_agent_id')) {
+            $payload['delivery_agent_id'] = $validated['delivery_agent_id'];
+        }
+        if ($request->exists('delivery_person_id')) {
+            $payload['delivery_person_id'] = $validated['delivery_person_id'];
+        }
+        if ($request->exists('delivery_integration_id')) {
+            $payload['delivery_integration_id'] = $validated['delivery_integration_id'];
+        }
+        if ($request->has('delivery_city')) {
+            $payload['delivery_city'] = $validated['delivery_city'];
+        }
 
-        return response()->json($order->load(['deliveryAgent']));
+        if (empty($payload)) {
+            return response()->json(['message' => 'No assignment data provided'], 422);
+        }
+
+        $order = $this->orderService->assignDeliveryAgent($order->id, $payload);
+
+        return response()->json($order->load(['deliveryAgent', 'deliveryPerson', 'deliveryIntegration']));
     }
 
     public function destroy(Order $order)

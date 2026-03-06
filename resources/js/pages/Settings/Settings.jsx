@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Save, Building2, Globe, DollarSign, ShoppingCart, 
     Bell, Percent, AlertCircle, CheckCircle2, Loader2,
-    Settings as SettingsIcon, Mail, Phone, MapPin, FileText, MapPinned, Plus, Trash2, Edit2
+    Settings as SettingsIcon, Mail, Phone, MapPin, FileText, MapPinned, Plus, Trash2, Edit2, RefreshCw, Search
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -15,9 +15,15 @@ export default function Settings() {
     // Cities management state
     const [cities, setCities] = useState([]);
     const [loadingCities, setLoadingCities] = useState(false);
+    const [syncingCities, setSyncingCities] = useState(false);
     const [editingCity, setEditingCity] = useState(null);
-    const [cityForm, setCityForm] = useState({ name: '', delivery_cost: 0, is_active: true });
+    const [cityForm, setCityForm] = useState({ name: '', delivery_cost: '', is_active: true });
     const [showCityModal, setShowCityModal] = useState(false);
+    const [citySearch, setCitySearch] = useState('');
+    const normalizedCitySearch = citySearch.trim().toLowerCase();
+    const filteredCities = normalizedCitySearch
+        ? cities.filter((city) => city.name.toLowerCase().includes(normalizedCitySearch))
+        : cities;
     
     const [settings, setSettings] = useState({
         // General Settings
@@ -63,7 +69,7 @@ export default function Settings() {
 
     useEffect(() => {
         fetchSettings();
-        fetchCities();
+        fetchCities({ syncSources: true });
     }, []);
 
     const fetchSettings = async () => {
@@ -79,9 +85,18 @@ export default function Settings() {
         }
     };
 
-    const fetchCities = async () => {
+    const fetchCities = async ({ syncSources = false } = {}) => {
         try {
             setLoadingCities(true);
+
+            if (syncSources) {
+                try {
+                    await api.post('/cities/sync-sources');
+                } catch (syncError) {
+                    console.error('Initial cities sync warning:', syncError);
+                }
+            }
+
             const response = await api.get('/cities');
             setCities(response.data);
         } catch (error) {
@@ -95,15 +110,21 @@ export default function Settings() {
         e.preventDefault();
         try {
             setSaving(true);
+
+            const payload = {
+                ...cityForm,
+                delivery_cost: cityForm.delivery_cost === '' ? null : parseFloat(cityForm.delivery_cost),
+            };
+
             if (editingCity) {
-                await api.put(`/cities/${editingCity.id}`, cityForm);
+                await api.put(`/cities/${editingCity.id}`, payload);
                 setMessage({ type: 'success', text: 'City updated successfully!' });
             } else {
-                await api.post('/cities', cityForm);
+                await api.post('/cities', payload);
                 setMessage({ type: 'success', text: 'City added successfully!' });
             }
             setShowCityModal(false);
-            setCityForm({ name: '', delivery_cost: 0, is_active: true });
+            setCityForm({ name: '', delivery_cost: '', is_active: true });
             setEditingCity(null);
             fetchCities();
             setTimeout(() => setMessage(null), 3000);
@@ -117,7 +138,11 @@ export default function Settings() {
 
     const handleEditCity = (city) => {
         setEditingCity(city);
-        setCityForm({ name: city.name, delivery_cost: city.delivery_cost, is_active: city.is_active });
+        setCityForm({
+            name: city.name,
+            delivery_cost: city.delivery_cost ?? '',
+            is_active: city.is_active,
+        });
         setShowCityModal(true);
     };
 
@@ -131,6 +156,31 @@ export default function Settings() {
         } catch (error) {
             console.error('Error deleting city:', error);
             setMessage({ type: 'error', text: 'Failed to delete city' });
+        }
+    };
+
+    const handleSyncCities = async () => {
+        try {
+            setSyncingCities(true);
+            const response = await api.post('/cities/sync-sources');
+            const synced = response.data?.synced;
+            await fetchCities();
+
+            if (synced) {
+                setMessage({
+                    type: 'success',
+                    text: `Cities synced. Added ${synced.created}, kept ${synced.already_existing} existing.`,
+                });
+            } else {
+                setMessage({ type: 'success', text: 'Cities synchronized successfully!' });
+            }
+
+            setTimeout(() => setMessage(null), 4000);
+        } catch (error) {
+            console.error('Error syncing cities:', error);
+            setMessage({ type: 'error', text: 'Failed to sync cities from BMDelivery/Tawsilex sources' });
+        } finally {
+            setSyncingCities(false);
         }
     };
 
@@ -591,81 +641,137 @@ export default function Settings() {
                         {/* Cities Management */}
                         {activeTab === 'cities' && (
                             <div className="space-y-6">
-                                <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="p-3 bg-teal-100 rounded-xl">
-                                            <MapPinned className="text-teal-600" size={24} />
+                                <div className="pb-4 border-b border-gray-200">
+                                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="p-3 bg-teal-100 rounded-xl">
+                                                <MapPinned className="text-teal-600" size={24} />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-bold text-gray-900">Cities Management</h2>
+                                                <p className="text-sm text-gray-600">Auto-sync cities from BMDelivery API + Tawsilex list, then edit manually if needed.</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">Cities Management</h2>
-                                            <p className="text-sm text-gray-600">Manage cities and delivery costs</p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleSyncCities}
+                                                disabled={syncingCities}
+                                                className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <RefreshCw size={18} className={syncingCities ? 'animate-spin' : ''} />
+                                                <span>{syncingCities ? 'Syncing...' : 'Sync BM + Tawsilex Cities'}</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCityForm({ name: '', delivery_cost: '', is_active: true });
+                                                    setEditingCity(null);
+                                                    setShowCityModal(true);
+                                                }}
+                                                className="flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-4 py-2 rounded-lg hover:from-teal-700 hover:to-cyan-700 transition-all"
+                                            >
+                                                <Plus size={18} />
+                                                <span>Add City</span>
+                                            </button>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => {
-                                            setCityForm({ name: '', delivery_cost: 0, is_active: true });
-                                            setEditingCity(null);
-                                            setShowCityModal(true);
-                                        }}
-                                        className="flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-4 py-2 rounded-lg hover:from-teal-700 hover:to-cyan-700 transition-all"
-                                    >
-                                        <Plus size={18} />
-                                        <span>Add City</span>
-                                    </button>
                                 </div>
 
                                 {loadingCities ? (
                                     <div className="flex items-center justify-center py-12">
                                         <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
                                     </div>
-                                ) : cities.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <MapPinned className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                                        <p className="text-gray-600">No cities added yet</p>
-                                        <p className="text-sm text-gray-500 mt-1">Click "Add City" to get started</p>
-                                    </div>
                                 ) : (
-                                    <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
-                                        <table className="w-full">
-                                            <thead className="bg-gray-50 border-b border-gray-200">
-                                                <tr>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City Name</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery Cost</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-200">
-                                                {cities.map((city) => (
-                                                    <tr key={city.id} className="hover:bg-gray-50">
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{city.name}</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{city.delivery_cost} DH</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap">
-                                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                                                city.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                                            }`}>
-                                                                {city.is_active ? 'Active' : 'Inactive'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                            <button
-                                                                onClick={() => handleEditCity(city)}
-                                                                className="text-blue-600 hover:text-blue-900 mr-3"
-                                                            >
-                                                                <Edit2 size={16} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteCity(city.id)}
-                                                                className="text-red-600 hover:text-red-900"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    <>
+                                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                            <div className="relative w-full md:w-80">
+                                                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
+                                                    <Search size={16} />
+                                                </div>
+                                                <input
+                                                    type="search"
+                                                    value={citySearch}
+                                                    onChange={(e) => setCitySearch(e.target.value)}
+                                                    placeholder="Search cities..."
+                                                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                            {citySearch && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCitySearch('')}
+                                                    className="text-sm text-gray-600 hover:text-gray-900"
+                                                >
+                                                    Clear search
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {!cities.length ? (
+                                            <div className="text-center py-12">
+                                                <MapPinned className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                                                <p className="text-gray-600">No cities added yet</p>
+                                                <p className="text-sm text-gray-500 mt-1">Click "Add City" to get started</p>
+                                            </div>
+                                        ) : filteredCities.length === 0 ? (
+                                            <div className="text-center py-12 space-y-1 text-sm text-gray-500">
+                                                <p>No cities match "{citySearch}".</p>
+                                                <p className="text-gray-400">Clear the search to return to the full list.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+                                                <table className="w-full">
+                                                    <thead className="bg-gray-50 border-b border-gray-200">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City Name</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery Cost</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-200">
+                                                        {filteredCities.map((city) => (
+                                                            <tr key={city.id} className="hover:bg-gray-50">
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{city.name}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                                    {city.delivery_cost !== null && city.delivery_cost !== undefined ? `${city.delivery_cost} DH` : '-'}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                                                        city.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                                                    }`}
+                                                                    >
+                                                                        {city.is_active ? 'Active' : 'Inactive'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                    <div className="flex items-center justify-end gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleEditCity(city)}
+                                                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-900 px-3 py-1 border border-blue-100 rounded-lg"
+                                                                        >
+                                                                            <Edit2 size={14} />
+                                                                            <span>Edit</span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleDeleteCity(city.id)}
+                                                                            className="flex items-center gap-1 text-red-600 hover:text-red-900 px-3 py-1 border border-red-100 rounded-lg"
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                            <span>Delete</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
 
                             </div>
@@ -859,18 +965,18 @@ export default function Settings() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Delivery Cost *
+                                            Delivery Cost
                                         </label>
                                         <input
                                             type="number"
                                             step="0.01"
                                             value={cityForm.delivery_cost}
-                                            onChange={(e) => setCityForm({ ...cityForm, delivery_cost: parseFloat(e.target.value) })}
+                                            onChange={(e) => setCityForm({ ...cityForm, delivery_cost: e.target.value })}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                            required
                                             min="0"
-                                            placeholder="0.00"
+                                            placeholder="Optional (default 0)"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">Keep empty if you use provider-specific pricing.</p>
                                     </div>
                                     <div>
                                         <label className="flex items-center space-x-2">
@@ -889,7 +995,7 @@ export default function Settings() {
                                             onClick={() => {
                                                 setShowCityModal(false);
                                                 setEditingCity(null);
-                                                setCityForm({ name: '', delivery_cost: 0, is_active: true });
+                                                setCityForm({ name: '', delivery_cost: '', is_active: true });
                                             }}
                                             className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                                         >

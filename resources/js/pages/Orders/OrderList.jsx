@@ -3,19 +3,21 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, Edit, MessageCircle, RefreshCw } from 'lucide-react';
+import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X } from 'lucide-react';
 import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
 
 export default function OrderList({ status = '' }) {
     const { formatCurrency } = useSettings();
-    const { user } = useAuth();
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [updatingStatus, setUpdatingStatus] = useState(null);
+    const [deletingOrderId, setDeletingOrderId] = useState(null);
     const [isWebhookOnly, setIsWebhookOnly] = useState(false);
     const [showDeliveryModal, setShowDeliveryModal] = useState(false);
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
+    const [showAgentModal, setShowAgentModal] = useState(false);
+    const [selectedOrderForAgent, setSelectedOrderForAgent] = useState(null);
     const [pagination, setPagination] = useState({
         current_page: 1,
         last_page: 1,
@@ -33,14 +35,13 @@ export default function OrderList({ status = '' }) {
     });
     const [filters, setFilters] = useState({
         search: '',
-        status: status, // Set initial status from prop
+        status: status,
         source: '',
         date_from: '',
         date_to: '',
         page: 1
     });
     
-    // Update filters when status prop changes (when navigating between pages)
     useEffect(() => {
         setFilters(prev => ({ ...prev, status: status, page: 1 }));
     }, [status]);
@@ -66,7 +67,6 @@ export default function OrderList({ status = '' }) {
             const fetchedOrders = response.data.data;
             setOrders(fetchedOrders);
 
-            // Update pagination info
             setPagination({
                 current_page: response.data.current_page,
                 last_page: response.data.last_page,
@@ -76,7 +76,6 @@ export default function OrderList({ status = '' }) {
                 to: response.data.to
             });
 
-            // Calculate statistics from all orders (not just current page)
             const orderStats = {
                 total: response.data.total,
                 manual: fetchedOrders.filter(o => o.source === 'manual').length,
@@ -96,7 +95,6 @@ export default function OrderList({ status = '' }) {
         try {
             const response = await api.get('/api-integrations');
             const shopifyInt = response.data.find(int => int.type === 'shopify' && int.is_active);
-            
             if (shopifyInt) {
                 const hasWebhook = shopifyInt.credentials?.webhook_secret;
                 setIsWebhookOnly(hasWebhook);
@@ -123,7 +121,7 @@ export default function OrderList({ status = '' }) {
         return colors[status] || 'bg-gray-100 text-gray-800';
     };
 
-    const getSourceBadgeColor = (source) => {
+    const getSourceColor = (source) => {
         const colors = {
             manual: 'bg-gray-100 text-gray-800',
             shopify: 'bg-green-100 text-green-800',
@@ -143,35 +141,61 @@ export default function OrderList({ status = '' }) {
 
     const formatDeliveryStatus = (status) => {
         if (!status) return '';
-
-        // Backward compatibility for records created during the temporary label change.
-        if (status === 'sent_to_pickup') {
-            return 'sent';
-        }
-
+        if (status === 'sent_to_pickup') return 'sent';
         return status.replace(/_/g, ' ');
     };
 
-    const handleStatusChange = async (orderId, newStatus) => {
-        // Find the current order
-        const currentOrder = orders.find(o => o.id === orderId);
-        
-        // If changing to confirmed AND order doesn't already have a tracking code, show delivery company modal
-        if (newStatus === 'confirmed' && !currentOrder?.delivery_tracking_code) {
-            setPendingStatusChange({
-                orderId,
-                newStatus,
-                preferredCompanyId: currentOrder?.delivery_integration_id || null,
-            });
-            setShowDeliveryModal(true);
-            return;
-        }
+    const getAgentLabel = (order) => {
+        return order.delivery_person?.name || order.delivery_agent?.name || order.confirmation_agent?.name || '';
+    };
 
-        // For other status changes, update directly
+    const getDeliveryCompanyLabel = (order) => {
+        const integration = order.delivery_integration;
+        if (!integration) return '';
+
+        if (integration.name) return integration.name;
+        if (integration.provider) return integration.provider.replace(/_/g, ' ');
+        return '';
+    };
+
+    const handleStatusChange = async (orderId, newStatus) => {
+        const currentOrder = orders.find(o => o.id === orderId);
+
         try {
+            if (newStatus === 'confirmed' && !currentOrder?.delivery_tracking_code) {
+                const assignedCompanyId = currentOrder?.delivery_integration_id || null;
+                const assignedCity = currentOrder?.delivery_city || currentOrder?.city || '';
+
+                if (assignedCompanyId && assignedCity) {
+                    setUpdatingStatus(orderId);
+                    const response = await api.patch(`/orders/${orderId}/status`, {
+                        status: newStatus,
+                        delivery_integration_id: assignedCompanyId,
+                        delivery_city: assignedCity
+                    });
+
+                    setOrders(orders.map(order =>
+                        order.id === orderId ? { ...order, ...response.data } : order
+                    ));
+
+                    if (response.data.delivery_error) {
+                        alert(`Order confirmed but failed to send to delivery company:\n\n${response.data.delivery_error}\n\nPlease check the client's city and try again.`);
+                    }
+                    return;
+                }
+
+                setPendingStatusChange({
+                    orderId,
+                    newStatus,
+                    preferredCompanyId: assignedCompanyId,
+                    preferredCity: assignedCity,
+                });
+                setShowDeliveryModal(true);
+                return;
+            }
+
             setUpdatingStatus(orderId);
             await api.patch(`/orders/${orderId}/status`, { status: newStatus });
-            // Update local state
             setOrders(orders.map(order => 
                 order.id === orderId ? { ...order, status: newStatus } : order
             ));
@@ -196,7 +220,6 @@ export default function OrderList({ status = '' }) {
                 delivery_city: deliveryCity
             });
             
-            // Update local state with the response data
             setOrders(orders.map(order => 
                 order.id === orderId ? { ...order, ...response.data } : order
             ));
@@ -204,25 +227,51 @@ export default function OrderList({ status = '' }) {
             setShowDeliveryModal(false);
             setPendingStatusChange(null);
             
-            // Show warning if there was a delivery error (order was confirmed but delivery failed)
             if (response.data.delivery_error) {
                 alert(`Order confirmed but failed to send to delivery company:\n\n${response.data.delivery_error}\n\nPlease check the client's city and try again.`);
             }
         } catch (error) {
             console.error('Error updating order status:', error);
-            throw error; // Re-throw to be handled by the modal
+            throw error;
         } finally {
             setUpdatingStatus(null);
         }
     };
 
+    const handleDeleteOrder = async (orderId, orderNumber) => {
+        if (!window.confirm(`Delete order ${orderNumber}? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            setDeletingOrderId(orderId);
+            await api.delete(`/orders/${orderId}`);
+            await fetchOrders();
+        } catch (error) {
+            console.error('Error deleting order:', error);
+            alert('Failed to delete order');
+        } finally {
+            setDeletingOrderId(null);
+        }
+    };
+
+    const handleAgentClick = (order) => {
+        setSelectedOrderForAgent(order);
+        setShowAgentModal(true);
+    };
+
+    const closeAgentModal = () => {
+        setShowAgentModal(false);
+        setSelectedOrderForAgent(null);
+    };
+
     const getPageTitle = () => {
-        if (!status) return 'Orders Management';
+        if (!status) return 'Orders';
         return `${status.charAt(0).toUpperCase() + status.slice(1)} Orders`;
     };
 
     return (
-        <div className="space-y-6">
+        <div className="min-h-screen bg-gray-50 p-3">
             <DeliveryCompanyModal
                 isOpen={showDeliveryModal}
                 onClose={() => {
@@ -232,423 +281,660 @@ export default function OrderList({ status = '' }) {
                 onConfirm={handleDeliveryCompanyConfirm}
                 orderId={pendingStatusChange?.orderId}
                 preferredCompanyId={pendingStatusChange?.preferredCompanyId}
+                preferredCity={pendingStatusChange?.preferredCity}
             />
 
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-900">{getPageTitle()}</h1>
+            {/* Header */}
+            <div className="flex justify-between items-center mb-3">
+                <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
                 <button
                     onClick={() => navigate('/orders/create')}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
                     Create Order
                 </button>
             </div>
 
-            {/* Shopify Integration Info Banner */}
-            {isWebhookOnly && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                        <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {/* Shopify Banner */}
+            {(isWebhookOnly || !isWebhookOnly) && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-3 text-xs">
+                    <div className="flex gap-2">
+                        <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <div className="flex-1">
-                            <h3 className="text-sm font-semibold text-blue-900 mb-1">Shopify Integration Active</h3>
-                            <p className="text-sm text-blue-700">
-                                Orders from your Shopify store are <strong>automatically imported in real-time</strong> via webhooks. 
-                                Orders appear here immediately when created in Shopify.
+                        <div>
+                            <p className="font-semibold text-blue-900 mb-0.5">
+                                {isWebhookOnly ? 'Shopify Integration Active' : 'Connect Shopify'}
+                            </p>
+                            <p className="text-blue-700">
+                                {isWebhookOnly 
+                                    ? 'Orders are imported automatically via webhooks.'
+                                    : `Setup Shopify integration in `}
+                                {!isWebhookOnly && (
+                                    <Link to="/api-integrations" className="underline font-semibold">API Integrations</Link>
+                                )}
                             </p>
                         </div>
                     </div>
                 </div>
             )}
 
-            {!isWebhookOnly && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                        <svg className="w-6 h-6 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div className="flex-1">
-                            <h3 className="text-sm font-semibold text-blue-900 mb-1">Connect Shopify to Import Orders</h3>
-                            <p className="text-sm text-blue-700">
-                                To automatically import orders from your Shopify store, set up the Shopify integration in the{' '}
-                                <Link to="/api-integrations" className="underline font-medium">API Integrations</Link> section.
-                            </p>
-                        </div>
-                    </div>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: '', page: 1 })}>
+                    <p className="text-xs text-gray-600 mb-0.5">Total</p>
+                    <p className="text-lg font-bold text-gray-900">{stats.total}</p>
                 </div>
-            )}
-
-            {/* Order Statistics */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Total Orders</p>
-                            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
-                        </div>
-                        <div className="p-3 bg-gray-100 rounded-lg">
-                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        </div>
-                    </div>
+                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'manual', page: 1 })}>
+                    <p className="text-xs text-gray-600 mb-0.5">Manual</p>
+                    <p className="text-lg font-bold">{stats.manual}</p>
                 </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'manual' })}>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Manual</p>
-                            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.manual}</p>
-                        </div>
-                        <div className="p-3 bg-gray-100 rounded-lg">
-                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                        </div>
-                    </div>
+                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'shopify', page: 1 })}>
+                    <p className="text-xs text-green-600 mb-0.5">Shopify</p>
+                    <p className="text-lg font-bold text-green-900">{stats.shopify}</p>
                 </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'shopify' })}>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-green-600">Shopify</p>
-                            <p className="text-2xl font-bold text-green-900 mt-1">{stats.shopify}</p>
-                        </div>
-                        <div className="p-3 bg-green-100 rounded-lg">
-                            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                        </div>
-                    </div>
+                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'delivery_company', page: 1 })}>
+                    <p className="text-xs text-blue-600 mb-0.5">Delivery</p>
+                    <p className="text-lg font-bold text-blue-900">{stats.delivery_company}</p>
                 </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'delivery_company' })}>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-blue-600">Delivery</p>
-                            <p className="text-2xl font-bold text-blue-900 mt-1">{stats.delivery_company}</p>
-                        </div>
-                        <div className="p-3 bg-blue-100 rounded-lg">
-                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilters({ ...filters, source: 'marketplace' })}>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-purple-600">Marketplace</p>
-                            <p className="text-2xl font-bold text-purple-900 mt-1">{stats.marketplace}</p>
-                        </div>
-                        <div className="p-3 bg-purple-100 rounded-lg">
-                            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                        </div>
-                    </div>
+                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'marketplace', page: 1 })}>
+                    <p className="text-xs text-purple-600 mb-0.5">Marketplace</p>
+                    <p className="text-lg font-bold text-purple-900">{stats.marketplace}</p>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div>
-                        <input
-                            type="text"
-                            placeholder="Search by order number, client..."
-                            value={filters.search}
-                            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                    <div>
-                        <select
-                            value={filters.status}
-                            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                            <option value="">All Status</option>
-                            <option value="pending">Pending</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="shipped">Shipped</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
-                    <div>
-                        <select
-                            value={filters.source}
-                            onChange={(e) => setFilters({ ...filters, source: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                            <option value="">All Sources</option>
-                            <option value="manual">Manual</option>
-                            <option value="shopify">Shopify</option>
-                            <option value="delivery_company">Delivery Company</option>
-                            <option value="marketplace">Marketplace</option>
-                        </select>
-                    </div>
-                    <div>
-                        <input
-                            type="date"
-                            value={filters.date_from}
-                            onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                    <div>
-                        <input
-                            type="date"
-                            value={filters.date_to}
-                            onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
+            <div className="bg-white rounded p-2 shadow-sm mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-1.5">
+                    <input
+                        type="text"
+                        placeholder="Search by order ID, Shopify ID, client..."
+                        value={filters.search}
+                        onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    />
+                    <select
+                        value={filters.status}
+                        onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    >
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <select
+                        value={filters.source}
+                        onChange={(e) => setFilters({ ...filters, source: e.target.value })}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    >
+                        <option value="">All Sources</option>
+                        <option value="manual">Manual</option>
+                        <option value="shopify">Shopify</option>
+                        <option value="delivery_company">Delivery</option>
+                        <option value="marketplace">Marketplace</option>
+                    </select>
+                    <input
+                        type="date"
+                        value={filters.date_from}
+                        onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    />
+                    <input
+                        type="date"
+                        value={filters.date_to}
+                        onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    />
                 </div>
             </div>
 
-            {/* Orders Table */}
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery Person</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Conf.</th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan="14" className="px-6 py-4 text-center text-gray-500">Loading...</td>
-                                </tr>
-                            ) : orders.length === 0 ? (
-                                <tr>
-                                    <td colSpan="14" className="px-6 py-4 text-center text-gray-500">No orders found</td>
-                                </tr>
-                            ) : (
-                                orders.map(order => (
-                                    <tr key={order.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                            {formatDate(order.created_at)}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600">
-                                            {order.order_number}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getSourceBadgeColor(order.source)}`}>
-                                                {order.source?.charAt(0).toUpperCase() + order.source?.slice(1).replace('_', ' ') || 'Manual'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                            {order.client?.name}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {order.phone || order.client?.phone}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {order.city || order.client?.city || '-'}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
-                                            {order.shipping_address || order.client?.address || '-'}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {formatCurrency(order.total)}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-500">
-                                            {order.items?.map(item => (
-                                                <div key={item.id} className="text-xs">
-                                                    {item.product?.name || item.product_name || 'Unknown Product'} (x{item.quantity})
-                                                </div>
-                                            ))}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <select
-                                                value={order.status}
-                                                onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                                disabled={updatingStatus === order.id}
-                                                className={`px-3 py-1.5 text-xs font-semibold rounded-full border-0 cursor-pointer focus:ring-2 focus:ring-offset-1 ${getStatusBadgeColor(order.status)} ${
-                                                    updatingStatus === order.id ? 'opacity-50 cursor-wait' : ''
-                                                }`}
-                                            >
-                                                <option value="pending">Pending</option>
-                                                <option value="confirmed">Confirmed</option>
-                                                <option value="picked_up">Picked Up</option>
-                                                <option value="ready_for_shipping">Ready for Shipping</option>
-                                                <option value="shipped">Shipped</option>
-                                                <option value="out_for_delivery">Out for Delivery</option>
-                                                <option value="delivered">Delivered</option>
-                                                <option value="cancelled">Cancelled</option>
-                                                <option value="refused">Refused</option>
-                                                <option value="returned">Returned</option>
-                                                <option value="return_requested">Return Requested</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {order.delivery_tracking_code ? (
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-medium text-blue-600 truncate max-w-[100px]" title={order.delivery_tracking_code}>
-                                                        {order.delivery_tracking_code}
-                                                    </span>
-                                                    {order.delivery_integration && (
-                                                        <span className="text-xs text-gray-400 capitalize">
-                                                            {order.delivery_integration.provider}
-                                                        </span>
-                                                    )}
-                                                    {order.delivery_status && (
-                                                        <span className="text-xs text-purple-600 capitalize mt-1">
-                                                            {formatDeliveryStatus(order.delivery_status)}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                '-'
+            {/* Orders List */}
+            <div className="space-y-1.5">
+                {loading ? (
+                    <div className="bg-white rounded p-6 text-center text-gray-500 text-sm">
+                        <div className="inline-block animate-spin h-5 w-5 border-2 border-blue-200 border-t-blue-600 rounded-full mb-2"></div>
+                        <p>Loading...</p>
+                    </div>
+                ) : orders.length === 0 ? (
+                    <div className="bg-white rounded p-6 text-center text-gray-500 text-sm">
+                        No orders found
+                    </div>
+                ) : (
+                    orders.map(order => {
+                        const agentLabel = getAgentLabel(order);
+                        const companyLabel = getDeliveryCompanyLabel(order);
+                        const assignmentPrimaryLabel = companyLabel || agentLabel || '+ Assign';
+                        
+                        const statusBorderColor = {
+                            pending: 'border-yellow-400',
+                            confirmed: 'border-blue-400',
+                            picked_up: 'border-indigo-400',
+                            ready_for_shipping: 'border-cyan-400',
+                            shipped: 'border-purple-400',
+                            out_for_delivery: 'border-violet-400',
+                            delivered: 'border-green-400',
+                            cancelled: 'border-red-400',
+                            refused: 'border-orange-400',
+                            returned: 'border-pink-400',
+                            return_requested: 'border-rose-400'
+                        };
+
+                        return (
+                            <div key={order.id} className={`bg-white rounded shadow-sm hover:shadow p-2 border-l-4 ${statusBorderColor[order.status] || 'border-gray-400'}`}>
+                                    {/* Header */}
+                                    <div className="flex justify-between items-start gap-2 mb-1.5">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-sm font-bold text-blue-700">{order.order_number}</span>
+                                            {order.source === 'shopify' && order.shopify_name && (
+                                                <span className="text-xs text-gray-500 truncate">Shopify #: {order.shopify_name}</span>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {order.delivery_person?.name || '-'}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {order.confirmation_agent?.name || '-'}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end space-x-1">
-                                                {/* WhatsApp */}
-                                                {order.client?.phone && (
-                                                    <a
-                                                        href={`https://wa.me/${order.client.phone.replace(/[^0-9]/g, '')}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                                        title="WhatsApp"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                                                        </svg>
-                                                    </a>
-                                                )}
-                                                {/* Message */}
-                                                <button
-                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Send Message"
-                                                >
-                                                    <MessageCircle size={18} />
-                                                </button>
-                                                {/* Refresh/Sync */}
-                                                <button
-                                                    onClick={() => fetchOrders()}
-                                                    className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                                                    title="Refresh Order"
-                                                >
-                                                    <RefreshCw size={18} />
-                                                </button>
-                                                {/* View */}
-                                                <Link
-                                                    to={`/orders/${order.id}`}
-                                                    className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                                                    title="View Details"
-                                                >
-                                                    <Eye size={18} />
-                                                </Link>
-                                                {/* Edit */}
-                                                <Link
-                                                    to={`/orders/${order.id}/edit`}
-                                                    className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                                    title="Edit Order"
-                                                >
-                                                    <Edit size={18} />
-                                                </Link>
+                                                </div>
+                                                <span className={`px-1.5 py-0.5 text-xs font-semibold rounded ${getSourceColor(order.source)}`}>
+                                                    {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
+                                                </span>
+                                                <span className="text-xs text-gray-500">{formatDate(order.created_at)}</span>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                        </div>
+                                        <select
+                                            value={order.status}
+                                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                                            disabled={updatingStatus === order.id}
+                                            className={`px-1.5 py-0.5 text-xs font-semibold rounded flex-shrink-0 border-0 ${getStatusBadgeColor(order.status)} ${
+                                                updatingStatus === order.id ? 'opacity-50 cursor-wait' : ''
+                                            }`}
+                                        >
+                                            <option value="pending">Pending</option>
+                                            <option value="confirmed">Confirmed</option>
+                                            <option value="picked_up">Picked Up</option>
+                                            <option value="ready_for_shipping">Ready</option>
+                                            <option value="shipped">Shipped</option>
+                                            <option value="out_for_delivery">Out</option>
+                                            <option value="delivered">Delivered</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Products - Quick View */}
+                                    <div className="mb-1.5 p-1.5 bg-gray-50 rounded border border-gray-200">
+                                        <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Products</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(order.items || []).map((item, idx) => (
+                                                <span key={idx} className="text-xs bg-white border border-gray-300 rounded px-2 py-0.5">
+                                                    <span className="font-medium">{item.product?.name || item.product_name || 'Item'}</span>
+                                                    <span className="text-gray-500"> ×{item.quantity}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Content - One Line Compact */}
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-1.5 text-xs mb-1.5">
+                                        <div>
+                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Client</p>
+                                            <p className="font-medium truncate">{order.client?.name || '-'}</p>
+                                            <p className="text-gray-500 truncate">{order.client?.phone || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Location</p>
+                                            <p className="font-medium truncate">{order.city || '-'}</p>
+                                            <p className="text-gray-500 line-clamp-1">{order.shipping_address || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Amount</p>
+                                            <p className="font-bold">{formatCurrency(order.total)}</p>
+                                            <p className="text-gray-500">{(order.items || []).length} items</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Tracking</p>
+                                            {order.delivery_tracking_code ? (
+                                                <>
+                                                    <p className="text-blue-600 font-mono truncate">{order.delivery_tracking_code.substring(0, 12)}...</p>
+                                                    <p className="text-gray-600">{order.delivery_integration?.provider || ''}</p>
+                                                </>
+                                            ) : (
+                                                <p className="text-gray-400">Not assigned</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Agent</p>
+                                            <button
+                                                onClick={() => handleAgentClick(order)}
+                                                className="group text-gray-600 hover:text-blue-600 hover:underline text-left w-full cursor-pointer transition-colors"
+                                            >
+                                                <span className="truncate text-sm font-medium group-hover:text-blue-600">
+                                                    {assignmentPrimaryLabel}
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center justify-end gap-0.5 border-t border-gray-100 pt-1">
+                                        {order.client?.phone && (
+                                            <a
+                                                href={`https://wa.me/${order.client.phone.replace(/[^0-9]/g, '')}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="p-0.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                                title="WhatsApp"
+                                            >
+                                                <MessageCircle size={12} />
+                                            </a>
+                                        )}
+                                        <button
+                                            onClick={() => fetchOrders()}
+                                            className="p-0.5 text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                                            title="Refresh"
+                                        >
+                                            <RefreshCw size={12} />
+                                        </button>
+                                        <Link
+                                            to={`/orders/${order.id}`}
+                                            className="p-0.5 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                                            title="View"
+                                        >
+                                            <Eye size={12} />
+                                        </Link>
+                                        <Link
+                                            to={`/orders/${order.id}/edit`}
+                                            className="p-0.5 text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                                            title="Edit"
+                                        >
+                                            <Edit size={12} />
+                                        </Link>
+                                        <button
+                                            onClick={() => handleDeleteOrder(order.id, order.order_number)}
+                                            disabled={deletingOrderId === order.id}
+                                            className="p-0.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                            title="Delete"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
 
                 {/* Pagination */}
                 {!loading && orders.length > 0 && (
-                    <div className="px-6 py-4 border-t border-gray-200">
-                        <div className="flex items-center justify-between">
-                            <div className="text-sm text-gray-700">
-                                Showing <span className="font-medium">{pagination.from}</span> to{' '}
-                                <span className="font-medium">{pagination.to}</span> of{' '}
-                                <span className="font-medium">{pagination.total}</span> results
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <button
-                                    onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
-                                    disabled={pagination.current_page === 1}
-                                    className={`px-3 py-1 text-sm rounded-lg border ${
-                                        pagination.current_page === 1
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
-                                    }`}
-                                >
-                                    Previous
-                                </button>
-                                
-                                {/* Page numbers */}
-                                <div className="flex items-center space-x-1">
-                                    {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                                        .filter(page => {
-                                            // Show first page, last page, current page, and pages around current
-                                            return (
-                                                page === 1 ||
-                                                page === pagination.last_page ||
-                                                (page >= pagination.current_page - 1 && page <= pagination.current_page + 1)
-                                            );
-                                        })
-                                        .map((page, index, array) => (
-                                            <React.Fragment key={page}>
-                                                {index > 0 && array[index - 1] !== page - 1 && (
-                                                    <span className="px-2 text-gray-500">...</span>
-                                                )}
-                                                <button
-                                                    onClick={() => setFilters({ ...filters, page })}
-                                                    className={`px-3 py-1 text-sm rounded-lg ${
-                                                        pagination.current_page === page
-                                                            ? 'bg-blue-600 text-white'
-                                                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                                                    }`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            </React.Fragment>
-                                        ))}
-                                </div>
-
-                                <button
-                                    onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
-                                    disabled={pagination.current_page === pagination.last_page}
-                                    className={`px-3 py-1 text-sm rounded-lg border ${
-                                        pagination.current_page === pagination.last_page
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
-                                    }`}
-                                >
-                                    Next
-                                </button>
-                            </div>
+                    <div className="bg-white rounded p-2 shadow-sm flex items-center justify-between text-xs">
+                        <span className="text-gray-600">{pagination.from}-{pagination.to} of {pagination.total}</span>
+                        <div className="flex gap-0.5">
+                            <button
+                                onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
+                                disabled={pagination.current_page === 1}
+                                className={`px-1.5 py-0.5 rounded border ${pagination.current_page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                            >
+                                ◀
+                            </button>
+                            {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
+                                .filter(page => page === 1 || page === pagination.last_page || (page >= pagination.current_page - 1 && page <= pagination.current_page + 1))
+                                .map((page, index, array) => (
+                                    <React.Fragment key={page}>
+                                        {index > 0 && array[index - 1] !== page - 1 && <span className="px-1 text-gray-400">•••</span>}
+                                        <button
+                                            onClick={() => setFilters({ ...filters, page })}
+                                            className={`px-1.5 py-0.5 rounded ${pagination.current_page === page ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </React.Fragment>
+                                ))}
+                            <button
+                                onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
+                                disabled={pagination.current_page === pagination.last_page}
+                                className={`px-1.5 py-0.5 rounded border ${pagination.current_page === pagination.last_page ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                            >
+                                ▶
+                            </button>
                         </div>
                     </div>
                 )}
+            </div>
+
+            {/* Agent Assignment Modal */}
+            {showAgentModal && selectedOrderForAgent && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <AgentAssignmentModal
+                        order={selectedOrderForAgent}
+                        onClose={closeAgentModal}
+                        onAssign={() => {
+                            closeAgentModal();
+                            fetchOrders();
+                        }}
+                    />
+                </div>
+            )}
+        </div>
+    );
+}
+
+function AgentAssignmentModal({ order, onClose, onAssign }) {
+    const [assignmentType, setAssignmentType] = useState('person');
+    const [deliveryPersonId, setDeliveryPersonId] = useState(order?.delivery_person_id || '');
+    const [selectedCompanyId, setSelectedCompanyId] = useState(order?.delivery_integration_id || null);
+    const [selectedCity, setSelectedCity] = useState(order?.delivery_city || order?.city || '');
+    const [deliveryPersons, setDeliveryPersons] = useState([]);
+    const [deliveryCompanies, setDeliveryCompanies] = useState([]);
+    const [cities, setCities] = useState([]);
+    const [citySearch, setCitySearch] = useState('');
+    const [loadingData, setLoadingData] = useState(true);
+    const [loadingCities, setLoadingCities] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [assignmentError, setAssignmentError] = useState('');
+    const [cityError, setCityError] = useState('');
+
+    const fetchCities = async (companyId) => {
+        if (!companyId) {
+            setCities([]);
+            return;
+        }
+
+        try {
+            setLoadingCities(true);
+            setCityError('');
+            const response = await api.get(`/orders/delivery-companies/${companyId}/cities`);
+            const cityList = Array.isArray(response.data) ? response.data : [];
+            setCities(cityList);
+            if (cityList.length === 0) {
+                setCityError('No cities available for this delivery company.');
+            }
+        } catch (error) {
+            console.error('Error fetching cities:', error);
+            setCityError('Failed to load cities. Please try again.');
+            setCities([]);
+        } finally {
+            setLoadingCities(false);
+        }
+    };
+
+    const fetchDeliveryData = async (preferredCompanyId = null) => {
+        try {
+            setLoadingData(true);
+            setAssignmentError('');
+            const [personsRes, companiesRes] = await Promise.all([
+                api.get('/delivery-persons'),
+                api.get('/orders/delivery-companies/available')
+            ]);
+            setDeliveryPersons(personsRes.data || []);
+            setDeliveryCompanies(companiesRes.data || []);
+            if (preferredCompanyId) {
+                await fetchCities(preferredCompanyId);
+            } else {
+                setCities([]);
+            }
+        } catch (error) {
+            console.error('Error fetching delivery data:', error);
+            setAssignmentError('Failed to load delivery data. Please try again.');
+        } finally {
+            setLoadingData(false);
+        }
+    };
+
+    useEffect(() => {
+        const preferredCompanyId = order?.delivery_integration_id || null;
+        setDeliveryPersonId(order?.delivery_person_id || '');
+        setSelectedCompanyId(preferredCompanyId);
+        setSelectedCity(order?.delivery_city || order?.city || '');
+        fetchDeliveryData(preferredCompanyId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [order?.id]);
+
+    const handleCompanySelect = async (companyId) => {
+        setSelectedCompanyId(companyId);
+        setSelectedCity('');
+        setCitySearch('');
+        await fetchCities(companyId);
+    };
+
+    const handleAssign = async () => {
+        setAssignmentError('');
+
+        if (assignmentType === 'person' && !deliveryPersonId) {
+            setAssignmentError('Please select a delivery person first.');
+            return;
+        }
+
+        if (assignmentType === 'company') {
+            if (!selectedCompanyId) {
+                setAssignmentError('Choose a delivery company.');
+                return;
+            }
+            if (!selectedCity) {
+                setAssignmentError('Please select a delivery city.');
+                return;
+            }
+        }
+
+        try {
+            setSaving(true);
+
+            if (assignmentType === 'person') {
+                await api.patch(`/orders/${order.id}/assign-agent`, {
+                    delivery_person_id: parseInt(deliveryPersonId, 10),
+                    delivery_integration_id: null
+                });
+            } else {
+                await api.patch(`/orders/${order.id}/assign-agent`, {
+                    delivery_person_id: null,
+                    delivery_agent_id: null,
+                    delivery_integration_id: parseInt(selectedCompanyId, 10),
+                    delivery_city: selectedCity
+                });
+            }
+
+            onAssign();
+        } catch (error) {
+            console.error('Error assigning delivery data:', error);
+            const serverMessage = error.response?.data?.message || error.message;
+            setAssignmentError(serverMessage || 'Failed to assign. Please try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const getCityName = (city) => {
+        return typeof city === 'object' ? (city.name || city.ville || city.city || 'Unknown') : city;
+    };
+
+    const filteredCities = cities.filter((city) =>
+        getCityName(city).toLowerCase().includes(citySearch.toLowerCase())
+    );
+
+    return (
+        <div className="bg-white rounded-lg shadow-lg max-w-xl w-full p-4">
+            <div className="flex items-start justify-between">
+                <div>
+                    <h2 className="text-lg font-bold text-gray-900">Assign Delivery Agent</h2>
+                    <p className="text-xs text-gray-600">Order: <span className="font-semibold">{order.order_number}</span></p>
+                </div>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+                    <X size={18} />
+                </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 mt-4">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setAssignmentType('person');
+                        setAssignmentError('');
+                    }}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${
+                        assignmentType === 'person'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                >
+                    Delivery Person
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setAssignmentType('company');
+                        setAssignmentError('');
+                    }}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded transition ${
+                        assignmentType === 'company'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                >
+                    Delivery Company
+                </button>
+            </div>
+
+            {/* Body */}
+            {loadingData ? (
+                <div className="py-6 text-center text-xs text-gray-500">Loading delivery data...</div>
+            ) : (
+                <div className="mt-4 space-y-4">
+                    {assignmentType === 'person' && (
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-2">Select Delivery Person</label>
+                            {deliveryPersons.length === 0 ? (
+                                <p className="text-xs text-gray-500">No delivery persons found.</p>
+                            ) : (
+                                <select
+                                    value={deliveryPersonId}
+                                    onChange={(e) => setDeliveryPersonId(e.target.value)}
+                                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                >
+                                    <option value="">-- Choose Person --</option>
+                                    {deliveryPersons.map(person => (
+                                        <option key={person.id} value={person.id}>
+                                            {person.name} {person.phone ? `(${person.phone})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                    )}
+
+                    {assignmentType === 'company' && (
+                        <div className="space-y-4">
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold text-gray-600">Select Delivery Company</p>
+                                    <span className="text-xs text-gray-400">{deliveryCompanies.length} available</span>
+                                </div>
+                                {deliveryCompanies.length === 0 ? (
+                                    <p className="text-xs text-gray-500 mt-1">No active delivery companies configured.</p>
+                                ) : (
+                                    <div className="mt-2 space-y-2">
+                                        {deliveryCompanies.map(company => (
+                                            <button
+                                                key={company.id}
+                                                type="button"
+                                                onClick={() => handleCompanySelect(company.id)}
+                                                className={`w-full flex items-center justify-between p-3 border rounded-lg transition ${
+                                                    selectedCompanyId === company.id
+                                                        ? 'border-blue-400 bg-blue-50'
+                                                        : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                                }`}
+                                            >
+                                                <div className="flex flex-col text-left">
+                                                    <span className="text-sm font-semibold text-gray-900">{company.name}</span>
+                                                    <span className="text-[11px] text-gray-500 uppercase">{company.provider || company.credentials?.provider || 'delivery'} provider</span>
+                                                </div>
+                                                <Truck className="text-gray-400" size={18} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold text-gray-600">Delivery City</p>
+                                    <MapPin className="text-gray-400" size={14} />
+                                </div>
+                                {loadingCities ? (
+                                    <div className="py-4 text-center text-xs text-gray-500">Loading cities...</div>
+                                ) : selectedCompanyId ? (
+                                    <>
+                                        <input
+                                            type="text"
+                                            value={citySearch}
+                                            onChange={(e) => setCitySearch(e.target.value)}
+                                            placeholder="Search city..."
+                                            className="w-full mt-2 px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                        />
+                                        {cityError && (
+                                            <div className="mt-2 flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+                                                <AlertCircle size={14} />
+                                                <span>{cityError}</span>
+                                            </div>
+                                        )}
+                                        <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                                            {filteredCities.length === 0 ? (
+                                                <div className="px-3 py-2 text-xs text-gray-500">No cities found.</div>
+                                            ) : (
+                                                filteredCities.map((city, index) => {
+                                                    const cityName = getCityName(city);
+                                                    return (
+                                                        <label
+                                                            key={`${cityName}-${index}`}
+                                                            className={`flex items-center px-3 py-2 text-xs cursor-pointer border-b last:border-b-0 transition ${
+                                                                selectedCity === cityName
+                                                                    ? 'bg-blue-50 text-blue-900'
+                                                                    : 'hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="radio"
+                                                                name="delivery_city"
+                                                                value={cityName}
+                                                                checked={selectedCity === cityName}
+                                                                onChange={() => setSelectedCity(cityName)}
+                                                                className="h-3 w-3 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                            <span className="ml-2 font-medium">{cityName}</span>
+                                                        </label>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <p className="text-xs text-gray-500 mt-2">Pick a delivery company to see its coverage.</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Error */}
+            {assignmentError && (
+                <div className="mt-3 flex items-center gap-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                    <AlertCircle size={14} />
+                    <span>{assignmentError}</span>
+                </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 mt-4">
+                <button
+                    onClick={onClose}
+                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={handleAssign}
+                    disabled={saving || loadingData}
+                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                    {saving ? 'Assigning...' : 'Assign'}
+                </button>
             </div>
         </div>
     );

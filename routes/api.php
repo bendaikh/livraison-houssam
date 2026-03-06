@@ -111,6 +111,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/settings/{key}', [SettingController::class, 'get']);
 
     // Cities
+    Route::post('/cities/sync-sources', [CityController::class, 'syncFromSources']);
     Route::apiResource('cities', CityController::class);
 
     // Notifications
