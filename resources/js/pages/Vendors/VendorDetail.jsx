@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import BankLogo from '../../components/BankLogo';
 import { 
     ArrowLeft, Mail, Phone, MapPin, Store, Calendar, 
     Package, DollarSign, Building2, FileText,
-    CheckCircle, XCircle
+    CheckCircle, XCircle, Landmark
 } from 'lucide-react';
 
 export default function VendorDetail() {
@@ -178,6 +179,28 @@ export default function VendorDetail() {
                                 <div>
                                     <p className="text-sm font-medium text-slate-500">Tax ID</p>
                                     <p className="text-lg font-semibold text-slate-800">{vendor.tax_id}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {(vendor.bank_name || vendor.rib) && (
+                            <div className="flex items-start space-x-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                <Landmark size={20} className="text-blue-600 mt-1 flex-shrink-0" />
+                                <div>
+                                    <p className="text-sm font-medium text-slate-500">Bank Payment Details</p>
+                                    {vendor.bank_name && (
+                                        <div className="flex items-center space-x-2 mt-1">
+                                            <BankLogo
+                                                bankName={vendor.bank_name}
+                                                size={24}
+                                                className="border-blue-100"
+                                            />
+                                            <p className="text-base font-semibold text-blue-900">{vendor.bank_name}</p>
+                                        </div>
+                                    )}
+                                    {vendor.rib && (
+                                        <p className="text-sm font-mono text-blue-800 mt-1">RIB: {vendor.rib}</p>
+                                    )}
                                 </div>
                             </div>
                         )}

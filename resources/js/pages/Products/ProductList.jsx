@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
     Plus, Search, Edit, Trash2, Package, Filter, 
     Download, Eye, AlertCircle, TrendingUp, TrendingDown,
@@ -10,12 +11,21 @@ import {
 
 export default function ProductList() {
     const { formatCurrency } = useSettings();
+    const { user } = useAuth();
+    const navigate = useNavigate();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
+    const isVendor = user?.role?.slug === 'vendor';
+    const [viewMode, setViewMode] = useState('grid'); // 'table' or 'grid' - GRID IS DEFAULT
     const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'active', 'inactive', 'low_stock'
     const [updatingMarketplace, setUpdatingMarketplace] = useState(null);
+    const getImageSrc = (imagePath) => {
+        if (!imagePath) return null;
+        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+        if (imagePath.startsWith('/')) return imagePath;
+        return `/storage/${imagePath}`;
+    };
 
     useEffect(() => {
         fetchProducts();
@@ -272,13 +282,17 @@ export default function ProductList() {
                                 {products.map((product) => {
                                     const stockStatus = getStockStatus(product);
                                     return (
-                                        <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
+                                        <tr
+                                            key={product.id}
+                                            className="hover:bg-slate-50 transition-colors group cursor-pointer"
+                                            onClick={() => navigate(`/products/${product.id}`)}
+                                        >
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center space-x-3">
                                                     <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
                                                         {product.images && product.images.length > 0 ? (
                                                             <img 
-                                                                src={`/storage/${product.images[0]}`} 
+                                                                src={getImageSrc(product.images[0])} 
                                                                 alt={product.name}
                                                                 className="w-12 h-12 rounded-xl object-cover"
                                                             />
@@ -351,7 +365,7 @@ export default function ProductList() {
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center justify-center space-x-2">
                                                     <button
-                                                        onClick={() => toggleMarketplace(product.id, product.is_marketplace_active)}
+                                                        onClick={(e) => { e.stopPropagation(); toggleMarketplace(product.id, product.is_marketplace_active); }}
                                                         disabled={updatingMarketplace === product.id}
                                                         className={`relative inline-flex h-8 w-14 items-center rounded-full transition-all ${
                                                             product.is_marketplace_active
@@ -370,13 +384,14 @@ export default function ProductList() {
                                                     </button>
                                                     <Link
                                                         to={`/products/${product.id}/edit`}
+                                                        onClick={(e) => e.stopPropagation()}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                                         title="Edit Product"
                                                     >
                                                         <Edit size={18} />
                                                     </Link>
                                                     <button
-                                                        onClick={() => handleDelete(product.id)}
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(product.id); }}
                                                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                         title="Delete Product"
                                                     >
@@ -393,69 +408,93 @@ export default function ProductList() {
                 </div>
             ) : (
                 /* Grid View */
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {products.map((product) => {
                         const stockStatus = getStockStatus(product);
+                        const sellingPrice = parseFloat(product.company_price || product.price || product.vendor_price || 0);
+                        const costPrice = parseFloat(product.cost_price || product.vendor_price || 0);
+                        
                         return (
-                            <div key={product.id} className="bg-white rounded-2xl shadow-lg border border-slate-200/50 overflow-hidden hover:shadow-xl transition-all group">
-                                {/* Product Image */}
-                                <div className="relative h-48 bg-gradient-to-br from-blue-100 to-indigo-100">
+                            <div key={product.id} className="bg-white rounded-2xl shadow-md hover:shadow-2xl border border-slate-200/50 overflow-hidden transition-all duration-300 group flex flex-col h-full">
+                                {/* Product Image Container */}
+                                <button
+                                    onClick={() => navigate(`/products/${product.id}`)}
+                                    className="relative h-56 w-full bg-gradient-to-br from-blue-100 to-indigo-100 text-left overflow-hidden group cursor-pointer"
+                                >
                                     {product.images && product.images.length > 0 ? (
                                         <img 
-                                            src={`/storage/${product.images[0]}`} 
+                                            src={getImageSrc(product.images[0])} 
                                             alt={product.name}
-                                            className="w-full h-full object-cover"
+                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center">
                                             <ImageIcon size={48} className="text-blue-400" />
                                         </div>
                                     )}
-                                    <div className="absolute top-3 right-3 flex space-x-2">
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold backdrop-blur-sm ${
+                                    
+                                    {/* Status Badge */}
+                                    <div className="absolute top-3 right-3">
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md ${
                                             product.is_active 
                                                 ? 'bg-green-500/90 text-white' 
                                                 : 'bg-slate-500/90 text-white'
                                         }`}>
-                                            {product.is_active ? 'Active' : 'Inactive'}
+                                            {product.is_active ? '✓ ACTIVE' : 'INACTIVE'}
                                         </span>
                                     </div>
-                                </div>
+
+                                    {/* New Badge if applicable */}
+                                    {product.is_marketplace_active && (
+                                        <div className="absolute top-3 left-3">
+                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-500/90 text-white">
+                                                Nouveau
+                                            </span>
+                                        </div>
+                                    )}
+                                </button>
 
                                 {/* Product Info */}
-                                <div className="p-5">
+                                <div className="p-4 flex flex-col flex-1">
+                                    {/* Product Name & SKU */}
                                     <div className="mb-3">
-                                        <h3 className="font-bold text-slate-800 text-lg mb-1 line-clamp-1">{product.name}</h3>
+                                        <button
+                                            onClick={() => navigate(`/products/${product.id}`)}
+                                            className="font-bold text-slate-800 text-base mb-1 line-clamp-2 text-left hover:text-teal-600 transition-colors cursor-pointer"
+                                        >
+                                            {product.name}
+                                        </button>
                                         <p className="text-xs text-slate-500 font-mono">{product.sku}</p>
                                     </div>
 
+                                    {/* Category */}
                                     {product.category && (
-                                        <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-purple-100 text-purple-700 mb-3">
+                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-100 text-purple-700 mb-3 w-fit">
                                             {product.category.name}
                                         </span>
                                     )}
 
-                                    <div className="space-y-2 mb-4">
-                                        {product.company_price && (
+                                    {/* Prices */}
+                                    <div className="space-y-2 mb-4 pb-4 border-b border-slate-200">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs text-slate-500 font-semibold">Prix de vente</span>
+                                            <span className="font-bold text-emerald-600 text-sm">{formatCurrency(sellingPrice)}</span>
+                                        </div>
+                                        {costPrice > 0 && (
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs text-slate-500">Company Price</span>
-                                                <span className="font-bold text-emerald-600">{formatCurrency(product.company_price)}</span>
-                                            </div>
-                                        )}
-                                        {product.vendor_price && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-xs text-slate-500">Seller Price</span>
-                                                <span className="font-semibold text-slate-700">{formatCurrency(product.vendor_price)}</span>
+                                                <span className="text-xs text-slate-500 font-semibold">Prix de revient</span>
+                                                <span className="text-sm text-slate-600">{formatCurrency(costPrice)}</span>
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-200">
+                                    {/* Stock Status */}
+                                    <div className="flex items-center justify-between mb-4">
                                         <div>
-                                            <p className="text-xs text-slate-500">Stock</p>
+                                            <p className="text-xs text-slate-500 font-semibold">Stock</p>
                                             <p className="font-bold text-lg text-slate-800">{product.stock_quantity}</p>
                                         </div>
-                                        <span className={`px-3 py-1 rounded-lg text-xs font-medium ${
+                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
                                             stockStatus.color === 'green' ? 'bg-green-100 text-green-700' :
                                             stockStatus.color === 'orange' ? 'bg-orange-100 text-orange-700' :
                                             'bg-red-100 text-red-700'
@@ -464,39 +503,49 @@ export default function ProductList() {
                                         </span>
                                     </div>
 
-                                    {/* Actions */}
-                                    <div className="flex space-x-2">
-                                        <button
-                                            onClick={() => toggleMarketplace(product.id, product.is_marketplace_active)}
-                                            disabled={updatingMarketplace === product.id}
-                                            className={`relative inline-flex h-10 w-16 items-center rounded-full transition-all ${
-                                                product.is_marketplace_active
-                                                    ? 'bg-purple-600'
-                                                    : 'bg-gray-300'
-                                            } ${updatingMarketplace === product.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
-                                            title={product.is_marketplace_active ? 'Deactivate from Marketplace' : 'Activate for Marketplace'}
-                                        >
-                                            <span
-                                                className={`inline-flex items-center justify-center h-8 w-8 transform rounded-full bg-white shadow-lg transition-transform ${
-                                                    product.is_marketplace_active ? 'translate-x-7' : 'translate-x-1'
-                                                }`}
+                                    {/* Action Buttons */}
+                                    <div className="mt-auto">
+                                        {isVendor ? (
+                                            <button
+                                                onClick={() => navigate(`/products/${product.id}`)}
+                                                className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white rounded-lg font-bold text-sm transition-all shadow-md hover:shadow-lg"
                                             >
-                                                <ShoppingBag size={16} className={product.is_marketplace_active ? 'text-purple-600' : 'text-gray-400'} />
-                                            </span>
-                                        </button>
-                                        <Link
-                                            to={`/products/${product.id}/edit`}
-                                            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-1"
-                                        >
-                                            <Edit size={16} />
-                                            <span>Edit</span>
-                                        </Link>
-                                        <button
-                                            onClick={() => handleDelete(product.id)}
-                                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                                                Commandez
+                                            </button>
+                                        ) : (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => toggleMarketplace(product.id, product.is_marketplace_active)}
+                                                    disabled={updatingMarketplace === product.id}
+                                                    className={`relative inline-flex h-10 w-14 items-center rounded-full transition-all ${
+                                                        product.is_marketplace_active
+                                                            ? 'bg-purple-600'
+                                                            : 'bg-gray-300'
+                                                    } ${updatingMarketplace === product.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                                                    title={product.is_marketplace_active ? 'Deactivate from Marketplace' : 'Activate for Marketplace'}
+                                                >
+                                                    <span
+                                                        className={`inline-flex items-center justify-center h-8 w-8 transform rounded-full bg-white shadow-lg transition-transform ${
+                                                            product.is_marketplace_active ? 'translate-x-6' : 'translate-x-0.5'
+                                                        }`}
+                                                    >
+                                                        <ShoppingBag size={14} className={product.is_marketplace_active ? 'text-purple-600' : 'text-gray-400'} />
+                                                    </span>
+                                                </button>
+                                                <Link
+                                                    to={`/products/${product.id}/edit`}
+                                                    className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all flex items-center justify-center"
+                                                >
+                                                    <Edit size={16} />
+                                                </Link>
+                                                <button
+                                                    onClick={() => handleDelete(product.id)}
+                                                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

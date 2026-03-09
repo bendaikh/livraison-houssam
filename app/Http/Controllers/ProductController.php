@@ -60,7 +60,7 @@ class ProductController extends Controller
             'weight' => 'nullable|numeric|min:0',
             'weight_unit' => 'nullable|string',
             'images' => 'nullable|array',
-            'images.*' => 'image|max:2048',
+            'images.*' => 'image|max:10240',
         ]);
 
         // Set price to company_price if not provided
@@ -107,6 +107,7 @@ class ProductController extends Controller
             'weight' => 'nullable|numeric|min:0',
             'weight_unit' => 'nullable|string',
             'images' => 'nullable|array',
+            'images.*' => 'image|max:10240',
         ]);
 
         // Set price to company_price if not provided

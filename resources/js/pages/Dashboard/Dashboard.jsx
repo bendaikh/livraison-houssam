@@ -3,7 +3,7 @@ import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown } from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown, FileText, X } from 'lucide-react';
 
 export default function Dashboard() {
     const { formatCurrency } = useSettings();
@@ -162,7 +162,7 @@ export default function Dashboard() {
             </div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {statCards.map((stat, index) => (
                     <div 
                         key={index} 
@@ -194,6 +194,93 @@ export default function Dashboard() {
                         </div>
                     </div>
                 ))}
+            </div>
+
+            {/* Charts Section */}
+            {/* Status Cards - Order counts by status */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {/* All Products */}
+                {!isVendor && (
+                    <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                        <div className="text-center">
+                            <Package className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+                            <p className="text-emerald-600 text-sm font-semibold">All Products</p>
+                            <p className="text-2xl font-bold text-emerald-900 mt-1">{stats?.products?.total || 0}</p>
+                        </div>
+                    </div>
+                )}
+                {/* New Orders */}
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                    <div className="text-center">
+                        <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                        <p className="text-blue-600 text-sm font-semibold">New</p>
+                        <p className="text-2xl font-bold text-blue-900 mt-1">{stats?.orders?.pending || 0}</p>
+                    </div>
+                </div>
+                {/* Delivered Orders */}
+                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                    <div className="text-center">
+                        <Package className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+                        <p className="text-emerald-600 text-sm font-semibold">Delivered</p>
+                        <p className="text-2xl font-bold text-emerald-900 mt-1">{stats?.orders?.delivered || 0}</p>
+                    </div>
+                </div>
+                {/* Confirmed Orders */}
+                <div className="bg-cyan-50 rounded-xl p-4 border border-cyan-100">
+                    <div className="text-center">
+                        <CheckCircle className="w-8 h-8 text-cyan-600 mx-auto mb-2" />
+                        <p className="text-cyan-600 text-sm font-semibold">Confirmed</p>
+                        <p className="text-2xl font-bold text-cyan-900 mt-1">{stats?.orders?.confirmed || 0}</p>
+                    </div>
+                </div>
+                {/* In Delivery */}
+                <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+                    <div className="text-center">
+                        <Package className="w-8 h-8 text-indigo-600 mx-auto mb-2" />
+                        <p className="text-indigo-600 text-sm font-semibold">In Delivery</p>
+                        <p className="text-2xl font-bold text-indigo-900 mt-1">{stats?.orders?.shipped || 0}</p>
+                    </div>
+                </div>
+                {/* Returned Orders */}
+                <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
+                    <div className="text-center">
+                        <ArrowDownRight className="w-8 h-8 text-orange-600 mx-auto mb-2" />
+                        <p className="text-orange-600 text-sm font-semibold">Returned</p>
+                        <p className="text-2xl font-bold text-orange-900 mt-1">{stats?.orders?.returned || 0}</p>
+                    </div>
+                </div>
+                {/* Refused Orders */}
+                <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+                    <div className="text-center">
+                        <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
+                        <p className="text-red-600 text-sm font-semibold">Refused</p>
+                        <p className="text-2xl font-bold text-red-900 mt-1">{stats?.orders?.refused || 0}</p>
+                    </div>
+                </div>
+                {/* Cancelled Orders */}
+                <div className="bg-rose-50 rounded-xl p-4 border border-rose-100">
+                    <div className="text-center">
+                        <X className="w-8 h-8 text-rose-600 mx-auto mb-2" />
+                        <p className="text-rose-600 text-sm font-semibold">Cancelled</p>
+                        <p className="text-2xl font-bold text-rose-900 mt-1">{stats?.orders?.cancelled || 0}</p>
+                    </div>
+                </div>
+                {/* Waiting Confirmation */}
+                <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                    <div className="text-center">
+                        <Clock className="w-8 h-8 text-amber-600 mx-auto mb-2" />
+                        <p className="text-amber-600 text-sm font-semibold">Waiting</p>
+                        <p className="text-2xl font-bold text-amber-900 mt-1">0</p>
+                    </div>
+                </div>
+                {/* Cancelled Shipping */}
+                <div className="bg-pink-50 rounded-xl p-4 border border-pink-100">
+                    <div className="text-center">
+                        <X className="w-8 h-8 text-pink-600 mx-auto mb-2" />
+                        <p className="text-pink-600 text-sm font-semibold">Cancelled Shipping</p>
+                        <p className="text-2xl font-bold text-pink-900 mt-1">0</p>
+                    </div>
+                </div>
             </div>
 
             {/* Charts Section */}

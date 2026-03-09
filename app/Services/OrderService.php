@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\Notification;
+use App\Models\StockMovement;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -198,8 +199,9 @@ class OrderService
                 }
             }
 
-            // Deduct stock when order is delivered (not confirmed)
-            if ($status === 'delivered' && $oldStatus !== 'delivered') {
+            // Deduct stock when order moves to confirmed (first time only)
+            $hasStockDeduction = StockMovement::where('order_id', $orderId)->where('type', 'out')->exists();
+            if ($status === 'confirmed' && !$hasStockDeduction) {
                 try {
                     $this->stockService->deductStockForOrder($orderId);
                 } catch (\Exception $e) {
@@ -211,8 +213,8 @@ class OrderService
                 }
             }
 
-            // Restore stock when order is cancelled (only if it was previously delivered)
-            if ($status === 'cancelled' && $oldStatus === 'delivered') {
+            // Restore stock when order is cancelled and stock had been deducted
+            if ($status === 'cancelled' && $oldStatus !== 'cancelled' && $hasStockDeduction) {
                 try {
                     $this->stockService->restoreStockForOrder($orderId);
                 } catch (\Exception $e) {

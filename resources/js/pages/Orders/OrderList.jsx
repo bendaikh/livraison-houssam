@@ -145,8 +145,12 @@ export default function OrderList({ status = '' }) {
         return status.replace(/_/g, ' ');
     };
 
-    const getAgentLabel = (order) => {
-        return order.delivery_person?.name || order.delivery_agent?.name || order.confirmation_agent?.name || '';
+    const getDeliveryAgentLabel = (order) => {
+        return order.delivery_person?.name || order.delivery_agent?.name || '';
+    };
+
+    const getConfirmationAgentLabel = (order) => {
+        return order.confirmation_agent?.name || '';
     };
 
     const getDeliveryCompanyLabel = (order) => {
@@ -271,7 +275,7 @@ export default function OrderList({ status = '' }) {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4">
             <DeliveryCompanyModal
                 isOpen={showDeliveryModal}
                 onClose={() => {
@@ -286,79 +290,84 @@ export default function OrderList({ status = '' }) {
 
             {/* Header */}
             <div className="flex justify-between items-center mb-3">
-                <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
+                <div>
+                    <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
+                </div>
                 <button
                     onClick={() => navigate('/orders/create')}
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
                 >
-                    Create Order
+                    + Create Order
                 </button>
             </div>
 
             {/* Shopify Banner */}
             {(isWebhookOnly || !isWebhookOnly) && (
-                <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-3 text-xs">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 text-xs">
                     <div className="flex gap-2">
-                        <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <div>
-                            <p className="font-semibold text-blue-900 mb-0.5">
-                                {isWebhookOnly ? 'Shopify Integration Active' : 'Connect Shopify'}
-                            </p>
-                            <p className="text-blue-700">
-                                {isWebhookOnly 
-                                    ? 'Orders are imported automatically via webhooks.'
-                                    : `Setup Shopify integration in `}
-                                {!isWebhookOnly && (
-                                    <Link to="/api-integrations" className="underline font-semibold">API Integrations</Link>
-                                )}
-                            </p>
-                        </div>
+                        <p className="text-green-700 font-semibold">{isWebhookOnly ? '✓ Shopify Active' : 'Connect Shopify'}</p>
                     </div>
                 </div>
             )}
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
-                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: '', page: 1 })}>
-                    <p className="text-xs text-gray-600 mb-0.5">Total</p>
-                    <p className="text-lg font-bold text-gray-900">{stats.total}</p>
+            <div className="grid grid-cols-5 gap-2 mb-3">
+                <div 
+                    onClick={() => setFilters({ ...filters, source: '', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-gray-400"
+                >
+                    <p className="text-[10px] text-gray-600 mb-0.5 font-medium uppercase">Total</p>
+                    <p className="text-base font-bold text-gray-900">{stats.total}</p>
                 </div>
-                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'manual', page: 1 })}>
-                    <p className="text-xs text-gray-600 mb-0.5">Manual</p>
-                    <p className="text-lg font-bold">{stats.manual}</p>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'manual', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-gray-400"
+                >
+                    <p className="text-[10px] text-gray-600 mb-0.5 font-medium uppercase">Manual</p>
+                    <p className="text-base font-bold text-gray-900">{stats.manual}</p>
                 </div>
-                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'shopify', page: 1 })}>
-                    <p className="text-xs text-green-600 mb-0.5">Shopify</p>
-                    <p className="text-lg font-bold text-green-900">{stats.shopify}</p>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'shopify', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-green-500"
+                >
+                    <p className="text-[10px] text-green-600 mb-0.5 font-medium uppercase">Shopify</p>
+                    <p className="text-base font-bold text-green-900">{stats.shopify}</p>
                 </div>
-                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'delivery_company', page: 1 })}>
-                    <p className="text-xs text-blue-600 mb-0.5">Delivery</p>
-                    <p className="text-lg font-bold text-blue-900">{stats.delivery_company}</p>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'delivery_company', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-blue-500"
+                >
+                    <p className="text-[10px] text-blue-600 mb-0.5 font-medium uppercase">Delivery</p>
+                    <p className="text-base font-bold text-blue-900">{stats.delivery_company}</p>
                 </div>
-                <div className="bg-white rounded p-2 shadow-sm hover:shadow text-center cursor-pointer" onClick={() => setFilters({ ...filters, source: 'marketplace', page: 1 })}>
-                    <p className="text-xs text-purple-600 mb-0.5">Marketplace</p>
-                    <p className="text-lg font-bold text-purple-900">{stats.marketplace}</p>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'marketplace', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-purple-500"
+                >
+                    <p className="text-[10px] text-purple-600 mb-0.5 font-medium uppercase">Market</p>
+                    <p className="text-base font-bold text-purple-900">{stats.marketplace}</p>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded p-2 shadow-sm mb-3">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-1.5">
+            <div className="bg-white rounded-lg p-3 shadow-sm mb-3 border border-gray-100">
+                <div className="grid grid-cols-5 gap-2">
                     <input
                         type="text"
-                        placeholder="Search by order ID, Shopify ID, client..."
+                        placeholder="Search..."
                         value={filters.search}
                         onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                     <select
                         value={filters.status}
                         onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
-                        <option value="">All Status</option>
+                        <option value="">Status</option>
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
                         <option value="shipped">Shipped</option>
@@ -368,9 +377,9 @@ export default function OrderList({ status = '' }) {
                     <select
                         value={filters.source}
                         onChange={(e) => setFilters({ ...filters, source: e.target.value })}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
-                        <option value="">All Sources</option>
+                        <option value="">Source</option>
                         <option value="manual">Manual</option>
                         <option value="shopify">Shopify</option>
                         <option value="delivery_company">Delivery</option>
@@ -380,72 +389,75 @@ export default function OrderList({ status = '' }) {
                         type="date"
                         value={filters.date_from}
                         onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                     <input
                         type="date"
                         value={filters.date_to}
                         onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                 </div>
             </div>
 
             {/* Orders List */}
-            <div className="space-y-1.5">
+            <div className="space-y-1">
                 {loading ? (
-                    <div className="bg-white rounded p-6 text-center text-gray-500 text-sm">
-                        <div className="inline-block animate-spin h-5 w-5 border-2 border-blue-200 border-t-blue-600 rounded-full mb-2"></div>
-                        <p>Loading...</p>
+                    <div className="bg-white rounded-lg p-12 text-center text-gray-500">
+                        <div className="inline-block animate-spin h-8 w-8 border-4 border-blue-200 border-t-blue-600 rounded-full mb-3"></div>
+                        <p className="text-base font-medium">Loading orders...</p>
                     </div>
                 ) : orders.length === 0 ? (
-                    <div className="bg-white rounded p-6 text-center text-gray-500 text-sm">
-                        No orders found
+                    <div className="bg-white rounded-lg p-12 text-center text-gray-500">
+                        <p className="text-base font-medium">No orders found</p>
+                        <p className="text-sm mt-1">Try adjusting your filters or create a new order</p>
                     </div>
                 ) : (
                     orders.map(order => {
-                        const agentLabel = getAgentLabel(order);
+                        const deliveryAgentLabel = getDeliveryAgentLabel(order);
+                        const confirmationAgentLabel = getConfirmationAgentLabel(order);
                         const companyLabel = getDeliveryCompanyLabel(order);
-                        const assignmentPrimaryLabel = companyLabel || agentLabel || '+ Assign';
+                        const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
                         
                         const statusBorderColor = {
-                            pending: 'border-yellow-400',
-                            confirmed: 'border-blue-400',
-                            picked_up: 'border-indigo-400',
-                            ready_for_shipping: 'border-cyan-400',
-                            shipped: 'border-purple-400',
-                            out_for_delivery: 'border-violet-400',
-                            delivered: 'border-green-400',
-                            cancelled: 'border-red-400',
-                            refused: 'border-orange-400',
-                            returned: 'border-pink-400',
-                            return_requested: 'border-rose-400'
+                            pending: 'border-l-yellow-400',
+                            confirmed: 'border-l-blue-400',
+                            picked_up: 'border-l-indigo-400',
+                            ready_for_shipping: 'border-l-cyan-400',
+                            shipped: 'border-l-purple-400',
+                            out_for_delivery: 'border-l-violet-400',
+                            delivered: 'border-l-green-400',
+                            cancelled: 'border-l-red-400',
+                            refused: 'border-l-orange-400',
+                            returned: 'border-l-pink-400',
+                            return_requested: 'border-l-rose-400'
                         };
 
                         return (
-                            <div key={order.id} className={`bg-white rounded shadow-sm hover:shadow p-2 border-l-4 ${statusBorderColor[order.status] || 'border-gray-400'}`}>
-                                    {/* Header */}
-                                    <div className="flex justify-between items-start gap-2 mb-1.5">
+                            <div key={order.id} className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-all border-l-4 overflow-hidden ${statusBorderColor[order.status] || 'border-l-gray-400'}`}>
+                                    {/* Header Row */}
+                                    <div className="flex justify-between items-start gap-1 p-2 border-b border-gray-100">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
+                                            <div className="flex items-center gap-1 flex-wrap mb-0.5">
                                                 <div className="flex flex-col min-w-0">
-                                                    <span className="text-sm font-bold text-blue-700">{order.order_number}</span>
+                                                    <span className="text-[10px] font-bold text-blue-700 break-all">{order.order_number}</span>
+                                                    <span className="text-[9px] text-gray-500 break-all">ID: {order.id}</span>
                                             {order.source === 'shopify' && order.shopify_name && (
-                                                <span className="text-xs text-gray-500 truncate">Shopify #: {order.shopify_name}</span>
+                                                <span className="text-[9px] text-gray-500 break-all">Shopify: {order.shopify_name}</span>
                                             )}
                                                 </div>
-                                                <span className={`px-1.5 py-0.5 text-xs font-semibold rounded ${getSourceColor(order.source)}`}>
+                                                <span className={`px-1 py-0.5 text-[9px] font-semibold rounded ${getSourceColor(order.source)}`}>
                                                     {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
                                                 </span>
-                                                <span className="text-xs text-gray-500">{formatDate(order.created_at)}</span>
+                                                <span className="text-[9px] text-gray-600 font-medium">{formatDate(order.created_at)}</span>
                                             </div>
                                         </div>
                                         <select
                                             value={order.status}
                                             onChange={(e) => handleStatusChange(order.id, e.target.value)}
                                             disabled={updatingStatus === order.id}
-                                            className={`px-1.5 py-0.5 text-xs font-semibold rounded flex-shrink-0 border-0 ${getStatusBadgeColor(order.status)} ${
-                                                updatingStatus === order.id ? 'opacity-50 cursor-wait' : ''
+                                            className={`px-1.5 py-0.5 text-[10px] font-semibold rounded flex-shrink-0 border-0 cursor-pointer ${getStatusBadgeColor(order.status)} ${
+                                                updatingStatus === order.id ? 'opacity-50 cursor-wait' : 'hover:opacity-80 transition-opacity'
                                             }`}
                                         >
                                             <option value="pending">Pending</option>
@@ -459,101 +471,132 @@ export default function OrderList({ status = '' }) {
                                         </select>
                                     </div>
 
-                                    {/* Products - Quick View */}
-                                    <div className="mb-1.5 p-1.5 bg-gray-50 rounded border border-gray-200">
-                                        <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Products</p>
-                                        <div className="flex flex-wrap gap-2">
+                                    {/* Products Section */}
+                                    <div className="px-2 py-1.5 bg-gray-50 border-b border-gray-100">
+                                        <p className="text-[9px] font-semibold text-gray-600 uppercase mb-1 tracking-wide">Items</p>
+                                        <div className="flex flex-wrap gap-1">
                                             {(order.items || []).map((item, idx) => (
-                                                <span key={idx} className="text-xs bg-white border border-gray-300 rounded px-2 py-0.5">
-                                                    <span className="font-medium">{item.product?.name || item.product_name || 'Item'}</span>
-                                                    <span className="text-gray-500"> ×{item.quantity}</span>
+                                                <span key={idx} className="text-[9px] bg-white border border-gray-300 rounded px-1.5 py-0.5">
+                                                    <span className="font-medium text-[9px]">{item.product?.name || item.product_name || 'Item'}</span>
+                                                    <span className="text-gray-500 text-[9px] ml-0.5">×{item.quantity}</span>
                                                 </span>
                                             ))}
                                         </div>
                                     </div>
 
-                                    {/* Content - One Line Compact */}
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-1.5 text-xs mb-1.5">
-                                        <div>
-                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Client</p>
-                                            <p className="font-medium truncate">{order.client?.name || '-'}</p>
-                                            <p className="text-gray-500 truncate">{order.client?.phone || '-'}</p>
+                                    {/* Content Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-1.5 p-2 text-xs">
+                                        <div className="min-w-0 xl:col-span-3">
+                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Client</p>
+                                            <p className="font-semibold text-gray-900 truncate text-[10px]">{order.client?.name || '-'}</p>
+                                            <p className="text-gray-600 truncate text-[10px]">{order.client?.phone || '-'}</p>
+                                            <p className="font-medium text-gray-900 truncate mt-0.5 text-[10px]">{order.city || order.client?.city || '-'}</p>
+                                            <p className="text-gray-600 line-clamp-1 text-[9px]">{order.shipping_address || order.client?.address || '-'}</p>
                                         </div>
-                                        <div>
-                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Location</p>
-                                            <p className="font-medium truncate">{order.city || '-'}</p>
-                                            <p className="text-gray-500 line-clamp-1">{order.shipping_address || '-'}</p>
+                                        <div className="min-w-0 xl:col-span-1">
+                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Amount</p>
+                                            <p className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</p>
+                                            <p className="text-[9px] text-gray-600">{(order.items || []).length} items</p>
                                         </div>
-                                        <div>
-                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Amount</p>
-                                            <p className="font-bold">{formatCurrency(order.total)}</p>
-                                            <p className="text-gray-500">{(order.items || []).length} items</p>
+                                        <div className="min-w-0 xl:col-span-1">
+                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Benefit</p>
+                                            <p className={`font-bold text-sm ${
+                                                (() => {
+                                                    const itemsProfit = (order.items || []).reduce((sum, item) => {
+                                                        const itemPrice = parseFloat(item.price) || 0;
+                                                        const companyPrice = parseFloat(item.product?.company_price) || 0;
+                                                        const qty = parseInt(item.quantity) || 0;
+                                                        return sum + ((itemPrice - companyPrice) * qty);
+                                                    }, 0);
+                                                    const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
+                                                    return benefit > 0 ? 'text-green-600' : benefit < 0 ? 'text-red-600' : 'text-gray-600';
+                                                })()
+                                            }`}>
+                                                {(() => {
+                                                    const itemsProfit = (order.items || []).reduce((sum, item) => {
+                                                        const itemPrice = parseFloat(item.price) || 0;
+                                                        const companyPrice = parseFloat(item.product?.company_price) || 0;
+                                                        const qty = parseInt(item.quantity) || 0;
+                                                        return sum + ((itemPrice - companyPrice) * qty);
+                                                    }, 0);
+                                                    const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
+                                                    return formatCurrency(benefit);
+                                                })()}
+                                            </p>
                                         </div>
-                                        <div>
-                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Tracking</p>
+                                        <div className="min-w-0 xl:col-span-3">
+                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Tracking</p>
                                             {order.delivery_tracking_code ? (
                                                 <>
-                                                    <p className="text-blue-600 font-mono truncate">{order.delivery_tracking_code.substring(0, 12)}...</p>
-                                                    <p className="text-gray-600">{order.delivery_integration?.provider || ''}</p>
+                                                    <p className="text-blue-600 font-mono break-all text-[9px] font-medium leading-tight" title={order.delivery_tracking_code}>
+                                                        {order.delivery_tracking_code}
+                                                    </p>
+                                                    <p className="text-gray-600 text-[9px] mt-0">{order.delivery_integration?.provider || ''}</p>
                                                 </>
                                             ) : (
-                                                <p className="text-gray-400">Not assigned</p>
+                                                <p className="text-gray-400 text-[9px] font-medium">Not assigned</p>
                                             )}
                                         </div>
-                                        <div>
-                                            <p className="text-gray-500 font-semibold uppercase mb-0.5">Agent</p>
+                                        <div className="min-w-0 xl:col-span-2">
+                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Agent</p>
                                             <button
                                                 onClick={() => handleAgentClick(order)}
-                                                className="group text-gray-600 hover:text-blue-600 hover:underline text-left w-full cursor-pointer transition-colors"
+                                                className="group text-gray-700 hover:text-blue-600 text-left w-full cursor-pointer transition-colors"
                                             >
-                                                <span className="truncate text-sm font-medium group-hover:text-blue-600">
+                                                <span className="text-[9px] font-medium group-hover:underline break-words" title={assignmentPrimaryLabel}>
                                                     {assignmentPrimaryLabel}
                                                 </span>
                                             </button>
                                         </div>
+                                        <div className="min-w-0 xl:col-span-2">
+                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Confirm Agent</p>
+                                            <p className="text-[9px] font-medium text-gray-700 break-words" title={confirmationAgentLabel || '-'}>
+                                                {confirmationAgentLabel || '-'}
+                                            </p>
+                                        </div>
                                     </div>
 
-                                    {/* Actions */}
-                                    <div className="flex items-center justify-end gap-0.5 border-t border-gray-100 pt-1">
+                                    {/* Actions Footer */}
+                                    <div className="flex items-center justify-end gap-1 bg-gray-50 px-2 py-1.5 border-t border-gray-100">
                                         {order.client?.phone && (
                                             <a
                                                 href={`https://wa.me/${order.client.phone.replace(/[^0-9]/g, '')}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-0.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                                                title="WhatsApp"
+                                                className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                                title="Send WhatsApp"
                                             >
-                                                <MessageCircle size={12} />
+                                                <MessageCircle size={14} />
                                             </a>
                                         )}
                                         <button
                                             onClick={() => fetchOrders()}
-                                            className="p-0.5 text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                                            className="p-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
                                             title="Refresh"
                                         >
-                                            <RefreshCw size={12} />
+                                            <RefreshCw size={14} />
                                         </button>
                                         <Link
                                             to={`/orders/${order.id}`}
-                                            className="p-0.5 text-purple-600 hover:bg-purple-50 rounded transition-colors"
-                                            title="View"
+                                            className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                                            title="View Details"
                                         >
-                                            <Eye size={12} />
+                                            <Eye size={14} />
                                         </Link>
                                         <Link
                                             to={`/orders/${order.id}/edit`}
-                                            className="p-0.5 text-orange-600 hover:bg-orange-50 rounded transition-colors"
-                                            title="Edit"
+                                            className="p-1 text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                                            title="Edit Order"
                                         >
-                                            <Edit size={12} />
+                                            <Edit size={14} />
                                         </Link>
                                         <button
                                             onClick={() => handleDeleteOrder(order.id, order.order_number)}
                                             disabled={deletingOrderId === order.id}
-                                            className="p-0.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                                            title="Delete"
+                                            className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Delete Order"
                                         >
-                                            <Trash2 size={12} />
+                                            <Trash2 size={14} />
                                         </button>
                                     </div>
                                 </div>
@@ -563,24 +606,24 @@ export default function OrderList({ status = '' }) {
 
                 {/* Pagination */}
                 {!loading && orders.length > 0 && (
-                    <div className="bg-white rounded p-2 shadow-sm flex items-center justify-between text-xs">
-                        <span className="text-gray-600">{pagination.from}-{pagination.to} of {pagination.total}</span>
-                        <div className="flex gap-0.5">
+                    <div className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-between border border-gray-100">
+                        <span className="text-sm text-gray-600 font-medium">Showing {pagination.from}-{pagination.to} of {pagination.total} orders</span>
+                        <div className="flex gap-2">
                             <button
                                 onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
                                 disabled={pagination.current_page === 1}
-                                className={`px-1.5 py-0.5 rounded border ${pagination.current_page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                                className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                             >
-                                ◀
+                                ◀ Previous
                             </button>
                             {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
                                 .filter(page => page === 1 || page === pagination.last_page || (page >= pagination.current_page - 1 && page <= pagination.current_page + 1))
                                 .map((page, index, array) => (
                                     <React.Fragment key={page}>
-                                        {index > 0 && array[index - 1] !== page - 1 && <span className="px-1 text-gray-400">•••</span>}
+                                        {index > 0 && array[index - 1] !== page - 1 && <span className="px-2 text-gray-400">•••</span>}
                                         <button
                                             onClick={() => setFilters({ ...filters, page })}
-                                            className={`px-1.5 py-0.5 rounded ${pagination.current_page === page ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border'}`}
+                                            className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === page ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                                         >
                                             {page}
                                         </button>
@@ -589,9 +632,9 @@ export default function OrderList({ status = '' }) {
                             <button
                                 onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
                                 disabled={pagination.current_page === pagination.last_page}
-                                className={`px-1.5 py-0.5 rounded border ${pagination.current_page === pagination.last_page ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                                className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === pagination.last_page ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                             >
-                                ▶
+                                Next ▶
                             </button>
                         </div>
                     </div>

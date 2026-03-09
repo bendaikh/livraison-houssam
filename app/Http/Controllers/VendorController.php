@@ -39,6 +39,8 @@ class VendorController extends Controller
             'address' => 'nullable|string',
             'company_name' => 'nullable|string',
             'tax_id' => 'nullable|string',
+            'bank_name' => 'nullable|string|max:255|required_with:rib',
+            'rib' => ['nullable', 'string', 'max:34', 'required_with:bank_name', 'regex:/^[0-9 ]+$/'],
             'commission_rate' => 'nullable|numeric|min:0|max:100',
             'is_active' => 'boolean',
         ]);
@@ -65,6 +67,9 @@ class VendorController extends Controller
             // Create vendor profile linked to user
             $vendorData = $validated;
             unset($vendorData['password'], $vendorData['password_confirmation']);
+            if (isset($vendorData['rib'])) {
+                $vendorData['rib'] = preg_replace('/\s+/', '', $vendorData['rib']);
+            }
             $vendorData['user_id'] = $user->id;
             
             $vendor = Vendor::create($vendorData);
@@ -114,6 +119,8 @@ class VendorController extends Controller
             'address' => 'nullable|string',
             'company_name' => 'nullable|string',
             'tax_id' => 'nullable|string',
+            'bank_name' => 'nullable|string|max:255|required_with:rib',
+            'rib' => ['nullable', 'string', 'max:34', 'required_with:bank_name', 'regex:/^[0-9 ]+$/'],
             'commission_rate' => 'nullable|numeric|min:0|max:100',
             'is_active' => 'boolean',
         ]);
@@ -124,6 +131,9 @@ class VendorController extends Controller
             // Update vendor profile
             $vendorData = $validated;
             unset($vendorData['password'], $vendorData['password_confirmation']);
+            if (isset($vendorData['rib'])) {
+                $vendorData['rib'] = preg_replace('/\s+/', '', $vendorData['rib']);
+            }
             $vendor->update($vendorData);
 
             // Update user account if exists

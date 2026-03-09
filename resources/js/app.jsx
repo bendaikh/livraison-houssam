@@ -17,6 +17,7 @@ import Dashboard from './pages/Dashboard/Dashboard';
 
 // Products
 import ProductList from './pages/Products/ProductList';
+import ProductDetail from './pages/Products/ProductDetail';
 import ProductForm from './pages/Products/ProductForm';
 
 // Categories
@@ -88,6 +89,7 @@ function App() {
                         <Route path="products" element={<ProductList />} />
                         <Route path="products/create" element={<ProductForm />} />
                         <Route path="products/:id/edit" element={<ProductForm />} />
+                        <Route path="products/:id" element={<ProductDetail />} />
                         
                         {/* Categories */}
                         <Route path="categories" element={<CategoryList />} />

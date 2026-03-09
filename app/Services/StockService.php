@@ -100,6 +100,15 @@ class StockService
     {
         $order = \App\Models\Order::with('items.product')->findOrFail($orderId);
 
+        // Avoid double deduction for the same order
+        $alreadyDeducted = \App\Models\StockMovement::where('order_id', $orderId)
+            ->where('type', 'out')
+            ->exists();
+        if ($alreadyDeducted) {
+            \Log::info('Skipping stock deduction, already deducted for order', ['order_id' => $orderId]);
+            return;
+        }
+
         DB::transaction(function () use ($order) {
             foreach ($order->items as $item) {
                 // Skip items without a product_id (manual items with only product name)

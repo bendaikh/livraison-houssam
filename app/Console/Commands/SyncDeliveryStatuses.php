@@ -182,6 +182,7 @@ class SyncDeliveryStatuses extends Command
             
             // BMDelivery French statuses (from actual API response)
             'en attente de ramassage' => 'confirmed',
+            'en attente de rammage' => 'confirmed',
             'ramassé' => 'picked_up',
             'ramasse' => 'picked_up',
             'prêt pour expédition' => 'ready_for_shipping',

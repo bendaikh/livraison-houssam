@@ -30,6 +30,24 @@ export default function ProductForm() {
     const [images, setImages] = useState([]);
     const [existingImages, setExistingImages] = useState([]);
     const [errors, setErrors] = useState({});
+    const toNumber = (value) => parseFloat(value || 0);
+    const recommendedSellingPrice = toNumber(formData.recommended_price);
+    const companySellingPrice = toNumber(formData.company_price);
+    const productCostPrice = toNumber(formData.cost_price || formData.vendor_price);
+    const recommendedGrossProfit = recommendedSellingPrice - productCostPrice;
+    const companyGrossProfit = companySellingPrice - productCostPrice;
+    const recommendedMargin = recommendedSellingPrice > 0
+        ? (recommendedGrossProfit / recommendedSellingPrice) * 100
+        : 0;
+    const companyMargin = companySellingPrice > 0
+        ? (companyGrossProfit / companySellingPrice) * 100
+        : 0;
+    const getImageSrc = (imagePath) => {
+        if (!imagePath) return '';
+        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+        if (imagePath.startsWith('/')) return imagePath;
+        return `/storage/${imagePath}`;
+    };
 
     useEffect(() => {
         fetchCategories();
@@ -127,9 +145,7 @@ export default function ProductForm() {
             }
 
             // Always use POST when sending FormData (Laravel handles _method internally)
-            await api.post(isEditing ? `/products/${id}` : '/products', submitData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            await api.post(isEditing ? `/products/${id}` : '/products', submitData);
 
             navigate('/products');
         } catch (error) {
@@ -377,8 +393,8 @@ export default function ProductForm() {
                             <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-6">
                                 <div className="flex items-start justify-between mb-4">
                                     <div>
-                                        <h3 className="text-lg font-bold text-slate-800">Seller Profit Calculation</h3>
-                                        <p className="text-xs text-slate-600 mt-1">Estimated profit for seller</p>
+                                        <h3 className="text-lg font-bold text-slate-800">Gross Profit Estimate</h3>
+                                        <p className="text-xs text-slate-600 mt-1">Standard ecommerce formula: Selling Price - Cost Price</p>
                                     </div>
                                     <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
                                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -392,35 +408,23 @@ export default function ProductForm() {
                                     <div className="flex justify-between items-center py-2 border-b border-emerald-200">
                                         <span className="text-sm text-slate-600">Selling Price (Recommended)</span>
                                         <span className="text-lg font-semibold text-slate-800">
-                                            {formatCurrency(parseFloat(formData.recommended_price))}
+                                            {formatCurrency(recommendedSellingPrice)}
                                         </span>
                                     </div>
 
                                     {/* Product Cost */}
                                     <div className="flex justify-between items-center py-2 border-b border-emerald-200">
-                                        <span className="text-sm text-slate-600">Product Cost</span>
+                                        <span className="text-sm text-slate-600">Cost Price</span>
                                         <span className="text-lg font-medium text-red-600">
-                                            - {formatCurrency(parseFloat(formData.vendor_price))}
-                                        </span>
-                                    </div>
-
-                                    {/* Delivery Fee */}
-                                    <div className="flex justify-between items-center py-2 border-b border-emerald-200">
-                                        <span className="text-sm text-slate-600">Delivery Fee</span>
-                                        <span className="text-lg font-medium text-red-600">
-                                            - {formatCurrency(35)}
+                                            - {formatCurrency(productCostPrice)}
                                         </span>
                                     </div>
 
                                     {/* Net Profit */}
                                     <div className="flex justify-between items-center pt-3 mt-2 border-t-2 border-emerald-300">
-                                        <span className="text-base font-bold text-slate-800">Net Profit</span>
-                                        <span className="text-2xl font-bold text-emerald-600">
-                                            {formatCurrency(
-                                                parseFloat(formData.recommended_price) - 
-                                                parseFloat(formData.vendor_price) - 
-                                                35
-                                            )}
+                                        <span className="text-base font-bold text-slate-800">Gross Profit</span>
+                                        <span className={`text-2xl font-bold ${recommendedGrossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                            {formatCurrency(recommendedGrossProfit)}
                                         </span>
                                     </div>
 
@@ -428,8 +432,8 @@ export default function ProductForm() {
                                     <div className="bg-white rounded-lg p-3 mt-3">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs text-slate-600">Profit Margin</span>
-                                            <span className="text-sm font-bold text-emerald-700">
-                                                {(((parseFloat(formData.recommended_price) - parseFloat(formData.vendor_price) - 35) / parseFloat(formData.vendor_price)) * 100).toFixed(1)}%
+                                            <span className={`text-sm font-bold ${recommendedGrossProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                                {recommendedMargin.toFixed(1)}%
                                             </span>
                                         </div>
                                     </div>
@@ -437,7 +441,7 @@ export default function ProductForm() {
 
                                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                     <p className="text-xs text-blue-800">
-                                        <strong>Note:</strong> This is based on a fixed delivery fee of 35 DH. Actual profit may vary based on actual delivery costs.
+                                        <strong>Note:</strong> Margin = Gross Profit / Selling Price.
                                     </p>
                                 </div>
                             </div>
@@ -450,14 +454,14 @@ export default function ProductForm() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-semibold text-slate-700">Profit Margin</p>
-                                    <p className="text-xs text-slate-600 mt-0.5">Difference between company and seller price</p>
+                                    <p className="text-xs text-slate-600 mt-0.5">Based on company selling price and cost price</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-2xl font-bold text-emerald-600">
-                                        {formatCurrency(parseFloat(formData.company_price) - parseFloat(formData.vendor_price))}
+                                    <p className={`text-2xl font-bold ${companyGrossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                        {formatCurrency(companyGrossProfit)}
                                     </p>
                                     <p className="text-xs text-slate-600">
-                                        {((parseFloat(formData.company_price) - parseFloat(formData.vendor_price)) / parseFloat(formData.vendor_price) * 100).toFixed(1)}% margin
+                                        {companyMargin.toFixed(1)}% margin
                                     </p>
                                 </div>
                             </div>
@@ -551,7 +555,7 @@ export default function ProductForm() {
                                 {existingImages.map((image, index) => (
                                     <div key={index} className="relative group">
                                         <img
-                                            src={`/storage/${image}`}
+                                            src={getImageSrc(image)}
                                             alt={`Product ${index + 1}`}
                                             className="w-full h-32 object-cover rounded-xl border-2 border-slate-200 group-hover:border-blue-400 transition-all"
                                         />

@@ -17,6 +17,8 @@ class Vendor extends Model
         'address',
         'company_name',
         'tax_id',
+        'bank_name',
+        'rib',
         'commission_rate',
         'is_active',
         'total_sales',

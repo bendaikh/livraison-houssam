@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +9,7 @@ export default function OrderForm() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const { id } = useParams();
+    const location = useLocation();
     const isEditing = !!id;
     
     const [loading, setLoading] = useState(false);
@@ -46,6 +47,7 @@ export default function OrderForm() {
     }]);
 
     const [errors, setErrors] = useState({});
+    const [queryPrefillApplied, setQueryPrefillApplied] = useState(false);
 
     useEffect(() => {
         fetchProducts();
@@ -66,6 +68,38 @@ export default function OrderForm() {
             }
         }
     }, [id, user]);
+
+    useEffect(() => {
+        if (isEditing || queryPrefillApplied || products.length === 0) return;
+
+        const params = new URLSearchParams(location.search);
+        const productId = params.get('product_id');
+        const quantity = parseInt(params.get('quantity') || '1', 10);
+        const source = params.get('source');
+
+        if (!productId) {
+            setQueryPrefillApplied(true);
+            return;
+        }
+
+        const selectedProduct = products.find((product) => String(product.id) === String(productId));
+        if (!selectedProduct) {
+            setQueryPrefillApplied(true);
+            return;
+        }
+
+        setOrderItems([{
+            product_id: String(selectedProduct.id),
+            quantity: Number.isNaN(quantity) ? 1 : Math.max(1, quantity),
+            price: selectedProduct.vendor_price || selectedProduct.price || 0
+        }]);
+
+        if (source && ['manual', 'shopify', 'delivery_company', 'marketplace'].includes(source)) {
+            setFormData((prev) => ({ ...prev, source }));
+        }
+
+        setQueryPrefillApplied(true);
+    }, [isEditing, queryPrefillApplied, location.search, products]);
 
     const fetchProducts = async () => {
         try {
@@ -213,6 +247,19 @@ export default function OrderForm() {
         const shipping = parseFloat(formData.shipping_cost || 0);
         const discount = parseFloat(formData.discount || 0);
         return subtotal + shipping - discount;
+    };
+
+    const calculateEstimatedProfit = () => {
+        return orderItems.reduce((sum, item) => {
+            const product = products.find((p) => String(p.id) === String(item.product_id));
+            if (!product) return sum;
+
+            const baseCost = parseFloat(product.company_price ?? product.cost_price ?? product.price ?? 0);
+            const sellPrice = parseFloat(item.price || 0);
+            const qty = parseInt(item.quantity || 0, 10);
+
+            return sum + ((sellPrice - baseCost) * qty);
+        }, 0);
     };
 
     const baseCityOptions = isEditing ? cities : cities.filter(city => city.is_active);
@@ -701,6 +748,12 @@ export default function OrderForm() {
                             <div className="border-t pt-2 flex justify-between">
                                 <span className="font-semibold text-lg">Total:</span>
                                 <span className="font-bold text-lg text-blue-600">{formatCurrency(calculateTotal())}</span>
+                            </div>
+                            <div className="border-t pt-2 flex justify-between">
+                                <span className="font-semibold text-lg">Benefit:</span>
+                                <span className={`font-bold text-lg ${calculateEstimatedProfit() >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {formatCurrency(calculateEstimatedProfit())}
+                                </span>
                             </div>
                         </div>
                     </div>

@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { MOROCCAN_BANKS } from '../../constants/moroccanBanks';
+import BankLogo from '../../components/BankLogo';
 import { 
     Plus, Search, Edit2, Trash2, X, Check, Store, 
     Mail, Phone, MapPin, DollarSign, Package, 
-    Building2, AlertCircle, TrendingUp, FileText
+    Building2, AlertCircle, TrendingUp, FileText, Landmark
 } from 'lucide-react';
 
 export default function VendorList() {
@@ -22,11 +24,14 @@ export default function VendorList() {
         phone: '',
         address: '',
         company_name: '',
+        bank_name: '',
+        rib: '',
         password: '',
         password_confirmation: '',
         is_active: true
     });
     const [errors, setErrors] = useState({});
+    const [bankSearch, setBankSearch] = useState('');
 
     useEffect(() => {
         fetchVendors();
@@ -81,10 +86,13 @@ export default function VendorList() {
             phone: vendor.phone || '',
             address: vendor.address || '',
             company_name: vendor.company_name || '',
+            bank_name: vendor.bank_name || '',
+            rib: vendor.rib || '',
             password: '',
             password_confirmation: '',
             is_active: vendor.is_active
         });
+        setBankSearch(vendor.bank_name || '');
         setShowModal(true);
     };
 
@@ -109,14 +117,24 @@ export default function VendorList() {
             phone: '',
             address: '',
             company_name: '',
+            bank_name: '',
+            rib: '',
             password: '',
             password_confirmation: '',
             is_active: true
         });
+        setBankSearch('');
         setErrors({});
     };
 
     const filteredVendors = vendors;
+    const filteredBanks = MOROCCAN_BANKS.filter((bank) =>
+        bank.name.toLowerCase().includes(bankSearch.toLowerCase())
+    );
+    const formatRibInput = (value) => {
+        const digitsOnly = value.replace(/\D/g, '').slice(0, 34);
+        return digitsOnly.replace(/(.{4})/g, '$1 ').trim();
+    };
 
     const stats = {
         total: vendors.length,
@@ -353,6 +371,28 @@ export default function VendorList() {
                                 </div>
                             )}
 
+                            {(vendor.bank_name || vendor.rib) && (
+                                <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-100 space-y-2">
+                                    {vendor.bank_name && (
+                                        <div className="flex items-center space-x-2 text-sm text-blue-900">
+                                            <Landmark size={14} className="text-blue-600 flex-shrink-0" />
+                                            <BankLogo
+                                                bankName={vendor.bank_name}
+                                                size={20}
+                                                className="border-blue-100"
+                                            />
+                                            <span className="font-semibold">{vendor.bank_name}</span>
+                                        </div>
+                                    )}
+                                    {vendor.rib && (
+                                        <div className="flex items-center space-x-2 text-xs text-blue-700">
+                                            <FileText size={13} className="flex-shrink-0" />
+                                            <span className="font-mono tracking-wide">RIB: {vendor.rib}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Actions */}
                             <div className="flex items-center space-x-2 pt-4 border-t border-slate-200">
                                 <Link
@@ -384,16 +424,21 @@ export default function VendorList() {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto border border-slate-200">
                         {/* Modal Header */}
                         <div className="flex items-center justify-between p-6 border-b border-slate-200 sticky top-0 bg-white z-10 rounded-t-2xl">
                             <div className="flex items-center space-x-3">
                                 <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
                                     <Store size={20} className="text-white" />
                                 </div>
-                                <h2 className="text-2xl font-bold text-slate-800">
-                                    {editingVendor ? 'Edit Seller' : 'Create New Seller'}
-                                </h2>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-800">
+                                        {editingVendor ? 'Edit Seller' : 'Create New Seller'}
+                                    </h2>
+                                    <p className="text-sm text-slate-500">
+                                        Profile, login access, and payout information
+                                    </p>
+                                </div>
                             </div>
                             <button
                                 onClick={handleCloseModal}
@@ -407,11 +452,11 @@ export default function VendorList() {
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
                             {/* Error Display */}
                             {Object.keys(errors).length > 0 && (
-                                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                                     <div className="flex items-start">
                                         <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
                                         <div className="ml-3">
-                                            <h3 className="text-sm font-semibold text-red-800">Validation Errors</h3>
+                                            <h3 className="text-sm font-semibold text-red-800">Please fix these fields</h3>
                                             <ul className="mt-2 text-sm text-red-700 list-disc list-inside space-y-1">
                                                 {Object.entries(errors).map(([field, messages]) => (
                                                     <li key={field}>
@@ -425,7 +470,7 @@ export default function VendorList() {
                             )}
 
                             {/* Basic Information */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 p-5 bg-slate-50 rounded-2xl border border-slate-200">
                                 <h3 className="text-lg font-semibold text-slate-800 flex items-center space-x-2">
                                     <Store size={20} className="text-orange-600" />
                                     <span>Basic Information</span>
@@ -499,7 +544,7 @@ export default function VendorList() {
                             </div>
 
                             {/* Login Credentials */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 p-5 bg-slate-50 rounded-2xl border border-slate-200">
                                 <h3 className="text-lg font-semibold text-slate-800 flex items-center space-x-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
@@ -567,7 +612,7 @@ export default function VendorList() {
                             </div>
 
                             {/* Address Information */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 p-5 bg-slate-50 rounded-2xl border border-slate-200">
                                 <h3 className="text-lg font-semibold text-slate-800 flex items-center space-x-2">
                                     <MapPin size={20} className="text-orange-600" />
                                     <span>Address Information</span>
@@ -587,8 +632,113 @@ export default function VendorList() {
                                 </div>
                             </div>
 
+                            {/* Bank Information */}
+                            <div className="space-y-4 p-5 bg-slate-50 rounded-2xl border border-slate-200">
+                                <h3 className="text-lg font-semibold text-slate-800 flex items-center space-x-2">
+                                    <Landmark size={20} className="text-orange-600" />
+                                    <span>Bank Information</span>
+                                </h3>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                            Search Bank (Morocco)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={bankSearch}
+                                            onChange={(e) => setBankSearch(e.target.value)}
+                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                                            placeholder="Type to search banks..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="block text-sm font-semibold text-slate-700">
+                                                Select Bank
+                                            </label>
+                                            {formData.bank_name && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData({ ...formData, bank_name: '' });
+                                                        setBankSearch('');
+                                                    }}
+                                                    className="text-xs font-medium text-slate-500 hover:text-red-600 transition-colors"
+                                                >
+                                                    Clear selection
+                                                </button>
+                                            )}
+                                        </div>
+                                        {formData.bank_name && (
+                                            <div className="mb-2 inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-orange-100 border border-orange-200">
+                                                <BankLogo bankName={formData.bank_name} size={18} />
+                                                <span className="text-xs font-semibold text-orange-900">{formData.bank_name}</span>
+                                            </div>
+                                        )}
+                                        <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 bg-slate-50">
+                                            {filteredBanks.length > 0 ? (
+                                                filteredBanks.map((bank) => (
+                                                    <button
+                                                        key={bank.name}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, bank_name: bank.name });
+                                                            setBankSearch(bank.name);
+                                                        }}
+                                                        className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-all ${
+                                                            formData.bank_name === bank.name
+                                                                ? 'bg-orange-100 border border-orange-300'
+                                                                : 'hover:bg-slate-100 border border-transparent'
+                                                        }`}
+                                                    >
+                                                        <BankLogo
+                                                            bankName={bank.name}
+                                                            logoUrl={bank.logo}
+                                                            size={28}
+                                                            className="flex-shrink-0"
+                                                        />
+                                                        <span className="text-sm font-medium text-slate-700">{bank.name}</span>
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <p className="text-sm text-slate-500 px-2 py-1">No banks found for this search.</p>
+                                            )}
+                                        </div>
+                                        {errors.bank_name && (
+                                            <p className="text-red-500 text-xs mt-1.5 flex items-center">
+                                                <span className="mr-1">⚠</span>{errors.bank_name[0]}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                            RIB
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.rib}
+                                            onChange={(e) => setFormData({ ...formData, rib: formatRibInput(e.target.value) })}
+                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all font-mono"
+                                            placeholder="Type seller RIB (numbers only)"
+                                        />
+                                        {errors.rib && (
+                                            <p className="text-red-500 text-xs mt-1.5 flex items-center">
+                                                <span className="mr-1">⚠</span>{errors.rib[0]}
+                                            </p>
+                                        )}
+                                        <div className="flex items-center justify-between mt-1">
+                                            <p className="text-xs text-slate-500">When RIB is entered, a bank must be selected.</p>
+                                            <p className="text-xs text-slate-500">{formData.rib.replace(/\s/g, '').length}/34</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Status */}
-                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
                                 <label className="flex items-center cursor-pointer group">
                                     <div className="relative">
                                         <input
@@ -610,7 +760,7 @@ export default function VendorList() {
                             </div>
 
                             {/* Modal Footer */}
-                            <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                            <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 sticky bottom-0 bg-white pb-1">
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}
