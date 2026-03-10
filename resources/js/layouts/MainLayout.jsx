@@ -84,9 +84,11 @@ export default function MainLayout() {
             subItems: isVendor
                 ? [
                     { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
+                    { path: '/api-integrations/google-sheet', icon: FileText, label: 'Google Sheets', description: 'Spreadsheet import' },
                   ]
                 : [
                     { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
+                    { path: '/api-integrations/google-sheet', icon: FileText, label: 'Google Sheets', description: 'Spreadsheet import' },
                     { path: '/api-integrations/tawsilex', icon: Package, label: 'Tawsilex', description: 'Delivery service' },
                     { path: '/api-integrations/bmdelivery', icon: Box, label: 'BMDelivery', description: 'Delivery service' }
                   ]

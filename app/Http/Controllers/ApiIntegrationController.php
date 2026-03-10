@@ -20,20 +20,20 @@ class ApiIntegrationController extends Controller
             $query->latest()->limit(5);
         }]);
         
-        // If user is a vendor, only show Shopify integration linked to them
+        // If user is a vendor, only show Shopify / Google Sheet integrations linked to them
         if ($user && $user->role && $user->role->slug === 'vendor') {
             $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
             
             if ($vendor) {
-                // Show only Shopify integrations linked to this vendor or general Shopify
-                $query->where('type', 'shopify')
+                // Show only e-commerce style integrations linked to this vendor or general ones
+                $query->whereIn('type', ['shopify', 'google_sheet'])
                       ->where(function ($q) use ($vendor) {
                           $q->where('vendor_id', $vendor->id)
                             ->orWhereNull('vendor_id');
                       });
             } else {
-                // If vendor profile not found, show only Shopify type
-                $query->where('type', 'shopify');
+                // If vendor profile not found, show only Shopify/Google Sheet types
+                $query->whereIn('type', ['shopify', 'google_sheet']);
             }
         }
         
@@ -46,8 +46,8 @@ class ApiIntegrationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'type' => 'required|in:shopify,delivery',
-            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery',
+            'type' => 'required|in:shopify,delivery,google_sheet',
+            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
             'is_active' => 'boolean',
             'credentials' => 'required|array',
             'settings' => 'nullable|array',
@@ -67,8 +67,8 @@ class ApiIntegrationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'string|max:255',
-            'type' => 'in:shopify,delivery',
-            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery',
+            'type' => 'in:shopify,delivery,google_sheet',
+            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
             'is_active' => 'boolean',
             'credentials' => 'array',
             'settings' => 'nullable|array',
@@ -90,6 +90,7 @@ class ApiIntegrationController extends Controller
         try {
             $log = match($apiIntegration->type) {
                 'shopify' => $this->apiIntegrationService->syncShopifyOrders($apiIntegration->id),
+                'google_sheet' => $this->apiIntegrationService->syncGoogleSheetOrders($apiIntegration->id),
                 'delivery' => $this->apiIntegrationService->syncDeliveryCompanyOrders($apiIntegration->id),
                 default => throw new \Exception('Invalid integration type')
             };

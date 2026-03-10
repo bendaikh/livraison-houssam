@@ -49,6 +49,19 @@ export default function ApiIntegrations() {
             vendorVisible: true, // Vendors can see this
         },
         {
+            id: 'google_sheet',
+            path: '/api-integrations/google-sheet',
+            icon: '📊',
+            title: 'Google Sheets',
+            description: 'Import orders from a spreadsheet',
+            color: 'emerald',
+            bgColor: 'bg-emerald-50',
+            borderColor: 'border-emerald-200',
+            textColor: 'text-emerald-700',
+            badgeColor: 'bg-emerald-100 text-emerald-800',
+            vendorVisible: true,
+        },
+        {
             id: 'tawsilex',
             path: '/api-integrations/tawsilex',
             icon: '📦',
@@ -99,7 +112,7 @@ export default function ApiIntegrations() {
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">API Integrations</h1>
                     <p className="mt-2 text-gray-600">
-                        Connect your store with Shopify and delivery services
+                        Connect your store with Shopify, Google Sheets, and delivery services
                     </p>
                 </div>
                 <button

@@ -49,6 +49,28 @@ export default function OrderForm() {
     const [errors, setErrors] = useState({});
     const [queryPrefillApplied, setQueryPrefillApplied] = useState(false);
 
+    const normalizeCity = (value) =>
+        (value || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+
+    const isCasaCity = (value) => normalizeCity(value).includes('casa');
+
+    const getCityDeliveryCost = (cityName) => {
+        if (!cityName) return 35;
+
+        const normalized = normalizeCity(cityName);
+        const match = cities.find((city) => normalizeCity(city.name) === normalized);
+
+        if (match && match.delivery_cost !== null && match.delivery_cost !== undefined) {
+            return parseFloat(match.delivery_cost);
+        }
+
+        return isCasaCity(cityName) ? 25 : 35;
+    };
+
     useEffect(() => {
         fetchProducts();
         fetchVendors();
@@ -94,12 +116,24 @@ export default function OrderForm() {
             price: selectedProduct.vendor_price || selectedProduct.price || 0
         }]);
 
-        if (source && ['manual', 'shopify', 'delivery_company', 'marketplace'].includes(source)) {
+        if (source && ['manual', 'shopify', 'google_sheet', 'delivery_company', 'marketplace'].includes(source)) {
             setFormData((prev) => ({ ...prev, source }));
         }
 
         setQueryPrefillApplied(true);
     }, [isEditing, queryPrefillApplied, location.search, products]);
+
+    useEffect(() => {
+        if (isEditing) return;
+
+        const autoCost = getCityDeliveryCost(formData.city);
+        const currentCost = parseFloat(formData.shipping_cost ?? 0);
+        const normalizedCurrent = Number.isFinite(currentCost) ? currentCost : 0;
+
+        if (Math.abs(autoCost - normalizedCurrent) > 0.009) {
+            setFormData((prev) => ({ ...prev, shipping_cost: autoCost }));
+        }
+    }, [formData.city, formData.shipping_cost, cities, isEditing]);
 
     const fetchProducts = async () => {
         try {
@@ -236,6 +270,10 @@ export default function OrderForm() {
         setOrderItems(newItems);
     };
 
+    const parsedShipping = parseFloat(formData.shipping_cost ?? '');
+    const shippingCost = Number.isFinite(parsedShipping) ? parsedShipping : getCityDeliveryCost(formData.city);
+    const discountValue = parseFloat(formData.discount ?? 0) || 0;
+
     const calculateSubtotal = () => {
         return orderItems.reduce((sum, item) => {
             return sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 0));
@@ -244,22 +282,22 @@ export default function OrderForm() {
 
     const calculateTotal = () => {
         const subtotal = calculateSubtotal();
-        const shipping = parseFloat(formData.shipping_cost || 0);
-        const discount = parseFloat(formData.discount || 0);
-        return subtotal + shipping - discount;
+        return subtotal + shippingCost - discountValue;
     };
 
     const calculateEstimatedProfit = () => {
-        return orderItems.reduce((sum, item) => {
+        const baseCostTotal = orderItems.reduce((sum, item) => {
             const product = products.find((p) => String(p.id) === String(item.product_id));
             if (!product) return sum;
 
             const baseCost = parseFloat(product.company_price ?? product.cost_price ?? product.price ?? 0);
-            const sellPrice = parseFloat(item.price || 0);
             const qty = parseInt(item.quantity || 0, 10);
 
-            return sum + ((sellPrice - baseCost) * qty);
+            return sum + (baseCost * qty);
         }, 0);
+
+        const subtotal = calculateSubtotal();
+        return subtotal - baseCostTotal - shippingCost - discountValue;
     };
 
     const baseCityOptions = isEditing ? cities : cities.filter(city => city.is_active);
@@ -412,7 +450,7 @@ export default function OrderForm() {
                                                             setFormData({
                                                                 ...formData,
                                                                 city: city.name,
-                                                                shipping_cost: city.delivery_cost !== null ? city.delivery_cost : formData.shipping_cost
+                                                                shipping_cost: getCityDeliveryCost(city.name)
                                                             });
                                                             setShowCityDropdown(false);
                                                         }}
@@ -420,20 +458,18 @@ export default function OrderForm() {
                                                             formData.city === city.name ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                                                         }`}
                                                     >
-                                                        <div className="flex items-center justify-between">
-                                                            <div>
-                                                                <p className="text-sm font-medium text-gray-900">{city.name}</p>
-                                                                <div className="flex gap-2 mt-0.5">
-                                                                    {city.delivery_cost !== null && (
-                                                                        <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
-                                                                            {city.delivery_cost} DH
-                                                                        </span>
-                                                                    )}
-                                                                    {city.isCurrentOrderCity && (
-                                                                        <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
-                                                                            From Shopify
-                                                                        </span>
-                                                                    )}
+                                                                <div className="flex items-center justify-between">
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-900">{city.name}</p>
+                                                                        <div className="flex gap-2 mt-0.5">
+                                                                            <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
+                                                                                {getCityDeliveryCost(city.name)} DH
+                                                                            </span>
+                                                                            {city.isCurrentOrderCity && (
+                                                                                <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                                                                                    From Shopify
+                                                                                </span>
+                                                                            )}
                                                                     {!city.is_active && (
                                                                         <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
                                                                             Inactive
@@ -475,6 +511,14 @@ export default function OrderForm() {
                                         </p>
                                     </div>
                                 )}
+
+                                <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
+                                    <span className="font-medium">Shipping:</span>
+                                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded">
+                                        {formatCurrency(shippingCost)}
+                                    </span>
+                                    <span className="text-xs text-gray-500">Edit rates in Settings → Cities.</span>
+                                </div>
                             </div>
                             {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city[0]}</p>}
                         </div>
@@ -576,6 +620,7 @@ export default function OrderForm() {
                             >
                                 <option value="manual">Manual</option>
                                 <option value="shopify">Shopify</option>
+                                <option value="google_sheet">Google Sheet</option>
                                 <option value="delivery_company">Delivery Company</option>
                                 <option value="marketplace">Marketplace</option>
                             </select>
@@ -706,18 +751,20 @@ export default function OrderForm() {
 
                 {/* Pricing Summary */}
                 <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Pricing</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Pricing & Benefit</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Cost</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.shipping_cost}
-                                    onChange={(e) => setFormData({ ...formData, shipping_cost: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Cost (from city settings)</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={formatCurrency(shippingCost)}
+                                        className="w-40 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-700"
+                                    />
+                                    <span className="text-xs text-gray-500">Auto-filled when you choose a city.</span>
+                                </div>
                             </div>
 
                             <div>
@@ -739,11 +786,11 @@ export default function OrderForm() {
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Shipping:</span>
-                                <span className="font-medium">{formatCurrency(parseFloat(formData.shipping_cost || 0))}</span>
+                                <span className="font-medium">{formatCurrency(shippingCost)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Discount:</span>
-                                <span className="font-medium text-red-600">-{formatCurrency(parseFloat(formData.discount || 0))}</span>
+                                <span className="font-medium text-red-600">-{formatCurrency(discountValue)}</span>
                             </div>
                             <div className="border-t pt-2 flex justify-between">
                                 <span className="font-semibold text-lg">Total:</span>

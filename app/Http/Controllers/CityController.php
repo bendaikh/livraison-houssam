@@ -15,6 +15,9 @@ class CityController extends Controller
             $this->syncCitiesFromSources();
         }
 
+        // Ensure default delivery costs are filled for existing cities
+        $this->applyDefaultDeliveryCosts();
+
         $cities = City::orderBy('name')->get();
         return response()->json($cities);
     }
@@ -27,7 +30,8 @@ class CityController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $validated['delivery_cost'] = $validated['delivery_cost'] ?? 0;
+        $validated['delivery_cost'] = $validated['delivery_cost']
+            ?? $this->determineDefaultDeliveryCost($validated['name']);
         $city = City::create($validated);
         return response()->json($city, 201);
     }
@@ -45,7 +49,8 @@ class CityController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $validated['delivery_cost'] = $validated['delivery_cost'] ?? 0;
+        $validated['delivery_cost'] = $validated['delivery_cost']
+            ?? $this->determineDefaultDeliveryCost($validated['name']);
         $city->update($validated);
         return response()->json($city);
     }
@@ -127,7 +132,7 @@ class CityController extends Controller
             $city = City::firstOrCreate(
                 ['name' => $cityName],
                 [
-                    'delivery_cost' => 0,
+                    'delivery_cost' => $this->determineDefaultDeliveryCost($cityName),
                     'is_active' => true,
                 ]
             );
@@ -175,5 +180,42 @@ class CityController extends Controller
 
         $normalized = trim(preg_replace('/\s+/', ' ', $city) ?? '');
         return $normalized !== '' ? $normalized : null;
+    }
+
+    /**
+     * Determine the default delivery cost for a city.
+     * Casablanca (or any city containing "casa") is 25 DH, others 35 DH.
+     */
+    private function determineDefaultDeliveryCost(?string $cityName): float
+    {
+        $normalized = strtolower($this->normalizeCityName($cityName) ?? '');
+
+        if ($normalized === '') {
+            return 35.0;
+        }
+
+        return str_contains($normalized, 'casa') ? 25.0 : 35.0;
+    }
+
+    /**
+     * Backfill default delivery costs for cities without a value (null or zero).
+     */
+    private function applyDefaultDeliveryCosts(): void
+    {
+        // Update Casablanca variations first
+        City::where(function ($query) {
+                $query->whereNull('delivery_cost')
+                    ->orWhere('delivery_cost', 0);
+            })
+            ->whereRaw('LOWER(name) LIKE ?', ['%casa%'])
+            ->update(['delivery_cost' => 25]);
+
+        // Then apply the general default
+        City::where(function ($query) {
+                $query->whereNull('delivery_cost')
+                    ->orWhere('delivery_cost', 0);
+            })
+            ->whereRaw('LOWER(name) NOT LIKE ?', ['%casa%'])
+            ->update(['delivery_cost' => 35]);
     }
 }

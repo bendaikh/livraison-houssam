@@ -239,9 +239,25 @@ function OrderModal({ product, quantity: initialQuantity, formatCurrency, onClos
             || normalized.startsWith('casa');
     };
 
+    const findCity = (name) => {
+        const normalized = normalizeCity(name);
+        return cities.find((city) => normalizeCity(city.name) === normalized);
+    };
+
+    const getCityDeliveryCost = (cityName) => {
+        if (!cityName) return 35;
+
+        const match = findCity(cityName);
+        if (match && match.delivery_cost !== null && match.delivery_cost !== undefined) {
+            return parseFloat(match.delivery_cost);
+        }
+
+        return isCasaCity(cityName) ? 25 : 35;
+    };
+
     const sellPrice = parseFloat(orderForm.sell_price || 0);
     const companyPrice = parseFloat(product.company_price || product.price || 0);
-    const shippingPrice = orderForm.city ? (isCasaCity(orderForm.city) ? 25 : 35) : 35;
+    const shippingPrice = getCityDeliveryCost(orderForm.city);
     const customerTotal = sellPrice * quantity;
     const companyTotal = companyPrice * quantity;
     const estimatedBenefit = customerTotal - shippingPrice - companyTotal;
@@ -249,7 +265,7 @@ function OrderModal({ product, quantity: initialQuantity, formatCurrency, onClos
     const filteredCities = citySearch.trim() === '' 
         ? [] 
         : cities
-            .filter((city) => city.toLowerCase().includes(citySearch.toLowerCase()))
+            .filter((city) => city.name.toLowerCase().includes(citySearch.toLowerCase()))
             .slice(0, 100);
 
     useEffect(() => {
@@ -261,8 +277,8 @@ function OrderModal({ product, quantity: initialQuantity, formatCurrency, onClos
             setLoadingCities(true);
             const response = await api.get('/cities');
             if (response.data && Array.isArray(response.data)) {
-                const cityNames = response.data.map(city => city.name).sort();
-                setCities(cityNames);
+                const sorted = [...response.data].sort((a, b) => a.name.localeCompare(b.name));
+                setCities(sorted);
             }
         } catch (error) {
             console.error('Error fetching cities:', error);
@@ -447,16 +463,21 @@ function OrderModal({ product, quantity: initialQuantity, formatCurrency, onClos
                                                 filteredCities.map((city) => (
                                                     <button
                                                         type="button"
-                                                        key={city}
+                                                        key={city.id}
                                                         onMouseDown={(e) => {
                                                             e.preventDefault();
-                                                            setOrderForm({...orderForm, city});
+                                                            setOrderForm({...orderForm, city: city.name});
                                                             setCitySearch('');
                                                             setShowCityDropdown(false);
                                                         }}
                                                         className="w-full px-4 py-2 text-left text-sm transition-colors hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
                                                     >
-                                                        {city}
+                                                        <div className="flex items-center justify-between">
+                                                            <span>{city.name}</span>
+                                                            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                                                                {getCityDeliveryCost(city.name)} DH
+                                                            </span>
+                                                        </div>
                                                     </button>
                                                 ))
                                             ) : (

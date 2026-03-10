@@ -49,6 +49,7 @@ import ApiIntegrations from './pages/ApiIntegrations/ApiIntegrations';
 import ShopifyIntegrationPage from './pages/ApiIntegrations/ShopifyIntegrationPage';
 import TawsilexIntegrationPage from './pages/ApiIntegrations/TawsilexIntegrationPage';
 import BMDeliveryIntegrationPage from './pages/ApiIntegrations/BMDeliveryIntegrationPage';
+import GoogleSheetIntegrationPage from './pages/ApiIntegrations/GoogleSheetIntegrationPage';
 
 // Marketplace
 import MarketplaceProducts from './pages/Marketplace/MarketplaceProducts';
@@ -124,6 +125,7 @@ function App() {
                         {/* API Integrations */}
                         <Route path="api-integrations" element={<ApiIntegrations />} />
                         <Route path="api-integrations/shopify" element={<ShopifyIntegrationPage />} />
+                        <Route path="api-integrations/google-sheet" element={<GoogleSheetIntegrationPage />} />
                         <Route path="api-integrations/tawsilex" element={<TawsilexIntegrationPage />} />
                         <Route path="api-integrations/bmdelivery" element={<BMDeliveryIntegrationPage />} />
                         

@@ -18,6 +18,7 @@ This document describes how to integrate and use the Shopify, Tawsilex, and BMDe
 The application supports three types of API integrations:
 
 - **Shopify**: E-commerce platform for importing orders
+- **Google Sheets**: Spreadsheet import for sellers who manage orders in Sheets
 - **Tawsilex**: Moroccan delivery service for shipping management
 - **BMDelivery**: Moroccan delivery service for shipping management
 
@@ -82,6 +83,50 @@ This will:
 - Create clients automatically
 - Create products automatically
 - Map Shopify statuses to internal statuses
+
+---
+
+## Google Sheets Integration
+
+### Setup
+
+1. Create a Google Cloud project and enable the **Google Sheets API**
+2. Generate an API key (Credentials → Create credentials → API key)
+3. Share the sheet with **Anyone with the link** as *Viewer* (read-only is enough)
+4. Copy the Sheet ID or full URL and add credentials in the integration page
+
+### Credentials Format
+
+```json
+{
+  "sheet_id": "1AbCDEFghIjKlmNoPqrStuVwxYZ1234567890",
+  "api_key": "AIzaSyXXXX",
+  "range": "Orders!A1:Z1000",
+  "header_row": 1
+}
+```
+
+### Features
+
+- Import each row as an order
+- Basic mapping: client_name, phone, city, address, product_name, quantity, price, status
+- De-duplication using `order_number`/`order_id` if present
+- Missing columns are filled with sensible defaults
+
+### Syncing Orders
+
+**POST** `/api/api-integrations/{id}/sync`
+
+This will:
+- Read the configured sheet range
+- Create new orders with source `google_sheet`
+- Skip rows that already exist by `external_order_id`
+
+### Connection Test
+
+**POST** `/api/api-integrations/{id}/test-connection`
+
+Fetches a small sample to verify API key + sheet access.
 
 ---
 
@@ -385,6 +430,9 @@ TAWSILEX_API_TOKEN=
 
 # BMDelivery Integration (Optional)
 BMDELIVERY_API_TOKEN=
+
+# Google Sheets Integration (Optional)
+GOOGLE_SHEETS_API_KEY=
 ```
 
 ---

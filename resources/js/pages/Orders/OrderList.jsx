@@ -30,6 +30,7 @@ export default function OrderList({ status = '' }) {
         total: 0,
         manual: 0,
         shopify: 0,
+        google_sheet: 0,
         delivery_company: 0,
         marketplace: 0
     });
@@ -80,6 +81,7 @@ export default function OrderList({ status = '' }) {
                 total: response.data.total,
                 manual: fetchedOrders.filter(o => o.source === 'manual').length,
                 shopify: fetchedOrders.filter(o => o.source === 'shopify').length,
+                google_sheet: fetchedOrders.filter(o => o.source === 'google_sheet').length,
                 delivery_company: fetchedOrders.filter(o => o.source === 'delivery_company').length,
                 marketplace: fetchedOrders.filter(o => o.source === 'marketplace').length
             };
@@ -125,6 +127,7 @@ export default function OrderList({ status = '' }) {
         const colors = {
             manual: 'bg-gray-100 text-gray-800',
             shopify: 'bg-green-100 text-green-800',
+            google_sheet: 'bg-emerald-100 text-emerald-800',
             delivery_company: 'bg-blue-100 text-blue-800',
             marketplace: 'bg-purple-100 text-purple-800'
         };
@@ -314,7 +317,7 @@ export default function OrderList({ status = '' }) {
             )}
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-5 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
                 <div 
                     onClick={() => setFilters({ ...filters, source: '', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-gray-400"
@@ -335,6 +338,13 @@ export default function OrderList({ status = '' }) {
                 >
                     <p className="text-[10px] text-green-600 mb-0.5 font-medium uppercase">Shopify</p>
                     <p className="text-base font-bold text-green-900">{stats.shopify}</p>
+                </div>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'google_sheet', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-emerald-500"
+                >
+                    <p className="text-[10px] text-emerald-600 mb-0.5 font-medium uppercase">Sheets</p>
+                    <p className="text-base font-bold text-emerald-900">{stats.google_sheet}</p>
                 </div>
                 <div 
                     onClick={() => setFilters({ ...filters, source: 'delivery_company', page: 1 })}
@@ -382,6 +392,7 @@ export default function OrderList({ status = '' }) {
                         <option value="">Source</option>
                         <option value="manual">Manual</option>
                         <option value="shopify">Shopify</option>
+                        <option value="google_sheet">Google Sheet</option>
                         <option value="delivery_company">Delivery</option>
                         <option value="marketplace">Marketplace</option>
                     </select>
@@ -401,7 +412,7 @@ export default function OrderList({ status = '' }) {
             </div>
 
             {/* Orders List */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
                 {loading ? (
                     <div className="bg-white rounded-lg p-12 text-center text-gray-500">
                         <div className="inline-block animate-spin h-8 w-8 border-4 border-blue-200 border-t-blue-600 rounded-full mb-3"></div>
@@ -417,7 +428,8 @@ export default function OrderList({ status = '' }) {
                         const deliveryAgentLabel = getDeliveryAgentLabel(order);
                         const confirmationAgentLabel = getConfirmationAgentLabel(order);
                         const companyLabel = getDeliveryCompanyLabel(order);
-                        const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
+                        const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || confirmationAgentLabel || '+ Assign';
+                        const agentDisplayName = assignmentPrimaryLabel;
                         
                         const statusBorderColor = {
                             pending: 'border-l-yellow-400',
@@ -435,171 +447,168 @@ export default function OrderList({ status = '' }) {
 
                         return (
                             <div key={order.id} className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-all border-l-4 overflow-hidden ${statusBorderColor[order.status] || 'border-l-gray-400'}`}>
-                                    {/* Header Row */}
-                                    <div className="flex justify-between items-start gap-1 p-2 border-b border-gray-100">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1 flex-wrap mb-0.5">
-                                                <div className="flex flex-col min-w-0">
-                                                    <span className="text-[10px] font-bold text-blue-700 break-all">{order.order_number}</span>
-                                                    <span className="text-[9px] text-gray-500 break-all">ID: {order.id}</span>
-                                            {order.source === 'shopify' && order.shopify_name && (
-                                                <span className="text-[9px] text-gray-500 break-all">Shopify: {order.shopify_name}</span>
-                                            )}
+                                {/* Header Row - Compact and clean */}
+                                <div className="flex items-center justify-between gap-3 px-4 py-1.5 border-b border-gray-100 bg-gray-50">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="text-xs font-bold text-blue-700 flex-shrink-0">{order.order_number}</span>
+                                        <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 ${getSourceColor(order.source)}`}>
+                                            {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
+                                        </span>
+                                        <span className="text-[10px] text-gray-600 flex-shrink-0">{formatDate(order.created_at)}</span>
+                                    </div>
+                                    <select
+                                        value={order.status}
+                                        onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                                        disabled={updatingStatus === order.id}
+                                        className={`px-2 py-0.5 text-[10px] font-semibold rounded border-0 cursor-pointer flex-shrink-0 ${getStatusBadgeColor(order.status)} ${
+                                            updatingStatus === order.id ? 'opacity-50 cursor-wait' : 'hover:opacity-80 transition-opacity'
+                                        }`}
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="confirmed">Confirmed</option>
+                                        <option value="picked_up">Picked Up</option>
+                                        <option value="ready_for_shipping">Ready</option>
+                                        <option value="shipped">Shipped</option>
+                                        <option value="out_for_delivery">Out</option>
+                                        <option value="delivered">Delivered</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+
+                                {/* Content - Horizontal table layout */}
+                                <div className="grid gap-3 px-4 py-2 text-xs leading-snug items-start" style={{gridTemplateColumns: '2fr 1fr 1fr 1fr 1.2fr 1.5fr auto'}}>
+                                    
+                                    {/* CLIENT COLUMN */}
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Client</p>
+                                        <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.client?.name || '-'}</p>
+                                        <p className="text-gray-600 text-[10px] leading-tight truncate">{order.client?.phone || '-'}</p>
+                                        <p className="text-gray-500 text-[10px] leading-tight truncate">{order.city || order.client?.city || '-'}</p>
+                                    </div>
+
+                                    {/* ITEMS COLUMN */}
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Items</p>
+                                        <div className="space-y-0.25">
+                                            {(order.items || []).slice(0, 2).map((item, idx) => (
+                                                <div key={idx} className="text-[11px] text-gray-800 leading-snug truncate">
+                                                    <span className="font-medium">{item.product?.name?.substring(0, 12) || item.product_name?.substring(0, 12) || 'Item'}</span>
+                                                    <span className="text-gray-600"> ×{item.quantity}</span>
                                                 </div>
-                                                <span className={`px-1 py-0.5 text-[9px] font-semibold rounded ${getSourceColor(order.source)}`}>
-                                                    {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
-                                                </span>
-                                                <span className="text-[9px] text-gray-600 font-medium">{formatDate(order.created_at)}</span>
-                                            </div>
-                                        </div>
-                                        <select
-                                            value={order.status}
-                                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                            disabled={updatingStatus === order.id}
-                                            className={`px-1.5 py-0.5 text-[10px] font-semibold rounded flex-shrink-0 border-0 cursor-pointer ${getStatusBadgeColor(order.status)} ${
-                                                updatingStatus === order.id ? 'opacity-50 cursor-wait' : 'hover:opacity-80 transition-opacity'
-                                            }`}
-                                        >
-                                            <option value="pending">Pending</option>
-                                            <option value="confirmed">Confirmed</option>
-                                            <option value="picked_up">Picked Up</option>
-                                            <option value="ready_for_shipping">Ready</option>
-                                            <option value="shipped">Shipped</option>
-                                            <option value="out_for_delivery">Out</option>
-                                            <option value="delivered">Delivered</option>
-                                            <option value="cancelled">Cancelled</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Products Section */}
-                                    <div className="px-2 py-1.5 bg-gray-50 border-b border-gray-100">
-                                        <p className="text-[9px] font-semibold text-gray-600 uppercase mb-1 tracking-wide">Items</p>
-                                        <div className="flex flex-wrap gap-1">
-                                            {(order.items || []).map((item, idx) => (
-                                                <span key={idx} className="text-[9px] bg-white border border-gray-300 rounded px-1.5 py-0.5">
-                                                    <span className="font-medium text-[9px]">{item.product?.name || item.product_name || 'Item'}</span>
-                                                    <span className="text-gray-500 text-[9px] ml-0.5">×{item.quantity}</span>
-                                                </span>
                                             ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Content Grid */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-1.5 p-2 text-xs">
-                                        <div className="min-w-0 xl:col-span-3">
-                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Client</p>
-                                            <p className="font-semibold text-gray-900 truncate text-[10px]">{order.client?.name || '-'}</p>
-                                            <p className="text-gray-600 truncate text-[10px]">{order.client?.phone || '-'}</p>
-                                            <p className="font-medium text-gray-900 truncate mt-0.5 text-[10px]">{order.city || order.client?.city || '-'}</p>
-                                            <p className="text-gray-600 line-clamp-1 text-[9px]">{order.shipping_address || order.client?.address || '-'}</p>
-                                        </div>
-                                        <div className="min-w-0 xl:col-span-1">
-                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Amount</p>
-                                            <p className="font-bold text-sm text-gray-900">{formatCurrency(order.total)}</p>
-                                            <p className="text-[9px] text-gray-600">{(order.items || []).length} items</p>
-                                        </div>
-                                        <div className="min-w-0 xl:col-span-1">
-                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Benefit</p>
-                                            <p className={`font-bold text-sm ${
-                                                (() => {
-                                                    const itemsProfit = (order.items || []).reduce((sum, item) => {
-                                                        const itemPrice = parseFloat(item.price) || 0;
-                                                        const companyPrice = parseFloat(item.product?.company_price) || 0;
-                                                        const qty = parseInt(item.quantity) || 0;
-                                                        return sum + ((itemPrice - companyPrice) * qty);
-                                                    }, 0);
-                                                    const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
-                                                    return benefit > 0 ? 'text-green-600' : benefit < 0 ? 'text-red-600' : 'text-gray-600';
-                                                })()
-                                            }`}>
-                                                {(() => {
-                                                    const itemsProfit = (order.items || []).reduce((sum, item) => {
-                                                        const itemPrice = parseFloat(item.price) || 0;
-                                                        const companyPrice = parseFloat(item.product?.company_price) || 0;
-                                                        const qty = parseInt(item.quantity) || 0;
-                                                        return sum + ((itemPrice - companyPrice) * qty);
-                                                    }, 0);
-                                                    const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
-                                                    return formatCurrency(benefit);
-                                                })()}
-                                            </p>
-                                        </div>
-                                        <div className="min-w-0 xl:col-span-3">
-                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Tracking</p>
-                                            {order.delivery_tracking_code ? (
-                                                <>
-                                                    <p className="text-blue-600 font-mono break-all text-[9px] font-medium leading-tight" title={order.delivery_tracking_code}>
-                                                        {order.delivery_tracking_code}
-                                                    </p>
-                                                    <p className="text-gray-600 text-[9px] mt-0">{order.delivery_integration?.provider || ''}</p>
-                                                </>
-                                            ) : (
-                                                <p className="text-gray-400 text-[9px] font-medium">Not assigned</p>
+                                            {(order.items || []).length > 2 && (
+                                                <p className="text-[11px] text-blue-600 font-semibold leading-snug">+{(order.items || []).length - 2} more</p>
                                             )}
                                         </div>
-                                        <div className="min-w-0 xl:col-span-2">
-                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Agent</p>
-                                            <button
-                                                onClick={() => handleAgentClick(order)}
-                                                className="group text-gray-700 hover:text-blue-600 text-left w-full cursor-pointer transition-colors"
-                                            >
-                                                <span className="text-[9px] font-medium group-hover:underline break-words" title={assignmentPrimaryLabel}>
-                                                    {assignmentPrimaryLabel}
-                                                </span>
-                                            </button>
-                                        </div>
-                                        <div className="min-w-0 xl:col-span-2">
-                                            <p className="text-[9px] font-semibold text-gray-600 uppercase mb-0.5 tracking-wide">Confirm Agent</p>
-                                            <p className="text-[9px] font-medium text-gray-700 break-words" title={confirmationAgentLabel || '-'}>
-                                                {confirmationAgentLabel || '-'}
-                                            </p>
-                                        </div>
                                     </div>
 
-                                    {/* Actions Footer */}
-                                    <div className="flex items-center justify-end gap-1 bg-gray-50 px-2 py-1.5 border-t border-gray-100">
+                                    {/* AMOUNT COLUMN */}
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Amount</p>
+                                        <p className="font-bold text-gray-900 text-sm leading-tight">{formatCurrency(order.total)}</p>
+                                    </div>
+
+                                    {/* BENEFIT COLUMN */}
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Benefit</p>
+                                        <p className={`font-bold text-sm leading-tight ${
+                                            (() => {
+                                                const itemsProfit = (order.items || []).reduce((sum, item) => {
+                                                    const itemPrice = parseFloat(item.price) || 0;
+                                                    const companyPrice = parseFloat(item.product?.company_price) || 0;
+                                                    const qty = parseInt(item.quantity) || 0;
+                                                    return sum + ((itemPrice - companyPrice) * qty);
+                                                }, 0);
+                                                const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
+                                                return benefit > 0 ? 'text-green-600' : benefit < 0 ? 'text-red-600' : 'text-gray-600';
+                                            })()
+                                        }`}>
+                                            {(() => {
+                                                const itemsProfit = (order.items || []).reduce((sum, item) => {
+                                                    const itemPrice = parseFloat(item.price) || 0;
+                                                    const companyPrice = parseFloat(item.product?.company_price) || 0;
+                                                    const qty = parseInt(item.quantity) || 0;
+                                                    return sum + ((itemPrice - companyPrice) * qty);
+                                                }, 0);
+                                                const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
+                                                return formatCurrency(benefit);
+                                            })()}
+                                        </p>
+                                    </div>
+
+                                    {/* TRACKING COLUMN */}
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tracking</p>
+                                        {order.delivery_tracking_code ? (
+                                            <p className="text-blue-700 font-mono font-semibold text-[10px] truncate leading-snug" title={order.delivery_tracking_code}>
+                                                {order.delivery_tracking_code.substring(0, 12)}
+                                            </p>
+                                        ) : (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
+                                                Not assigned
+                                            </span>
+                                        )}
+                                    </div>
+
+                                  {/* AGENT COLUMN */}
+<div className="min-w-0 space-y-0.5 flex flex-col items-start">
+    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Agent</p>
+    <button
+        onClick={() => handleAgentClick(order)}
+        className="inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-semibold border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all"
+        title={assignmentPrimaryLabel}
+    >
+        <span className="truncate max-w-[140px]">
+            {assignmentPrimaryLabel}
+        </span>
+    </button>
+</div>
+
+                                    {/* ACTION ICONS COLUMN */}
+                                    <div className="flex items-start gap-0.5">
                                         {order.client?.phone && (
                                             <a
                                                 href={`https://wa.me/${order.client.phone.replace(/[^0-9]/g, '')}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                                className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors flex-shrink-0"
                                                 title="Send WhatsApp"
                                             >
-                                                <MessageCircle size={14} />
+                                                <MessageCircle size={15} />
                                             </a>
                                         )}
                                         <button
                                             onClick={() => fetchOrders()}
-                                            className="p-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                            className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
                                             title="Refresh"
                                         >
-                                            <RefreshCw size={14} />
+                                            <RefreshCw size={15} />
                                         </button>
                                         <Link
                                             to={`/orders/${order.id}`}
-                                            className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors flex-shrink-0"
                                             title="View Details"
                                         >
-                                            <Eye size={14} />
+                                            <Eye size={15} />
                                         </Link>
                                         <Link
                                             to={`/orders/${order.id}/edit`}
-                                            className="p-1 text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                                            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors flex-shrink-0"
                                             title="Edit Order"
                                         >
-                                            <Edit size={14} />
+                                            <Edit size={15} />
                                         </Link>
                                         <button
                                             onClick={() => handleDeleteOrder(order.id, order.order_number)}
                                             disabled={deletingOrderId === order.id}
-                                            className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 flex-shrink-0"
                                             title="Delete Order"
                                         >
-                                            <Trash2 size={14} />
+                                            <Trash2 size={15} />
                                         </button>
                                     </div>
                                 </div>
+                            </div>
                             );
                         })
                     )}

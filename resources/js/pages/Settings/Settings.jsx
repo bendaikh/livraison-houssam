@@ -720,55 +720,47 @@ export default function Settings() {
                                                 <p className="text-gray-400">Clear the search to return to the full list.</p>
                                             </div>
                                         ) : (
-                                            <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
-                                                <table className="w-full">
-                                                    <thead className="bg-gray-50 border-b border-gray-200">
-                                                        <tr>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City Name</th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery Cost</th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-200">
-                                                        {filteredCities.map((city) => (
-                                                            <tr key={city.id} className="hover:bg-gray-50">
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{city.name}</td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                                                    {city.delivery_cost !== null && city.delivery_cost !== undefined ? `${city.delivery_cost} DH` : '-'}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                                                        city.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                                                    }`}
-                                                                    >
+                                            <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+                                                {filteredCities.map((city) => {
+                                                    const costLabel = (city.delivery_cost !== null && city.delivery_cost !== undefined)
+                                                        ? `${city.delivery_cost} DH`
+                                                        : '-';
+
+                                                    return (
+                                                        <div
+                                                            key={city.id}
+                                                            className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between hover:bg-gray-50"
+                                                        >
+                                                            <div className="space-y-1">
+                                                                <p className="text-sm font-semibold text-gray-900">{city.name}</p>
+                                                                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                                                                    <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">Cost: {costLabel}</span>
+                                                                    <span className={`px-2 py-1 rounded ${city.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
                                                                         {city.is_active ? 'Active' : 'Inactive'}
                                                                     </span>
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                    <div className="flex items-center justify-end gap-2">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleEditCity(city)}
-                                                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-900 px-3 py-1 border border-blue-100 rounded-lg"
-                                                                        >
-                                                                            <Edit2 size={14} />
-                                                                            <span>Edit</span>
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleDeleteCity(city.id)}
-                                                                            className="flex items-center gap-1 text-red-600 hover:text-red-900 px-3 py-1 border border-red-100 rounded-lg"
-                                                                        >
-                                                                            <Trash2 size={14} />
-                                                                            <span>Delete</span>
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 md:gap-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleEditCity(city)}
+                                                                    className="flex items-center gap-1 text-blue-600 hover:text-blue-900 px-3 py-1 border border-blue-100 rounded-lg"
+                                                                >
+                                                                    <Edit2 size={14} />
+                                                                    <span>Edit</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteCity(city.id)}
+                                                                    className="flex items-center gap-1 text-red-600 hover:text-red-900 px-3 py-1 border border-red-100 rounded-lg"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                    <span>Delete</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </>
