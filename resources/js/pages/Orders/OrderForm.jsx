@@ -210,6 +210,9 @@ export default function OrderForm() {
             const response = await api.get(`/orders/${id}`);
             const order = response.data;
             const resolvedCity = String(order.city ?? order.client?.city ?? '').trim();
+            const resolvedShipping = (order.shipping_cost === null || order.shipping_cost === undefined)
+                ? getCityDeliveryCost(resolvedCity)
+                : order.shipping_cost;
             
             setFormData({
                 client_name: order.client?.name || '',
@@ -225,7 +228,7 @@ export default function OrderForm() {
                 city: resolvedCity,
                 notes: order.notes || '',
                 whatsapp: order.whatsapp || '',
-                shipping_cost: order.shipping_cost || 0,
+                shipping_cost: resolvedShipping,
                 discount: order.discount || 0
             });
             
@@ -271,7 +274,9 @@ export default function OrderForm() {
     };
 
     const parsedShipping = parseFloat(formData.shipping_cost ?? '');
-    const shippingCost = Number.isFinite(parsedShipping) ? parsedShipping : getCityDeliveryCost(formData.city);
+    const shippingCost = Number.isFinite(parsedShipping) && parsedShipping > 0
+        ? parsedShipping
+        : getCityDeliveryCost(formData.city);
     const discountValue = parseFloat(formData.discount ?? 0) || 0;
 
     const calculateSubtotal = () => {
@@ -297,7 +302,7 @@ export default function OrderForm() {
         }, 0);
 
         const subtotal = calculateSubtotal();
-        return subtotal - baseCostTotal - shippingCost - discountValue;
+        return subtotal - baseCostTotal - discountValue;
     };
 
     const baseCityOptions = isEditing ? cities : cities.filter(city => city.is_active);

@@ -160,7 +160,25 @@ export default function OrderList({ status = '' }) {
         const integration = order.delivery_integration;
         if (!integration) return '';
 
-        if (integration.name) return integration.name;
+        const providerLabels = {
+            tawsilex: 'Tawsilex',
+            tawsilex_api: 'Tawsilex',
+            tasiliex: 'Tawsilex',
+            bmdelivery: 'BMDelivery',
+            bm_delivery: 'BMDelivery',
+            bm_delivery_ma: 'BMDelivery',
+            vadomax: 'BMDelivery',
+            smanager: 'Tawsilex'
+        };
+
+        const providerKey = (integration.provider || integration.credentials?.provider || integration.name || '').toLowerCase();
+        const friendlyProvider = providerLabels[providerKey] ||
+            (providerKey ? providerKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');
+
+        // Always prioritize a known provider label (BMDelivery / Tawsilex) over custom names like "smanager"
+        if (friendlyProvider) return friendlyProvider;
+        if (integration.name && !/api/i.test(integration.name)) return integration.name;
+        if (integration.name) return integration.name.replace(/api/ig, '').trim();
         if (integration.provider) return integration.provider.replace(/_/g, ' ');
         return '';
     };
@@ -476,7 +494,7 @@ export default function OrderList({ status = '' }) {
                                 </div>
 
                                 {/* Content - Horizontal table layout */}
-                                <div className="grid gap-3 px-4 py-2 text-xs leading-snug items-start" style={{gridTemplateColumns: '2fr 1fr 1fr 1fr 1.2fr 1.5fr auto'}}>
+                                <div className="grid gap-3 px-4 py-2 text-xs leading-snug items-start" style={{gridTemplateColumns: '1.8fr 1.2fr 1fr 1fr 1fr 1.2fr 1.5fr auto'}}>
                                     
                                     {/* CLIENT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
@@ -484,6 +502,22 @@ export default function OrderList({ status = '' }) {
                                         <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.client?.name || '-'}</p>
                                         <p className="text-gray-600 text-[10px] leading-tight truncate">{order.client?.phone || '-'}</p>
                                         <p className="text-gray-500 text-[10px] leading-tight truncate">{order.city || order.client?.city || '-'}</p>
+                                    </div>
+
+                                    {/* SELLER COLUMN */}
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Seller</p>
+                                        {order.vendor ? (
+                                            <>
+                                                <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.vendor?.name || '-'}</p>
+                                                <p className="text-gray-600 text-[10px] leading-tight truncate">{order.vendor?.email || '-'}</p>
+                                                <p className="text-gray-500 text-[10px] leading-tight truncate">{order.vendor?.phone || '-'}</p>
+                                            </>
+                                        ) : (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
+                                                Direct
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* ITEMS COLUMN */}
@@ -519,7 +553,7 @@ export default function OrderList({ status = '' }) {
                                                     const qty = parseInt(item.quantity) || 0;
                                                     return sum + ((itemPrice - companyPrice) * qty);
                                                 }, 0);
-                                                const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
+                                                const benefit = itemsProfit - (parseFloat(order.discount) || 0);
                                                 return benefit > 0 ? 'text-green-600' : benefit < 0 ? 'text-red-600' : 'text-gray-600';
                                             })()
                                         }`}>
@@ -530,7 +564,7 @@ export default function OrderList({ status = '' }) {
                                                     const qty = parseInt(item.quantity) || 0;
                                                     return sum + ((itemPrice - companyPrice) * qty);
                                                 }, 0);
-                                                const benefit = itemsProfit - (parseFloat(order.shipping_cost) || 0);
+                                                const benefit = itemsProfit - (parseFloat(order.discount) || 0);
                                                 return formatCurrency(benefit);
                                             })()}
                                         </p>

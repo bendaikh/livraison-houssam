@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -12,12 +12,16 @@ export default function ProductForm() {
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState([]);
     const [vendors, setVendors] = useState([]);
+    const [sellerScope, setSellerScope] = useState('all');
+    const [selectedSellers, setSelectedSellers] = useState([]);
+    const [sellerSearchTerm, setSellerSearchTerm] = useState('');
+    const [initialSellerAssignments, setInitialSellerAssignments] = useState([]);
+    const [sellerSelectionInitialized, setSellerSelectionInitialized] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         sku: '',
         description: '',
         category_id: '',
-        vendor_id: '',
         company_price: '',
         vendor_price: '',
         recommended_price: '',
@@ -49,6 +53,14 @@ export default function ProductForm() {
         return `/storage/${imagePath}`;
     };
 
+    // Reset seller assignment state when switching between create/edit routes
+    useEffect(() => {
+        setSellerScope('all');
+        setSelectedSellers([]);
+        setInitialSellerAssignments([]);
+        setSellerSelectionInitialized(false);
+    }, [id]);
+
     useEffect(() => {
         fetchCategories();
         fetchVendors();
@@ -56,6 +68,16 @@ export default function ProductForm() {
             fetchProduct();
         }
     }, [id]);
+
+    const activeVendors = useMemo(
+        () => vendors.filter((vendor) => vendor.is_active !== false),
+        [vendors]
+    );
+
+    const activeVendorIds = useMemo(
+        () => activeVendors.map((vendor) => vendor.id),
+        [activeVendors]
+    );
 
     const fetchCategories = async () => {
         try {
@@ -85,7 +107,6 @@ export default function ProductForm() {
                 sku: product.sku,
                 description: product.description || '',
                 category_id: product.category_id || '',
-                vendor_id: product.vendor_id || '',
                 company_price: product.company_price || '',
                 vendor_price: product.vendor_price || '',
                 recommended_price: product.recommended_price || '',
@@ -96,6 +117,11 @@ export default function ProductForm() {
                 weight_unit: product.weight_unit || 'kg'
             });
             setExistingImages(product.images || []);
+
+            const assignedSellerIds = (product.marketplace_products || []).map(mp => Number(mp.vendor_id));
+            setInitialSellerAssignments(assignedSellerIds);
+            setSelectedSellers(assignedSellerIds);
+            setSellerSelectionInitialized(false);
         } catch (error) {
             console.error('Error fetching product:', error);
         } finally {
@@ -103,9 +129,48 @@ export default function ProductForm() {
         }
     };
 
+    // Initialize seller selection once vendors (and, when editing, assignments) are available
+    useEffect(() => {
+        if (sellerSelectionInitialized) return;
+
+        if (vendors.length === 0) {
+            return;
+        }
+
+        if (isEditing) {
+            const hasAllActive = activeVendorIds.length > 0 && initialSellerAssignments.length >= activeVendorIds.length;
+            setSellerScope(hasAllActive ? 'all' : 'specific');
+            setSelectedSellers(hasAllActive ? activeVendorIds : initialSellerAssignments);
+        } else {
+            setSellerScope('all');
+            setSelectedSellers(activeVendorIds);
+        }
+
+        setSellerSelectionInitialized(true);
+    }, [
+        vendors,
+        activeVendorIds,
+        initialSellerAssignments,
+        sellerSelectionInitialized,
+        isEditing
+    ]);
+
+    // Keep "all sellers" selection in sync if vendor list changes
+    useEffect(() => {
+        if (sellerScope === 'all') {
+            setSelectedSellers(activeVendorIds);
+        }
+    }, [sellerScope, activeVendorIds]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
+
+        if (sellerScope === 'specific' && selectedSellers.length === 0) {
+            setErrors({ seller_ids: ['Please select at least one seller'] });
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -132,6 +197,14 @@ export default function ProductForm() {
             images.forEach((image, index) => {
                 submitData.append(`images[${index}]`, image);
             });
+
+            // Seller visibility
+            submitData.append('seller_scope', sellerScope);
+            if (sellerScope === 'specific') {
+                selectedSellers.forEach((sellerId, index) => {
+                    submitData.append(`seller_ids[${index}]`, sellerId);
+                });
+            }
 
             // For editing, add _method field to simulate PUT request (required for multipart/form-data)
             if (isEditing) {
@@ -297,18 +370,93 @@ export default function ProductForm() {
                             )}
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Seller</label>
-                            <select
-                                value={formData.vendor_id}
-                                onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
-                            >
-                                <option value="">Select Seller</option>
-                                {vendors.map(vendor => (
-                                    <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                                ))}
-                            </select>
+                        <div className="md:col-span-2 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-3">Who can sell this product? *</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center space-x-3 p-3 border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer transition">
+                                        <input
+                                            type="radio"
+                                            name="seller_scope"
+                                            value="all"
+                                            checked={sellerScope === 'all'}
+                                            onChange={() => {
+                                                setSellerScope('all');
+                                                setSelectedSellers(activeVendorIds);
+                                                setSellerSearchTerm('');
+                                            }}
+                                            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm font-medium text-slate-700">All Sellers</span>
+                                        <span className="text-xs text-slate-500">({activeVendors.length} active)</span>
+                                    </label>
+
+                                    <label className="flex items-center space-x-3 p-3 border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer transition">
+                                        <input
+                                            type="radio"
+                                            name="seller_scope"
+                                            value="specific"
+                                            checked={sellerScope === 'specific'}
+                                            onChange={() => setSellerScope('specific')}
+                                            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm font-medium text-slate-700">Only Specific Sellers</span>
+                                        <span className="text-xs text-slate-500">(Select below)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {sellerScope === 'specific' && (
+                                <div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search sellers..."
+                                        value={sellerSearchTerm}
+                                        onChange={(e) => setSellerSearchTerm(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    />
+                                    <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto p-3 border border-slate-200 rounded-lg bg-slate-50">
+                                        {activeVendors
+                                            .filter(vendor => vendor.name.toLowerCase().includes(sellerSearchTerm.toLowerCase()))
+                                            .map(vendor => (
+                                                <div
+                                                    key={vendor.id}
+                                                    onClick={() => {
+                                                        setSelectedSellers(prev =>
+                                                            prev.includes(vendor.id)
+                                                                ? prev.filter(id => id !== vendor.id)
+                                                                : [...prev, vendor.id]
+                                                        );
+                                                    }}
+                                                    className={`p-3 rounded-lg border-2 cursor-pointer transition ${
+                                                        selectedSellers.includes(vendor.id)
+                                                            ? 'border-blue-500 bg-blue-50'
+                                                            : 'border-slate-300 bg-white hover:border-slate-400'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                                            selectedSellers.includes(vendor.id)
+                                                                ? 'border-blue-500 bg-blue-500'
+                                                                : 'border-slate-300'
+                                                        }`}>
+                                                            {selectedSellers.includes(vendor.id) && (
+                                                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-sm font-medium text-slate-700 truncate">{vendor.name}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                    {selectedSellers.length > 0 && (
+                                        <p className="text-xs text-slate-600 mt-2">{selectedSellers.length} seller{selectedSellers.length !== 1 ? 's' : ''} selected</p>
+                                    )}
+                                    {errors.seller_ids && <p className="text-red-500 text-xs mt-2 flex items-center"><span className="mr-1">⚠</span>{errors.seller_ids[0]}</p>}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

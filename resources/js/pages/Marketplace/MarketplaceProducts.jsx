@@ -2,32 +2,25 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import OrderModal from '../../components/OrderModal';
 import { 
-    Package, Store, Users, Search, Filter, Plus, X, Check, 
-    ToggleLeft, ToggleRight, Edit, Trash2, TrendingUp, AlertCircle,
-    CheckCircle, XCircle, DollarSign, Hash, Eye, ChevronDown, ChevronUp,
-    Grid, List as ListIcon
+    Package, Store, Users, Search, ToggleLeft, ToggleRight, Trash2, TrendingUp, X,
+    CheckCircle, DollarSign, Hash, ChevronDown, ChevronUp, Grid, List as ListIcon, ShoppingBag
 } from 'lucide-react';
 
 export default function MarketplaceProducts() {
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const [products, setProducts] = useState([]);
-    const [vendors, setVendors] = useState([]);
     const [statistics, setStatistics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState('list');
-    const [selectedProduct, setSelectedProduct] = useState(null);
-    const [showAssignModal, setShowAssignModal] = useState(false);
-    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [viewMode, setViewMode] = useState('grid');
     const [expandedProducts, setExpandedProducts] = useState(new Set());
-    const [assignForm, setAssignForm] = useState({
-        vendor_id: '',
-        commission_rate: '',
-        assigned_quantity: 0,
-        is_active: true,
-    });
+    const [orderProduct, setOrderProduct] = useState(null);
+    const [showOrderModal, setShowOrderModal] = useState(false);
+    const [detailProduct, setDetailProduct] = useState(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
     
     const isVendor = user?.role?.slug === 'vendor';
 
@@ -38,13 +31,11 @@ export default function MarketplaceProducts() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [productsRes, vendorsRes, statsRes] = await Promise.all([
+            const [productsRes, statsRes] = await Promise.all([
                 api.get('/marketplace', { params: { search: searchTerm, is_marketplace_active: 1 } }),
-                api.get('/vendors'),
                 api.get('/marketplace/statistics'),
             ]);
             setProducts(productsRes.data.data);
-            setVendors(vendorsRes.data.data);
             setStatistics(statsRes.data);
         } catch (error) {
             console.error('Error fetching marketplace data:', error);
@@ -53,26 +44,24 @@ export default function MarketplaceProducts() {
         }
     };
 
-    const handleAssignVendor = async (product) => {
-        setSelectedProduct(product);
-        setShowAssignModal(true);
-        setAssignForm({
-            vendor_id: '',
-            commission_rate: '',
-            assigned_quantity: 0,
-            is_active: true,
-        });
+    const openOrderModal = (product) => {
+        setOrderProduct(product);
+        setShowOrderModal(true);
     };
 
-    const submitAssignment = async () => {
-        try {
-            await api.post(`/marketplace/products/${selectedProduct.id}/assign`, assignForm);
-            setShowAssignModal(false);
-            fetchData();
-        } catch (error) {
-            console.error('Error assigning vendor:', error);
-            alert(error.response?.data?.message || 'Failed to assign vendor');
-        }
+    const closeOrderModal = () => {
+        setShowOrderModal(false);
+        setOrderProduct(null);
+    };
+
+    const openProductDetails = (product) => {
+        setDetailProduct(product);
+        setShowDetailModal(true);
+    };
+
+    const closeProductDetails = () => {
+        setShowDetailModal(false);
+        setDetailProduct(null);
     };
 
     const toggleActivation = async (assignmentId) => {
@@ -127,7 +116,7 @@ export default function MarketplaceProducts() {
                         </div>
                         <span>Marketplace</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Manage product assignments to vendors</p>
+                    <p className="text-slate-500 mt-1">Browse marketplace products, view details, and place orders</p>
                 </div>
             </div>
 
@@ -232,8 +221,8 @@ export default function MarketplaceProducts() {
             {viewMode === 'list' ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">
                     <div className="p-6 border-b border-slate-100">
-                        <h3 className="text-lg font-semibold text-slate-800">Products & Vendor Assignments</h3>
-                        <p className="text-sm text-slate-500 mt-1">Manage which vendors can sell each product</p>
+                        <h3 className="text-lg font-semibold text-slate-800">Marketplace Products</h3>
+                        <p className="text-sm text-slate-500 mt-1">Click a card to view product details, then place an order</p>
                     </div>
 
                     <div className="divide-y divide-slate-100">
@@ -298,15 +287,13 @@ export default function MarketplaceProducts() {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    {!isVendor && (
-                                                        <button
-                                                            onClick={() => handleAssignVendor(product)}
-                                                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all flex items-center space-x-2"
-                                                        >
-                                                            <Plus size={18} />
-                                                            <span>Assign Vendor</span>
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => openOrderModal(product)}
+                                                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all flex items-center space-x-2"
+                                                    >
+                                                        <ShoppingBag size={18} />
+                                                        <span>Order</span>
+                                                    </button>
                                                     {hasAssignments && (
                                                         <button
                                                             onClick={() => toggleProductExpansion(product.id)}
@@ -382,7 +369,14 @@ export default function MarketplaceProducts() {
                         products.map((product) => {
                             const hasAssignments = product.marketplace_products?.length > 0;
                             return (
-                                <div key={product.id} className="bg-white rounded-2xl shadow-lg border border-slate-200/50 overflow-hidden hover:shadow-xl transition-all group">
+                                <div
+                                    key={product.id}
+                                    className="bg-white rounded-2xl shadow-lg border border-slate-200/50 overflow-hidden hover:shadow-xl transition-all group cursor-pointer"
+                                    onClick={() => openProductDetails(product)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProductDetails(product); } }}
+                                >
                                     {/* Product Image */}
                                     <div className="relative h-48 bg-gradient-to-br from-purple-100 to-indigo-100">
                                         {product.images && product.images.length > 0 ? (
@@ -461,15 +455,13 @@ export default function MarketplaceProducts() {
                                         )}
 
                                         {/* Actions */}
-                                        {!isVendor && (
-                                            <button
-                                                onClick={() => handleAssignVendor(product)}
-                                                className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                                            >
-                                                <Plus size={16} />
-                                                <span>Assign Vendor</span>
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); openOrderModal(product); }}
+                                            className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                                        >
+                                            <ShoppingBag size={16} />
+                                            <span>Order</span>
+                                        </button>
                                     </div>
                                 </div>
                             );
@@ -478,110 +470,102 @@ export default function MarketplaceProducts() {
                 </div>
             )}
 
-            {/* Assign Vendor Modal */}
-            {showAssignModal && (
+            {showDetailModal && detailProduct && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-bold text-slate-800">Assign Vendor</h3>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between p-5 border-b border-slate-200">
+                            <div>
+                                <p className="text-xs uppercase text-slate-500 font-semibold">Product Details</p>
+                                <h2 className="text-2xl font-bold text-slate-900">{detailProduct.name}</h2>
+                                <p className="text-sm text-slate-500">SKU: {detailProduct.sku}</p>
+                            </div>
                             <button
-                                onClick={() => setShowAssignModal(false)}
-                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                onClick={closeProductDetails}
+                                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Product
-                                </label>
-                                <div className="p-3 bg-slate-50 rounded-xl">
-                                    <p className="font-semibold text-slate-800">{selectedProduct?.name}</p>
-                                    <p className="text-sm text-slate-500">{selectedProduct?.sku}</p>
+                                <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-[360px] flex items-center justify-center">
+                                    {detailProduct.images?.[0] ? (
+                                        <img
+                                            src={detailProduct.images[0].startsWith('http') ? detailProduct.images[0] : `/storage/${detailProduct.images[0]}`}
+                                            alt={detailProduct.name}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="text-slate-400 text-sm">No image</div>
+                                    )}
                                 </div>
+                                {detailProduct.images?.length > 1 && (
+                                    <div className="flex gap-2 mt-3 overflow-x-auto">
+                                        {detailProduct.images.map((img, idx) => (
+                                            <img
+                                                key={`${img}-${idx}`}
+                                                src={img.startsWith('http') ? img : `/storage/${img}`}
+                                                alt={`thumb-${idx}`}
+                                                className="w-16 h-16 rounded-lg border border-slate-200 object-cover"
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Select Vendor *
-                                </label>
-                                <select
-                                    value={assignForm.vendor_id}
-                                    onChange={(e) => setAssignForm({ ...assignForm, vendor_id: e.target.value })}
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                                    required
+                            <div className="space-y-4">
+                                {detailProduct.category && (
+                                    <span className="inline-block px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">
+                                        {detailProduct.category.name}
+                                    </span>
+                                )}
+
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xs text-slate-600 font-semibold">Available Stock</p>
+                                        <p className="text-2xl font-bold text-slate-900">{detailProduct.stock_quantity} units</p>
+                                    </div>
+                                    <span className={`text-sm font-semibold px-3 py-1 rounded-lg ${detailProduct.stock_quantity > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                                        {detailProduct.stock_quantity > 0 ? 'In Stock' : 'Out of Stock'}
+                                    </span>
+                                </div>
+
+                                {detailProduct.recommended_price != null && (
+                                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                                        <p className="text-xs text-blue-700 font-semibold">Recommended Sell Price</p>
+                                        <p className="text-xl font-bold text-blue-900">{formatCurrency(detailProduct.recommended_price)}</p>
+                                    </div>
+                                )}
+
+                                {detailProduct.description && (
+                                    <div className="rounded-lg border border-slate-200 p-4 bg-white">
+                                        <p className="text-sm text-slate-700 whitespace-pre-line">{detailProduct.description}</p>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() => { closeProductDetails(); openOrderModal(detailProduct); }}
+                                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/20 transition-all flex items-center justify-center space-x-2"
                                 >
-                                    <option value="">Choose a vendor...</option>
-                                    {vendors.filter(v => v.is_active).map((vendor) => (
-                                        <option key={vendor.id} value={vendor.id}>
-                                            {vendor.name} - {vendor.commission_rate}% commission
-                                        </option>
-                                    ))}
-                                </select>
+                                    <ShoppingBag size={18} />
+                                    <span>Order</span>
+                                </button>
                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Commission Rate (%) - Optional
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
-                                    value={assignForm.commission_rate}
-                                    onChange={(e) => setAssignForm({ ...assignForm, commission_rate: e.target.value })}
-                                    placeholder="Leave empty to use vendor's default"
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Assigned Quantity
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={assignForm.assigned_quantity}
-                                    onChange={(e) => setAssignForm({ ...assignForm, assigned_quantity: parseInt(e.target.value) || 0 })}
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                                />
-                            </div>
-
-                            <div className="flex items-center space-x-3">
-                                <input
-                                    type="checkbox"
-                                    id="is_active"
-                                    checked={assignForm.is_active}
-                                    onChange={(e) => setAssignForm({ ...assignForm, is_active: e.target.checked })}
-                                    className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <label htmlFor="is_active" className="text-sm font-medium text-slate-700">
-                                    Activate immediately
-                                </label>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center space-x-3 mt-6">
-                            <button
-                                onClick={submitAssignment}
-                                disabled={!assignForm.vendor_id}
-                                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Assign Vendor
-                            </button>
-                            <button
-                                onClick={() => setShowAssignModal(false)}
-                                className="px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
-                            >
-                                Cancel
-                            </button>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showOrderModal && orderProduct && (
+                <OrderModal
+                    product={orderProduct}
+                    initialQuantity={1}
+                    formatCurrency={formatCurrency}
+                    source="marketplace"
+                    onClose={closeOrderModal}
+                    onOrderCreated={fetchData}
+                />
             )}
         </div>
     );

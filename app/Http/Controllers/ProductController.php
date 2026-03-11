@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -61,6 +62,9 @@ class ProductController extends Controller
             'weight_unit' => 'nullable|string',
             'images' => 'nullable|array',
             'images.*' => 'image|max:10240',
+            'seller_scope' => 'nullable|in:all,specific',
+            'seller_ids' => 'nullable|array',
+            'seller_ids.*' => 'exists:vendors,id',
         ]);
 
         // Set price to company_price if not provided
@@ -80,12 +84,22 @@ class ProductController extends Controller
 
         $product = Product::create($validated);
 
+        // Assign product visibility to sellers (marketplace)
+        $this->syncMarketplaceAssignments($product, $request, true);
+
         return response()->json($product->load(['category', 'vendor']), 201);
     }
 
     public function show(Product $product)
     {
-        return response()->json($product->load(['category', 'vendor', 'stockMovements.user']));
+        return response()->json(
+            $product->load([
+                'category',
+                'vendor',
+                'stockMovements.user',
+                'marketplaceProducts.vendor',
+            ])
+        );
     }
 
     public function update(Request $request, Product $product)
@@ -108,6 +122,9 @@ class ProductController extends Controller
             'weight_unit' => 'nullable|string',
             'images' => 'nullable|array',
             'images.*' => 'image|max:10240',
+            'seller_scope' => 'nullable|in:all,specific',
+            'seller_ids' => 'nullable|array',
+            'seller_ids.*' => 'exists:vendors,id',
         ]);
 
         // Set price to company_price if not provided
@@ -127,7 +144,62 @@ class ProductController extends Controller
 
         $product->update($validated);
 
+        // Update seller assignments only when provided (avoid side-effects on simple updates)
+        if ($request->has('seller_scope') || $request->has('seller_ids')) {
+            $this->syncMarketplaceAssignments($product, $request);
+        }
+
         return response()->json($product->load(['category', 'vendor']));
+    }
+
+    /**
+     * Sync marketplace assignments for a product based on request input.
+     *
+     * @param  Product  $product
+     * @param  Request  $request
+     * @param  bool  $fallbackToAll  When true (on store), default to assigning all active sellers if no mode provided.
+     */
+    private function syncMarketplaceAssignments(Product $product, Request $request, bool $fallbackToAll = false): void
+    {
+        $mode = $request->input('seller_scope');
+
+        // On creation, default to "all" so the product is visible to every active seller unless specified otherwise
+        if (!$mode && $fallbackToAll) {
+            $mode = 'all';
+        }
+
+        if (!in_array($mode, ['all', 'specific'], true)) {
+            return; // No seller assignment requested
+        }
+
+        $sellerIds = $request->input('seller_ids', []);
+
+        $targetVendorIds = $mode === 'all'
+            ? Vendor::where('is_active', true)->pluck('id')->all()
+            : array_values(array_unique(array_map('intval', $sellerIds)));
+
+        $existingAssignments = $product->marketplaceProducts()->get()->keyBy('vendor_id');
+        $now = now();
+        $syncPayload = [];
+
+        foreach ($targetVendorIds as $vendorId) {
+            $existing = $existingAssignments->get($vendorId);
+
+            $syncPayload[$vendorId] = [
+                'is_active' => $existing?->is_active ?? true,
+                'commission_rate' => $existing?->commission_rate ?? null,
+                'assigned_quantity' => $existing?->assigned_quantity ?? 0,
+                'activated_at' => $existing?->activated_at ?? $now,
+                'deactivated_at' => $existing?->deactivated_at ?? null,
+            ];
+        }
+
+        // Sync assignments (detach those not selected)
+        $product->marketplaceVendors()->sync($syncPayload);
+
+        $product->update([
+            'is_marketplace_active' => count($targetVendorIds) > 0,
+        ]);
     }
 
     public function destroy(Product $product)
