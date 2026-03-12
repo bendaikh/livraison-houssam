@@ -48,6 +48,7 @@ class ApiIntegrationController extends Controller
             'name' => 'required|string|max:255',
             'type' => 'required|in:shopify,delivery,google_sheet',
             'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
+            'vendor_id' => 'nullable|exists:vendors,id',
             'is_active' => 'boolean',
             'credentials' => 'required|array',
             'settings' => 'nullable|array',
@@ -69,6 +70,7 @@ class ApiIntegrationController extends Controller
             'name' => 'string|max:255',
             'type' => 'in:shopify,delivery,google_sheet',
             'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
+            'vendor_id' => 'nullable|exists:vendors,id',
             'is_active' => 'boolean',
             'credentials' => 'array',
             'settings' => 'nullable|array',
@@ -246,6 +248,51 @@ class ApiIntegrationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Failed to get statuses: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function listGoogleSheetTabs(Request $request, ApiIntegration $apiIntegration)
+    {
+        $validated = $request->validate([
+            'sheet_url' => 'required|string',
+        ]);
+
+        try {
+            $tabs = $this->apiIntegrationService->listGoogleSheetTabs($apiIntegration->id, $validated['sheet_url']);
+            return response()->json([
+                'message' => 'Tabs loaded',
+                'data' => $tabs,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to load tabs: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function previewGoogleSheet(Request $request, ApiIntegration $apiIntegration)
+    {
+        $validated = $request->validate([
+            'sheet_url' => 'required|string',
+            'tab' => 'required|string',
+            'limit' => 'nullable|integer|min:1|max:500',
+        ]);
+
+        try {
+            $preview = $this->apiIntegrationService->previewGoogleSheet(
+                $apiIntegration->id,
+                $validated['sheet_url'],
+                $validated['tab'],
+                $validated['limit'] ?? 100
+            );
+            return response()->json([
+                'message' => 'Preview loaded',
+                'data' => $preview,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to preview sheet: ' . $e->getMessage(),
             ], 500);
         }
     }

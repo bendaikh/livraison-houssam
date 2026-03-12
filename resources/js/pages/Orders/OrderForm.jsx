@@ -19,6 +19,9 @@ export default function OrderForm() {
     const [deliveryPersons, setDeliveryPersons] = useState([]);
     const [confirmationAgents, setConfirmationAgents] = useState([]);
     const [deliveryCompanies, setDeliveryCompanies] = useState([]);
+    const [deliveryCompanyCities, setDeliveryCompanyCities] = useState([]);
+    const [deliveryCitiesLoading, setDeliveryCitiesLoading] = useState(false);
+    const [deliveryCitiesError, setDeliveryCitiesError] = useState('');
     const [cities, setCities] = useState([]);
     const [showCityDropdown, setShowCityDropdown] = useState(false);
     
@@ -30,6 +33,7 @@ export default function OrderForm() {
         delivery_integration_id: '',
         delivery_person_id: '',
         confirmation_agent_id: '',
+        delivery_city: '',
         status: 'pending',
         source: 'manual',
         shipping_address: '',
@@ -189,6 +193,29 @@ export default function OrderForm() {
         }
     };
 
+    const fetchDeliveryCompanyCities = async (companyId) => {
+        if (!companyId) {
+            setDeliveryCompanyCities([]);
+            setDeliveryCitiesError('');
+            return;
+        }
+        try {
+            setDeliveryCitiesLoading(true);
+            setDeliveryCitiesError('');
+            const response = await api.get(`/orders/delivery-companies/${companyId}/cities`);
+            setDeliveryCompanyCities(Array.isArray(response.data) ? response.data : []);
+            if (!response.data || response.data.length === 0) {
+                setDeliveryCitiesError('This delivery company has no configured cities.');
+            }
+        } catch (error) {
+            console.error('Error fetching delivery company cities:', error);
+            setDeliveryCompanyCities([]);
+            setDeliveryCitiesError('Failed to load delivery cities. Please try again.');
+        } finally {
+            setDeliveryCitiesLoading(false);
+        }
+    };
+
     const fetchCities = async () => {
         try {
             const response = await api.get('/cities');
@@ -222,6 +249,7 @@ export default function OrderForm() {
                 delivery_integration_id: order.delivery_integration_id || '',
                 delivery_person_id: order.delivery_person_id || '',
                 confirmation_agent_id: order.confirmation_agent_id || '',
+                delivery_city: order.delivery_city || resolvedCity || '',
                 status: order.status || 'pending',
                 source: order.source || 'manual',
                 shipping_address: order.shipping_address || '',
@@ -325,6 +353,26 @@ export default function OrderForm() {
         city.name.toLowerCase().includes(formData.city.toLowerCase())
     );
 
+    // Once a confirmation agent has been set on an existing order, lock the field
+    const isConfirmationLocked = isEditing && !!formData.confirmation_agent_id;
+
+        // Keep delivery city in sync with shipping city whenever company is selected.
+        useEffect(() => {
+            if (formData.delivery_integration_id && formData.city && !formData.delivery_city) {
+                setFormData(prev => ({ ...prev, delivery_city: prev.city }));
+            }
+        }, [formData.delivery_integration_id, formData.city, formData.delivery_city]);
+
+        // When delivery company changes, load its cities and reset delivery_city
+        useEffect(() => {
+            fetchDeliveryCompanyCities(formData.delivery_integration_id);
+            if (formData.delivery_integration_id) {
+                setFormData(prev => ({ ...prev, delivery_city: prev.city }));
+            } else {
+                setDeliveryCompanyCities([]);
+            }
+        }, [formData.delivery_integration_id]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
@@ -336,12 +384,16 @@ export default function OrderForm() {
                 items: orderItems
             };
 
-            if (isEditing) {
-                await api.put(`/orders/${id}`, submitData);
-            } else {
-                await api.post('/orders', submitData);
+            const response = isEditing
+                ? await api.put(`/orders/${id}`, submitData)
+                : await api.post('/orders', submitData);
+
+            if (response.data?.delivery_error) {
+                alert(`Order saved but delivery failed: ${response.data.delivery_error}`);
+            } else if (submitData.status === 'confirmed' && submitData.delivery_integration_id && !response.data?.delivery_tracking_code) {
+                alert('Order saved, but no tracking code was returned by the delivery provider.');
             }
-            
+
             navigate('/orders');
         } catch (error) {
             if (error.response?.data?.errors) {
@@ -419,7 +471,11 @@ export default function OrderForm() {
                                         type="text"
                                         value={formData.city}
                                         onChange={(e) => {
-                                            setFormData({ ...formData, city: e.target.value });
+                                            setFormData({ 
+                                                ...formData, 
+                                                city: e.target.value,
+                                                delivery_city: formData.delivery_integration_id ? e.target.value : formData.delivery_city
+                                            });
                                             setShowCityDropdown(true);
                                         }}
                                         onFocus={() => setShowCityDropdown(true)}
@@ -584,13 +640,19 @@ export default function OrderForm() {
                                     <select
                                         value={formData.confirmation_agent_id}
                                         onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        disabled={isConfirmationLocked}
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isConfirmationLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                     >
                                         <option value="">Select Agent</option>
                                         {confirmationAgents.map(agent => (
                                             <option key={agent.id} value={agent.id}>{agent.name}</option>
                                         ))}
                                     </select>
+                                    {isConfirmationLocked && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Agent already confirmed for this order; changes are locked.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -638,7 +700,11 @@ export default function OrderForm() {
                             </label>
                             <select
                                 value={formData.delivery_integration_id}
-                                onChange={(e) => setFormData({ ...formData, delivery_integration_id: e.target.value })}
+                                onChange={(e) => setFormData({ 
+                                    ...formData, 
+                                    delivery_integration_id: e.target.value,
+                                    delivery_city: e.target.value ? (formData.delivery_city || formData.city) : ''
+                                })}
                                 disabled={!!formData.delivery_person_id}
                                 className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                                     formData.delivery_person_id ? 'bg-gray-100 cursor-not-allowed' : ''
@@ -651,6 +717,42 @@ export default function OrderForm() {
                                     </option>
                                 ))}
                             </select>
+                            {formData.delivery_integration_id && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Will use delivery city: <span className="font-semibold">{formData.delivery_city || formData.city || 'not set'}</span>
+                                </p>
+                            )}
+                            {formData.delivery_integration_id && (
+                                <div className="mt-3 space-y-1">
+                                    <label className="block text-xs font-semibold text-gray-600">
+                                        Delivery City (required for this company)
+                                    </label>
+                                    {deliveryCitiesLoading ? (
+                                        <p className="text-xs text-gray-500">Loading cities...</p>
+                                    ) : deliveryCompanyCities.length > 0 ? (
+                                        <select
+                                            value={formData.delivery_city || ''}
+                                            onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        >
+                                            <option value="">Select delivery city</option>
+                                            {deliveryCompanyCities.map((city, idx) => {
+                                                const cityName = typeof city === 'object' ? (city.name || city.ville || city.city || '') : city;
+                                                return (
+                                                    <option key={`${cityName}-${idx}`} value={cityName}>
+                                                        {cityName}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    ) : (
+                                        <p className="text-xs text-red-600">{deliveryCitiesError || 'No cities available for this company.'}</p>
+                                    )}
+                                    {deliveryCitiesError && (
+                                        <p className="text-xs text-red-600">{deliveryCitiesError}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 

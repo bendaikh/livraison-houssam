@@ -95,6 +95,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/api-integrations/{apiIntegration}/track-shipment', [ApiIntegrationController::class, 'trackShipment']);
     Route::get('/api-integrations/{apiIntegration}/cities', [ApiIntegrationController::class, 'getCities']);
     Route::get('/api-integrations/{apiIntegration}/statuses', [ApiIntegrationController::class, 'getStatuses']);
+    Route::get('/api-integrations/{apiIntegration}/google-sheet/tabs', [ApiIntegrationController::class, 'listGoogleSheetTabs']);
+    Route::post('/api-integrations/{apiIntegration}/google-sheet/preview', [ApiIntegrationController::class, 'previewGoogleSheet']);
 
     // Users & Roles (Admin and SuperAdmin only)
     Route::middleware(['role:admin,superadmin'])->group(function () {

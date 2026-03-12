@@ -7,7 +7,9 @@ use App\Models\ApiImportLog;
 use App\Models\Order;
 use App\Models\Client;
 use App\Models\Product;
+use App\Models\Vendor;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use App\Services\GoogleSheetService;
 use Carbon\Carbon;
 
@@ -144,14 +146,19 @@ class ApiIntegrationService
 
             $log->update(['total_records' => count($rows)]);
 
-            $successful = 0;
+            $created = 0;
+            $duplicates = 0;
             $failed = 0;
             $errors = [];
 
             foreach ($rows as $row) {
                 try {
-                    $this->importGoogleSheetRow($row, $integration);
-                    $successful++;
+                    $result = $this->importGoogleSheetRow($row, $integration);
+                    if ($result['created']) {
+                        $created++;
+                    } else {
+                        $duplicates++;
+                    }
                 } catch (\Exception $e) {
                     $failed++;
                     $errors[] = [
@@ -167,11 +174,11 @@ class ApiIntegrationService
             }
 
             $log->update([
-                'status' => $failed === 0 ? 'success' : ($successful > 0 ? 'partial' : 'failed'),
-                'successful_records' => $successful,
+                'status' => $failed === 0 ? 'success' : ($created > 0 ? 'partial' : 'failed'),
+                'successful_records' => $created,
                 'failed_records' => $failed,
                 'errors' => $errors,
-                'message' => "Imported {$successful} rows, {$failed} failed",
+                'message' => "Created {$created}, duplicates {$duplicates}, failed {$failed}",
             ]);
 
             $integration->update(['last_sync_at' => now()]);
@@ -476,7 +483,7 @@ class ApiIntegrationService
         }
     }
 
-    private function getOrCreateClient(array $data)
+    private function getOrCreateClient(array $data, bool $allowDifferentNameAsNew = false)
     {
         // Try to find existing client by phone or email
         $data['phone'] = $this->normalizeMoroccanPhone($data['phone'] ?? null);
@@ -485,7 +492,25 @@ class ApiIntegrationService
             ->orWhere('email', $data['email'])
             ->first();
 
-        if (!$client) {
+        if ($client) {
+            // If we want to keep per-row names, allow new client when name differs
+            $phoneDiffers = !empty($data['phone']) && $data['phone'] !== $client->phone;
+            $nameDiffers = !empty($data['name']) && $data['name'] !== $client->name;
+            if ($allowDifferentNameAsNew && ($nameDiffers || $phoneDiffers)) {
+                return Client::create($data);
+            }
+
+            // Otherwise update missing fields only (don’t overwrite name)
+            $updates = [];
+            foreach (['email','address','city','state','postal_code'] as $field) {
+                if (!empty($data[$field]) && $data[$field] !== $client->$field) {
+                    $updates[$field] = $data[$field];
+                }
+            }
+            if (!empty($updates)) {
+                $client->update($updates);
+            }
+        } else {
             $client = Client::create($data);
         }
 
@@ -606,6 +631,15 @@ class ApiIntegrationService
         throw new \Exception('Status listing not supported for this provider');
     }
 
+    private function findProductByName(?string $name): ?Product
+    {
+        if (!$name) return null;
+        $clean = trim($name);
+        if ($clean === '') return null;
+
+        return Product::whereRaw('LOWER(name) = ?', [mb_strtolower($clean)])->first();
+    }
+
     private function importGoogleSheetRow(array $row, ApiIntegration $integration)
     {
         // Helper to get first non-empty column by aliases
@@ -619,29 +653,48 @@ class ApiIntegrationService
         };
 
         // Map common aliases
-        $externalId = $pick(['order_number','order_id','id','commande','reference']);
-        $clientName = $pick(['client','client_name','customer','customer_name','nom','nom_client']);
-        $phone      = $pick(['phone','telephone','tel','mobile','client_phone']);
-        $city       = $pick(['city','ville']);
-        $address    = $pick(['address','adresse','shipping_address']);
-        $price      = $pick(['price','total','montant','cod','amount']);
-        $productName= $pick(['products','product','product_name','article','item'], 'Sheet Item');
+        // Fixed sheet headers we expect: CHECK, Order ID, First Name, Phone, Ville, Address 2, Total Price, Product Name & Variant, Quantity
+        $externalId = $row['order_id'] ?? $pick(['order_id','order_number','id','commande','reference']);
+        $clientName = $row['first_name'] ?? $pick(['first_name','client','client_name','customer','customer_name','nom','nom_client']);
+        $phone      = $row['phone'] ?? $pick(['phone','telephone','tel','mobile','client_phone']);
+        $city       = $row['ville'] ?? $pick(['ville','city']);
+        $address    = $row['address_2'] ?? $pick(['address_2','address','adresse','shipping_address']);
+        $price      = $row['total_price'] ?? $pick(['total_price','price','total','montant','cod','amount']);
+        $productName= $row['product_name_variant'] ?? $pick(['product_name_variant','product_name','product','article','item'], 'Sheet Item');
         $statusRaw  = $pick(['status','etat']);
         $shopifyName= $pick(['shopify_name','shopify_order_name','order_name','shopify_reference']);
         $sourceRaw  = $pick(['source'], 'google_sheet');
         $dateRaw    = $pick(['date','created_at','order_date']);
 
-        // Normalize numeric price for validation
-        if (is_string($price)) {
-            $price = str_replace(',', '.', $price);
+        $isPresent = function ($val) {
+            if ($val === null) return false;
+            if (is_string($val)) {
+                $trim = trim($val);
+                if ($trim === '-') return true;
+                return $trim !== '';
+            }
+            return true;
+        };
+
+        // Optional row checker column
+        if (array_key_exists('check', $row) && !$isPresent($row['check'])) {
+            throw new \Exception('Skipped row: CHECK column is empty');
         }
+
+        // Normalize numeric price for validation
+        $price = $this->sanitizePrice($price);
 
         // Validate required fields
         $missing = [];
-        foreach ([['client', $clientName], ['phone', $phone], ['city', $city], ['price', $price]] as [$label, $value]) {
-            if ($value === null || $value === '' || ($label === 'price' && !is_numeric($value))) {
+        foreach ([['client', $clientName], ['phone', $phone], ['price', $price]] as [$label, $value]) {
+            if (!$isPresent($value) || ($label === 'price' && !is_numeric($value))) {
                 $missing[] = $label;
             }
+        }
+
+        // city/address rule: at least one present
+        if (!($isPresent($city) || $isPresent($address))) {
+            $missing[] = 'city_or_address';
         }
         if (!empty($missing)) {
             throw new \Exception('Skipped row: missing required fields [' . implode(', ', $missing) . ']');
@@ -664,13 +717,44 @@ class ApiIntegrationService
         $status = $statusMap[$statusKey] ?? 'pending';
         $source = $sourceRaw ?: 'google_sheet';
 
-        // De-dupe by external_id fallback to sheet row marker
-        $computedExternalId = $externalId ?? ('sheet-' . $integration->id . '-' . ($row['__row_number'] ?? uniqid()));
-        $existing = Order::where('external_order_id', $computedExternalId)
-            ->where('source', 'google_sheet')
-            ->first();
+        // De-dupe by external_id, otherwise deterministic hash of essentials
+        $hashId = hash('sha256', implode('|', [
+            (string)$clientName,
+            (string)$phone,
+            (string)($city ?: $address),
+            (string)$productName,
+            (string)$numericPrice,
+        ]));
+        $computedExternalId = $externalId ?? $hashId;
+        $existing = Order::where('external_order_id', $computedExternalId)->first();
         if ($existing) {
-            return $existing;
+            // Update existing order with latest sheet data
+            DB::transaction(function () use ($existing, $client, $city, $address, $numericPrice, $quantity, $productName) {
+                $existing->items()->delete();
+                $existing->items()->create([
+                    'product_id' => null,
+                    'product_name' => $productName,
+                    'sku' => null,
+                    'quantity' => $quantity,
+                    'price' => $numericPrice,
+                    'subtotal' => $numericPrice * $quantity,
+                ]);
+
+                $existing->update([
+                    'client_id' => $client->id,
+                    'client_phone' => $client->phone,
+                    'shipping_address' => $address,
+                    'city' => $city ?: $address,
+                    'subtotal' => $numericPrice * $quantity,
+                    'shipping_cost' => 0,
+                    'tax' => 0,
+                    'discount' => 0,
+                    'total' => $numericPrice * $quantity,
+                    'phone' => $client->phone,
+                ]);
+            });
+
+            return ['order' => $existing->fresh(['items','client']), 'created' => false];
         }
 
         $client = $this->getOrCreateClient([
@@ -681,12 +765,22 @@ class ApiIntegrationService
             'city' => $city,
             'state' => $pick(['state']),
             'postal_code' => $pick(['postal_code']),
-        ]);
+        ], true); // allow new client when name differs for same phone
+
+        $vendorId = $integration->vendor_id;
+        if (!$vendorId) {
+            $user = auth()->user();
+            if ($user && $user->role && $user->role->slug === 'vendor') {
+                $vendorId = Vendor::where('user_id', $user->id)->value('id');
+            }
+        }
+
+        $matchedProduct = $this->findProductByName($productName);
 
         $items = [[
-            'product_id' => null,
+            'product_id' => $matchedProduct?->id,
             'product_name' => $productName,
-            'sku' => $pick(['sku']),
+            'sku' => $matchedProduct?->sku ?? $pick(['sku']),
             'quantity' => $quantity,
             'price' => $numericPrice,
         ]];
@@ -694,7 +788,7 @@ class ApiIntegrationService
         $order = $this->orderService->createOrder([
             'client_id' => $client->id,
             'client_phone' => $client->phone,
-            'vendor_id' => $integration->vendor_id,
+            'vendor_id' => $vendorId,
             'source' => $source ?: 'google_sheet',
             'external_order_id' => $computedExternalId,
             'shopify_name' => $shopifyName,
@@ -724,6 +818,76 @@ class ApiIntegrationService
             }
         }
 
-        return $order;
+        return ['order' => $order, 'created' => true];
+    }
+
+    /**
+     * List sheet tabs for preview UI
+     */
+    public function listGoogleSheetTabs(int $integrationId, string $sheetUrl): array
+    {
+        $integration = ApiIntegration::findOrFail($integrationId);
+        $apiKey = $integration->credentials['api_key'] ?? '';
+        if (!$apiKey) {
+            throw new \Exception('Google Sheets API key missing on integration.');
+        }
+
+        $this->googleSheetService->setApiKey($apiKey);
+        return $this->googleSheetService->listTabs($sheetUrl);
+    }
+
+    /**
+     * Preview a tab: returns headers and associative rows
+     */
+    public function previewGoogleSheet(int $integrationId, string $sheetUrl, string $tab, int $limit = 100): array
+    {
+        $integration = ApiIntegration::findOrFail($integrationId);
+        $apiKey = $integration->credentials['api_key'] ?? '';
+        if (!$apiKey) {
+            throw new \Exception('Google Sheets API key missing on integration.');
+        }
+
+        $this->googleSheetService->setApiKey($apiKey);
+        $values = $this->googleSheetService->fetchTab($sheetUrl, $tab, $limit);
+
+        if (empty($values)) {
+            return ['headers' => [], 'rows' => []];
+        }
+
+        $headers = $values[0];
+        $normalizedHeaders = array_map(fn($h) => strtolower(preg_replace('/[^a-z0-9]+/i', '_', trim($h))), $headers);
+        $rows = [];
+        foreach (array_slice($values, 1) as $index => $rowValues) {
+            $rowAssoc = ['__row_number' => $index + 2]; // account for header
+            foreach ($normalizedHeaders as $i => $header) {
+                $rowAssoc[$header] = $rowValues[$i] ?? null;
+            }
+            $rows[] = $rowAssoc;
+        }
+
+        return [
+            'headers' => $normalizedHeaders,
+            'rows' => $rows,
+        ];
+    }
+
+    private function sanitizePrice($price): string|float|null
+    {
+        if ($price === null) {
+            return null;
+        }
+        if (is_numeric($price)) {
+            return $price;
+        }
+        if (is_string($price)) {
+            $clean = str_replace(',', '.', $price);
+            // keep digits and dots
+            $clean = preg_replace('/[^0-9.]/', '', $clean);
+            if ($clean === '' || $clean === null) {
+                return null;
+            }
+            return $clean;
+        }
+        return null;
     }
 }

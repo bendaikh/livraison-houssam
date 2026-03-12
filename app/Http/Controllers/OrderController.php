@@ -81,6 +81,7 @@ class OrderController extends Controller
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
+            'delivery_city' => 'nullable|string|max:255',
             'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
@@ -114,6 +115,20 @@ class OrderController extends Controller
 
         $order = $this->orderService->createOrder($validated);
 
+        // If created directly as confirmed with a delivery company, push to delivery provider
+        if (
+            ($validated['status'] ?? 'pending') === 'confirmed' &&
+            !empty($validated['delivery_integration_id'])
+        ) {
+            $order = $this->orderService->updateOrderStatus(
+                $order->id,
+                'confirmed',
+                'Order created and confirmed',
+                $validated['delivery_integration_id'],
+                $validated['delivery_city'] ?? $validated['city'] ?? null
+            );
+        }
+
         return response()->json($order, 201);
     }
 
@@ -142,6 +157,7 @@ class OrderController extends Controller
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
+            'delivery_city' => 'nullable|string|max:255',
             'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
             'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace',
             'items' => 'required|array|min:1',
@@ -178,15 +194,45 @@ class OrderController extends Controller
         $oldStatus = $order->status;
         $newStatus = $validated['status'] ?? $oldStatus;
         
+        // Prevent changing confirmation agent once set
+        if (
+            $order->confirmation_agent_id &&
+            $request->filled('confirmation_agent_id') &&
+            $request->confirmation_agent_id != $order->confirmation_agent_id
+        ) {
+            return response()->json([
+                'message' => 'Confirmation agent cannot be changed after it has been set.'
+            ], 422);
+        }
+        
         // Update the order first
         $order = $this->orderService->updateOrder($order->id, $validated);
         
-        // If status changed, trigger status update logic (stock deduction, notifications, etc.)
+        // If status changed, trigger status update logic (stock deduction, notifications, delivery send, etc.)
         if ($oldStatus !== $newStatus) {
             $order = $this->orderService->updateOrderStatus(
                 $order->id,
                 $newStatus,
-                "Order status changed from {$oldStatus} to {$newStatus}"
+                "Order status changed from {$oldStatus} to {$newStatus}",
+                $validated['delivery_integration_id'] ?? $order->delivery_integration_id,
+                $validated['delivery_city'] ?? $order->delivery_city ?? $order->city
+            );
+        }
+
+        // Retry sending to delivery company if order is confirmed, has a delivery company, but no tracking code yet.
+        if (
+            ($validated['status'] ?? $order->status) === 'confirmed' &&
+            ($validated['delivery_integration_id'] ?? $order->delivery_integration_id) &&
+            empty($order->delivery_tracking_code)
+        ) {
+            $order = $this->orderService->updateOrderStatus(
+                $order->id,
+                'confirmed',
+                $oldStatus === $newStatus
+                    ? 'Order confirmed – retrying delivery send (no tracking code yet)'
+                    : "Order status changed from {$oldStatus} to {$newStatus}",
+                $validated['delivery_integration_id'] ?? $order->delivery_integration_id,
+                $validated['delivery_city'] ?? $order->delivery_city ?? $order->city
             );
         }
 
@@ -202,12 +248,15 @@ class OrderController extends Controller
             'delivery_city' => 'nullable|string', // The city selected from the delivery company's list
         ]);
 
+        $deliveryIntegrationId = $validated['delivery_integration_id'] ?? $order->delivery_integration_id;
+        $deliveryCity = $validated['delivery_city'] ?? $order->delivery_city ?? $order->city;
+
         $order = $this->orderService->updateOrderStatus(
             $order->id,
             $validated['status'],
             $validated['note'] ?? null,
-            $validated['delivery_integration_id'] ?? null,
-            $validated['delivery_city'] ?? null
+            $deliveryIntegrationId,
+            $deliveryCity
         );
 
         $response = $order->toArray();

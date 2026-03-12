@@ -12,6 +12,12 @@ class GoogleSheetService
     private string $range = 'Orders!A1:Z1000';
     private int $headerRow = 1;
 
+    public function setApiKey(string $apiKey): self
+    {
+        $this->apiKey = trim($apiKey);
+        return $this;
+    }
+
     public function setCredentials(string $apiKey, string $sheetId, ?string $range = null, int $headerRow = 1): self
     {
         $this->apiKey = trim($apiKey);
@@ -49,6 +55,42 @@ class GoogleSheetService
         }
 
         return $rows;
+    }
+
+    /**
+     * List sheet tabs (titles)
+     */
+    public function listTabs(string $sheetId): array
+    {
+        $this->validateApiKey();
+        $sheetId = $this->extractSheetId($sheetId);
+
+        $url = sprintf('https://sheets.googleapis.com/v4/spreadsheets/%s', $sheetId);
+        $response = Http::get($url, [
+            'key' => $this->apiKey,
+            'fields' => 'sheets.properties.title'
+        ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('Failed to list Google Sheet tabs: HTTP ' . $response->status());
+        }
+
+        $data = $response->json();
+        $sheets = $data['sheets'] ?? [];
+        return array_map(function ($sheet) {
+            return $sheet['properties']['title'] ?? '';
+        }, $sheets);
+    }
+
+    /**
+     * Fetch values from a specific tab (first 200 rows by default)
+     */
+    public function fetchTab(string $sheetId, string $tab, int $maxRows = 200): array
+    {
+        $sheetId = $this->extractSheetId($sheetId);
+        $range = $tab . '!A1:Z' . $maxRows;
+        $this->setCredentials($this->apiKey, $sheetId, $range, 1);
+        return $this->fetchValues($maxRows);
     }
 
     public function testConnection(): bool
@@ -128,11 +170,16 @@ class GoogleSheetService
 
     private function validate(): void
     {
-        if (empty($this->apiKey)) {
-            throw new \Exception('Google Sheets API key is missing.');
-        }
+        $this->validateApiKey();
         if (empty($this->sheetId)) {
             throw new \Exception('Google Sheet ID is missing.');
+        }
+    }
+
+    private function validateApiKey(): void
+    {
+        if (empty($this->apiKey)) {
+            throw new \Exception('Google Sheets API key is missing.');
         }
     }
 }

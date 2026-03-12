@@ -502,6 +502,9 @@ export default function OrderList({ status = '' }) {
                                         <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.client?.name || '-'}</p>
                                         <p className="text-gray-600 text-[10px] leading-tight truncate">{order.client?.phone || '-'}</p>
                                         <p className="text-gray-500 text-[10px] leading-tight truncate">{order.city || order.client?.city || '-'}</p>
+                                        {order.shipping_address && (
+                                            <p className="text-gray-500 text-[10px] leading-tight truncate">{order.shipping_address}</p>
+                                        )}
                                     </div>
 
                                     {/* SELLER COLUMN */}
@@ -510,8 +513,6 @@ export default function OrderList({ status = '' }) {
                                         {order.vendor ? (
                                             <>
                                                 <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.vendor?.name || '-'}</p>
-                                                <p className="text-gray-600 text-[10px] leading-tight truncate">{order.vendor?.email || '-'}</p>
-                                                <p className="text-gray-500 text-[10px] leading-tight truncate">{order.vendor?.phone || '-'}</p>
                                             </>
                                         ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">

@@ -43,6 +43,7 @@ class OrderService
                 'delivery_integration_id' => $data['delivery_integration_id'] ?? null,
                 'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
+                'delivery_city' => $data['delivery_city'] ?? null,
                 'status' => $data['status'] ?? 'pending',
                 'source' => $data['source'] ?? 'manual',
                 'external_order_id' => $data['external_order_id'] ?? null,
@@ -112,6 +113,7 @@ class OrderService
                 'delivery_integration_id' => $data['delivery_integration_id'] ?? null,
                 'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
+                'delivery_city' => $data['delivery_city'] ?? $order->delivery_city,
                 'source' => $data['source'] ?? 'manual',
                 'shopify_name' => $data['shopify_name'] ?? null,
                 'subtotal' => $subtotal,
@@ -351,13 +353,14 @@ class OrderService
             'full_response' => $response,
         ]);
         
-        $order->update([
-            'delivery_integration_id' => $deliveryIntegrationId,
-            'city' => $deliveryCity ?: $order->city,
-            'delivery_tracking_code' => $trackingCode,
-            'sent_to_delivery_at' => now(),
-            'delivery_status' => 'sent',
-        ]);
+            $order->update([
+                'delivery_integration_id' => $deliveryIntegrationId,
+                'city' => $deliveryCity ?: $order->city,
+                'delivery_city' => $deliveryCity ?: $order->delivery_city,
+                'delivery_tracking_code' => $trackingCode,
+                'sent_to_delivery_at' => now(),
+                'delivery_status' => 'sent',
+            ]);
 
         $this->addHistory($order->id, $order->status, "Order sent to {$integration->name}. Tracking code: {$trackingCode}");
     }
