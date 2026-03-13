@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\Vendor;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
@@ -19,9 +21,11 @@ class OrderController extends Controller
         // If user is a vendor, only show their orders
         $user = $request->user();
         if ($user && $user->role && $user->role->slug === 'vendor') {
-            $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
+            $vendor = $this->getAuthenticatedVendor($request);
             if ($vendor) {
                 $query->where('vendor_id', $vendor->id);
+            } else {
+                $query->whereRaw('1 = 0');
             }
         }
 
@@ -88,6 +92,7 @@ class OrderController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric|min:0',
             'shipping_cost' => 'nullable|numeric|min:0',
+            'shipping_included_in_price' => 'nullable|boolean',
             'tax' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',
@@ -95,6 +100,8 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);
+        $validated = $this->applyAuthenticatedVendor($request, $validated);
+        $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated);
 
         // If client_id is not provided, create or find client by name and phone
         if (!isset($validated['client_id'])) {
@@ -134,6 +141,8 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
+        $this->authorizeVendorOrderAccess(request(), $order);
+
         return response()->json($order->load([
             'client',
             'vendor',
@@ -148,6 +157,8 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order)
     {
+        $this->authorizeVendorOrderAccess($request, $order);
+
         $validated = $request->validate([
             'client_id' => 'nullable|exists:clients,id',
             'client_name' => 'required_without:client_id|string|max:255',
@@ -165,6 +176,7 @@ class OrderController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric|min:0',
             'shipping_cost' => 'nullable|numeric|min:0',
+            'shipping_included_in_price' => 'nullable|boolean',
             'tax' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',
@@ -172,6 +184,8 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);
+        $validated = $this->applyAuthenticatedVendor($request, $validated);
+        $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated, $order);
 
         // If client_id is not provided, create or find client by name and phone
         if (!isset($validated['client_id']) && isset($validated['client_name'])) {
@@ -241,6 +255,8 @@ class OrderController extends Controller
 
     public function updateStatus(Request $request, Order $order)
     {
+        $this->authorizeVendorOrderAccess($request, $order);
+
         $validated = $request->validate([
             'status' => 'required|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
             'note' => 'nullable|string',
@@ -271,6 +287,8 @@ class OrderController extends Controller
 
     public function assignDeliveryAgent(Request $request, Order $order)
     {
+        $this->authorizeVendorOrderAccess($request, $order);
+
         $validated = $request->validate([
             'delivery_agent_id' => 'nullable|exists:users,id',
             'delivery_person_id' => 'nullable|exists:users,id',
@@ -303,6 +321,8 @@ class OrderController extends Controller
 
     public function destroy(Order $order)
     {
+        $this->authorizeVendorOrderAccess(request(), $order);
+
         $order->delete();
         return response()->json(['message' => 'Order deleted successfully']);
     }
@@ -321,6 +341,8 @@ class OrderController extends Controller
      */
     public function syncDeliveryStatus(Order $order)
     {
+        $this->authorizeVendorOrderAccess(request(), $order);
+
         try {
             if (!$order->delivery_integration_id) {
                 return response()->json([
@@ -635,5 +657,76 @@ class OrderController extends Controller
             ['name' => 'Taza'],
             ['name' => 'Settat'],
         ];
+    }
+
+    private function getAuthenticatedVendor(Request $request): ?Vendor
+    {
+        $user = $request->user();
+
+        if (!$user || !$user->role || $user->role->slug !== 'vendor') {
+            return null;
+        }
+
+        return $user->vendor()->first();
+    }
+
+    private function applyAuthenticatedVendor(Request $request, array $validated): array
+    {
+        $user = $request->user();
+
+        if (!$user || !$user->role || $user->role->slug !== 'vendor') {
+            return $validated;
+        }
+
+        $vendor = $this->getAuthenticatedVendor($request);
+
+        if (!$vendor) {
+            throw ValidationException::withMessages([
+                'vendor_id' => ['Authenticated seller does not have a vendor profile.'],
+            ]);
+        }
+
+        $validated['vendor_id'] = $vendor->id;
+
+        return $validated;
+    }
+
+    private function authorizeVendorOrderAccess(Request $request, Order $order): void
+    {
+        $user = $request->user();
+
+        if (!$user || !$user->role || $user->role->slug !== 'vendor') {
+            return;
+        }
+
+        $vendor = $this->getAuthenticatedVendor($request);
+
+        if (!$vendor) {
+            throw ValidationException::withMessages([
+                'vendor_id' => ['Authenticated seller does not have a vendor profile.'],
+            ]);
+        }
+
+        if ((int) $order->vendor_id !== (int) $vendor->id) {
+            abort(403, 'You are not allowed to access this order.');
+        }
+    }
+
+    private function resolveShippingIncludedInPrice(Request $request, array $validated, ?Order $order = null): bool
+    {
+        if (array_key_exists('shipping_included_in_price', $validated)) {
+            return (bool) $validated['shipping_included_in_price'];
+        }
+
+        if ($order) {
+            return (bool) $order->shipping_included_in_price;
+        }
+
+        $user = $request->user();
+        $roleSlug = $user?->role?->slug;
+        $source = $validated['source'] ?? 'manual';
+
+        return in_array($roleSlug, ['admin', 'superadmin'], true)
+            && in_array($source, ['manual', 'marketplace'], true);
     }
 }

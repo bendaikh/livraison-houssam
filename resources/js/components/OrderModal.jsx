@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, Minus, Plus } from 'lucide-react';
 import api from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import { formatPriceInput, normalizePrice } from '../utils/currency';
 
 /**
  * Reusable modal for creating an order from a product.
@@ -14,6 +16,8 @@ export default function OrderModal({
     onClose = () => {},
     onOrderCreated
 }) {
+    const { user } = useAuth();
+    const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
     const buyPrice = parseFloat(
         product?.company_price ??
         product?.cost_price ??
@@ -25,6 +29,7 @@ export default function OrderModal({
     const recommendedSellPrice = product?.recommended_price != null
         ? parseFloat(product.recommended_price)
         : null;
+    const normalizedRecommendedSellPrice = normalizePrice(recommendedSellPrice);
 
     const [cities, setCities] = useState([]);
     const [loadingCities, setLoadingCities] = useState(false);
@@ -37,7 +42,7 @@ export default function OrderModal({
         client_email: '',
         shipping_address: '',
         city: '',
-        sell_price: (recommendedSellPrice ?? buyPrice).toFixed(2),
+        sell_price: formatPriceInput(normalizedRecommendedSellPrice ?? buyPrice),
         notes: ''
     });
     const [submitting, setSubmitting] = useState(false);
@@ -76,8 +81,9 @@ export default function OrderModal({
     const sellPrice = parseFloat(orderForm.sell_price || 0);
     const companyPrice = buyPrice;
     const shippingPrice = getCityDeliveryCost(orderForm.city);
+    const shippingIncludedInPrice = isAdminUser;
     const customerTotal = sellPrice * quantity;
-    const estimatedBenefit = (sellPrice - companyPrice) * quantity - shippingPrice;
+    const estimatedBenefit = (sellPrice - companyPrice) * quantity - (shippingIncludedInPrice ? 0 : shippingPrice);
     const estimatedMargin = customerTotal > 0 ? (estimatedBenefit / customerTotal) * 100 : 0;
     const customerTotalWithShipping = customerTotal + shippingPrice;
 
@@ -119,6 +125,7 @@ export default function OrderModal({
                 city: orderForm.city,
                 notes: orderForm.notes,
                 shipping_cost: shippingPrice,
+                shipping_included_in_price: shippingIncludedInPrice,
                 items: [{
                     product_id: product.id,
                     quantity: quantity,
@@ -182,7 +189,7 @@ export default function OrderModal({
                         {recommendedSellPrice !== null && !Number.isNaN(recommendedSellPrice) && (
                             <div className="md:col-span-2 p-3 rounded-lg border border-blue-200 bg-blue-50">
                                 <p className="text-xs text-blue-700 font-semibold">Recommended Sell Price</p>
-                                <p className="text-lg font-bold text-blue-900">{formatCurrency(recommendedSellPrice)}</p>
+                                <p className="text-lg font-bold text-blue-900">{formatCurrency(normalizedRecommendedSellPrice ?? recommendedSellPrice)}</p>
                             </div>
                         )}
                     </div>
@@ -203,7 +210,7 @@ export default function OrderModal({
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
                                 placeholder="Selling price"
                             />
-                            <p className="mt-1 text-xs text-gray-500">Set your selling price; shipping is added after city selection.</p>
+                            <p className="mt-1 text-xs text-gray-500">Set the selling price for this order.</p>
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity *</label>
@@ -376,7 +383,7 @@ export default function OrderModal({
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-gray-500">Benefit {orderForm.city ? '(after shipping)' : '(before shipping)'}</p>
+                                    <p className="text-xs text-gray-500">Benefit</p>
                                     <p className={`font-bold ${estimatedBenefit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         {formatCurrency(estimatedBenefit)}
                                     </p>

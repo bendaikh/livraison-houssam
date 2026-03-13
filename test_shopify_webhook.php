@@ -1,4 +1,4 @@
-<?php
+≥<?php
 
 // Test Shopify Webhook Integration
 // This script simulates a Shopify order creation webhook

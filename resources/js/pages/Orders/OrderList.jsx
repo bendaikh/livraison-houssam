@@ -8,6 +8,7 @@ import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
 
 export default function OrderList({ status = '' }) {
     const { formatCurrency } = useSettings();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -152,10 +153,6 @@ export default function OrderList({ status = '' }) {
         return order.delivery_person?.name || order.delivery_agent?.name || '';
     };
 
-    const getConfirmationAgentLabel = (order) => {
-        return order.confirmation_agent?.name || '';
-    };
-
     const getDeliveryCompanyLabel = (order) => {
         const integration = order.delivery_integration;
         if (!integration) return '';
@@ -181,6 +178,47 @@ export default function OrderList({ status = '' }) {
         if (integration.name) return integration.name.replace(/api/ig, '').trim();
         if (integration.provider) return integration.provider.replace(/_/g, ' ');
         return '';
+    };
+
+    const getSellerLabel = (order) => {
+        if (order.vendor?.name) {
+            return order.vendor.name;
+        }
+
+        if (user?.vendor?.id && String(order.vendor_id) === String(user.vendor.id)) {
+            return user.vendor.name || user.name || '';
+        }
+
+        return '';
+    };
+
+    const calculateOrderBenefit = (order) => {
+        const itemsProfit = (order.items || []).reduce((sum, item) => {
+            const itemPrice = parseFloat(item.price) || 0;
+            const companyPrice = parseFloat(item.product?.company_price ?? item.product?.cost_price ?? item.product?.price ?? 0) || 0;
+            const qty = parseInt(item.quantity, 10) || 0;
+
+            return sum + ((itemPrice - companyPrice) * qty);
+        }, 0);
+
+        const shippingExpense = order.shipping_included_in_price ? 0 : (parseFloat(order.shipping_cost) || 0);
+
+        return itemsProfit - shippingExpense - (parseFloat(order.discount) || 0);
+    };
+
+    const calculateOrderAmount = (order) => {
+        const subtotal = parseFloat(order.subtotal);
+
+        if (Number.isFinite(subtotal)) {
+            return subtotal - (parseFloat(order.discount) || 0);
+        }
+
+        return (order.items || []).reduce((sum, item) => {
+            const itemPrice = parseFloat(item.price) || 0;
+            const qty = parseInt(item.quantity, 10) || 0;
+
+            return sum + (itemPrice * qty);
+        }, 0) - (parseFloat(order.discount) || 0);
     };
 
     const handleStatusChange = async (orderId, newStatus) => {
@@ -444,9 +482,11 @@ export default function OrderList({ status = '' }) {
                 ) : (
                     orders.map(order => {
                         const deliveryAgentLabel = getDeliveryAgentLabel(order);
-                        const confirmationAgentLabel = getConfirmationAgentLabel(order);
                         const companyLabel = getDeliveryCompanyLabel(order);
-                        const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || confirmationAgentLabel || '+ Assign';
+                        const sellerLabel = getSellerLabel(order);
+                        const orderAmount = calculateOrderAmount(order);
+                        const orderBenefit = calculateOrderBenefit(order);
+                        const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
                         const agentDisplayName = assignmentPrimaryLabel;
                         
                         const statusBorderColor = {
@@ -510,9 +550,9 @@ export default function OrderList({ status = '' }) {
                                     {/* SELLER COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Seller</p>
-                                        {order.vendor ? (
+                                        {sellerLabel ? (
                                             <>
-                                                <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.vendor?.name || '-'}</p>
+                                                <p className="font-bold text-gray-900 text-sm leading-tight truncate">{sellerLabel}</p>
                                             </>
                                         ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
@@ -540,34 +580,16 @@ export default function OrderList({ status = '' }) {
                                     {/* AMOUNT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Amount</p>
-                                        <p className="font-bold text-gray-900 text-sm leading-tight">{formatCurrency(order.total)}</p>
+                                        <p className="font-bold text-gray-900 text-sm leading-tight">{formatCurrency(orderAmount)}</p>
                                     </div>
 
                                     {/* BENEFIT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Benefit</p>
                                         <p className={`font-bold text-sm leading-tight ${
-                                            (() => {
-                                                const itemsProfit = (order.items || []).reduce((sum, item) => {
-                                                    const itemPrice = parseFloat(item.price) || 0;
-                                                    const companyPrice = parseFloat(item.product?.company_price) || 0;
-                                                    const qty = parseInt(item.quantity) || 0;
-                                                    return sum + ((itemPrice - companyPrice) * qty);
-                                                }, 0);
-                                                const benefit = itemsProfit - (parseFloat(order.discount) || 0);
-                                                return benefit > 0 ? 'text-green-600' : benefit < 0 ? 'text-red-600' : 'text-gray-600';
-                                            })()
+                                            orderBenefit > 0 ? 'text-green-600' : orderBenefit < 0 ? 'text-red-600' : 'text-gray-600'
                                         }`}>
-                                            {(() => {
-                                                const itemsProfit = (order.items || []).reduce((sum, item) => {
-                                                    const itemPrice = parseFloat(item.price) || 0;
-                                                    const companyPrice = parseFloat(item.product?.company_price) || 0;
-                                                    const qty = parseInt(item.quantity) || 0;
-                                                    return sum + ((itemPrice - companyPrice) * qty);
-                                                }, 0);
-                                                const benefit = itemsProfit - (parseFloat(order.discount) || 0);
-                                                return formatCurrency(benefit);
-                                            })()}
+                                            {formatCurrency(orderBenefit)}
                                         </p>
                                     </div>
 
@@ -585,9 +607,9 @@ export default function OrderList({ status = '' }) {
                                         )}
                                     </div>
 
-                                  {/* AGENT COLUMN */}
+                                  {/* DELIVERY COLUMN */}
 <div className="min-w-0 space-y-0.5 flex flex-col items-start">
-    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Agent</p>
+    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Delivery</p>
     <button
         onClick={() => handleAgentClick(order)}
         className="inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-semibold border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all"
@@ -838,7 +860,7 @@ function AgentAssignmentModal({ order, onClose, onAssign }) {
         <div className="bg-white rounded-lg shadow-lg max-w-xl w-full p-4">
             <div className="flex items-start justify-between">
                 <div>
-                    <h2 className="text-lg font-bold text-gray-900">Assign Delivery Agent</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Assign Delivery</h2>
                     <p className="text-xs text-gray-600">Order: <span className="font-semibold">{order.order_number}</span></p>
                 </div>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-700">

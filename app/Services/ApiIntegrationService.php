@@ -132,7 +132,7 @@ class ApiIntegrationService
 
         try {
             $credentials = $integration->credentials;
-            $apiKey = $credentials['api_key'] ?? '';
+            $apiKey = $this->resolveGoogleSheetsApiKey($integration);
             $sheetId = $credentials['sheet_id'] ?? '';
             $range = $credentials['range'] ?? 'Orders!A1:Z1000';
             $headerRow = (int)($credentials['header_row'] ?? 1);
@@ -568,7 +568,7 @@ class ApiIntegrationService
             } elseif ($integration->type === 'google_sheet') {
                 $credentials = $integration->credentials;
                 $this->googleSheetService->setCredentials(
-                    $credentials['api_key'] ?? '',
+                    $this->resolveGoogleSheetsApiKey($integration),
                     $credentials['sheet_id'] ?? '',
                     $credentials['range'] ?? null,
                     (int)($credentials['header_row'] ?? 1)
@@ -726,37 +726,6 @@ class ApiIntegrationService
             (string)$numericPrice,
         ]));
         $computedExternalId = $externalId ?? $hashId;
-        $existing = Order::where('external_order_id', $computedExternalId)->first();
-        if ($existing) {
-            // Update existing order with latest sheet data
-            DB::transaction(function () use ($existing, $client, $city, $address, $numericPrice, $quantity, $productName) {
-                $existing->items()->delete();
-                $existing->items()->create([
-                    'product_id' => null,
-                    'product_name' => $productName,
-                    'sku' => null,
-                    'quantity' => $quantity,
-                    'price' => $numericPrice,
-                    'subtotal' => $numericPrice * $quantity,
-                ]);
-
-                $existing->update([
-                    'client_id' => $client->id,
-                    'client_phone' => $client->phone,
-                    'shipping_address' => $address,
-                    'city' => $city ?: $address,
-                    'subtotal' => $numericPrice * $quantity,
-                    'shipping_cost' => 0,
-                    'tax' => 0,
-                    'discount' => 0,
-                    'total' => $numericPrice * $quantity,
-                    'phone' => $client->phone,
-                ]);
-            });
-
-            return ['order' => $existing->fresh(['items','client']), 'created' => false];
-        }
-
         $client = $this->getOrCreateClient([
             'name' => $clientName ?: 'Sheet Client ' . ($row['__row_number'] ?? ''),
             'email' => $pick(['email','client_email']),
@@ -776,6 +745,43 @@ class ApiIntegrationService
         }
 
         $matchedProduct = $this->findProductByName($productName);
+
+        $existing = Order::where('external_order_id', $computedExternalId)->first();
+        if ($existing) {
+            // Keep duplicate detection aligned with import results by updating the matched order in place.
+            DB::transaction(function () use ($existing, $client, $city, $address, $numericPrice, $quantity, $productName, $matchedProduct, $vendorId, $source, $shopifyName, $status, $pick) {
+                $existing->items()->delete();
+                $existing->items()->create([
+                    'product_id' => $matchedProduct?->id,
+                    'product_name' => $productName,
+                    'sku' => $matchedProduct?->sku ?? $pick(['sku']),
+                    'quantity' => $quantity,
+                    'price' => $numericPrice,
+                    'subtotal' => $numericPrice * $quantity,
+                ]);
+
+                $existing->update([
+                    'client_id' => $client->id,
+                    'client_phone' => $client->phone,
+                    'vendor_id' => $vendorId,
+                    'source' => $source ?: 'google_sheet',
+                    'shopify_name' => $shopifyName,
+                    'status' => $status,
+                    'shipping_address' => $address,
+                    'city' => $city ?: $address,
+                    'subtotal' => $numericPrice * $quantity,
+                    'shipping_cost' => 0,
+                    'tax' => 0,
+                    'discount' => 0,
+                    'total' => $numericPrice * $quantity,
+                    'phone' => $client->phone,
+                    'notes' => $pick(['notes','comment','comments']),
+                    'whatsapp' => $pick(['whatsapp']),
+                ]);
+            });
+
+            return ['order' => $existing->fresh(['items', 'client']), 'created' => false];
+        }
 
         $items = [[
             'product_id' => $matchedProduct?->id,
@@ -827,9 +833,9 @@ class ApiIntegrationService
     public function listGoogleSheetTabs(int $integrationId, string $sheetUrl): array
     {
         $integration = ApiIntegration::findOrFail($integrationId);
-        $apiKey = $integration->credentials['api_key'] ?? '';
+        $apiKey = $this->resolveGoogleSheetsApiKey($integration);
         if (!$apiKey) {
-            throw new \Exception('Google Sheets API key missing on integration.');
+            throw new \Exception('Google Sheets API key is not configured on the server.');
         }
 
         $this->googleSheetService->setApiKey($apiKey);
@@ -842,9 +848,9 @@ class ApiIntegrationService
     public function previewGoogleSheet(int $integrationId, string $sheetUrl, string $tab, int $limit = 100): array
     {
         $integration = ApiIntegration::findOrFail($integrationId);
-        $apiKey = $integration->credentials['api_key'] ?? '';
+        $apiKey = $this->resolveGoogleSheetsApiKey($integration);
         if (!$apiKey) {
-            throw new \Exception('Google Sheets API key missing on integration.');
+            throw new \Exception('Google Sheets API key is not configured on the server.');
         }
 
         $this->googleSheetService->setApiKey($apiKey);
@@ -889,5 +895,17 @@ class ApiIntegrationService
             return $clean;
         }
         return null;
+    }
+
+    private function resolveGoogleSheetsApiKey(ApiIntegration $integration): string
+    {
+        $credentials = $integration->credentials ?? [];
+
+        return trim((string) (
+            $credentials['api_key']
+            ?? config('services.google_sheets.api_key')
+            ?? env('GOOGLE_SHEETS_API_KEY')
+            ?? ''
+        ));
     }
 }

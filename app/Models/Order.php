@@ -25,6 +25,7 @@ class Order extends Model
         'delivery_status',
         'subtotal',
         'shipping_cost',
+        'shipping_included_in_price',
         'tax',
         'discount',
         'total',
@@ -51,6 +52,7 @@ class Order extends Model
     protected $casts = [
         'subtotal' => 'decimal:2',
         'shipping_cost' => 'decimal:2',
+        'shipping_included_in_price' => 'boolean',
         'tax' => 'decimal:2',
         'discount' => 'decimal:2',
         'total' => 'decimal:2',

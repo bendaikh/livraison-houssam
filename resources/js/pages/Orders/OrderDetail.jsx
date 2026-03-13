@@ -519,7 +519,7 @@ export default function OrderDetail() {
                                 </div>
                                 {order.shipping_cost > 0 && (
                                     <div className="flex justify-between text-gray-600">
-                                        <span>Shipping</span>
+                                        <span>{order.shipping_included_in_price ? 'Shipping (included in price)' : 'Shipping'}</span>
                                         <span>{formatCurrency(order.shipping_cost)}</span>
                                     </div>
                                 )}

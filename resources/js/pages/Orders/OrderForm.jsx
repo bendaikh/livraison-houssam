@@ -7,6 +7,9 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function OrderForm() {
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
+    const isVendorUser = user?.role?.slug === 'vendor';
+    const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
+    const authenticatedSellerName = user?.vendor?.name || user?.name || 'Current seller';
     const navigate = useNavigate();
     const { id } = useParams();
     const location = useLocation();
@@ -22,6 +25,7 @@ export default function OrderForm() {
     const [deliveryCompanyCities, setDeliveryCompanyCities] = useState([]);
     const [deliveryCitiesLoading, setDeliveryCitiesLoading] = useState(false);
     const [deliveryCitiesError, setDeliveryCitiesError] = useState('');
+    const [deliveryCitySearch, setDeliveryCitySearch] = useState('');
     const [cities, setCities] = useState([]);
     const [showCityDropdown, setShowCityDropdown] = useState(false);
     
@@ -41,6 +45,7 @@ export default function OrderForm() {
         notes: '',
         whatsapp: '',
         shipping_cost: 0,
+        shipping_included_in_price: isAdminUser,
         discount: 0
     });
 
@@ -87,13 +92,13 @@ export default function OrderForm() {
         if (isEditing) {
             fetchOrder();
         } else {
-            // Auto-set vendor_id for sellers when creating new orders
-            if (user?.vendor?.id) {
-                console.log('Setting vendor_id for seller:', user.vendor.id);
-                setFormData(prev => ({ ...prev, vendor_id: user.vendor.id }));
-            }
+            setFormData((prev) => ({
+                ...prev,
+                vendor_id: user?.vendor?.id || prev.vendor_id,
+                shipping_included_in_price: isAdminUser,
+            }));
         }
-    }, [id, user]);
+    }, [id, user, isEditing, isAdminUser]);
 
     useEffect(() => {
         if (isEditing || queryPrefillApplied || products.length === 0) return;
@@ -257,6 +262,7 @@ export default function OrderForm() {
                 notes: order.notes || '',
                 whatsapp: order.whatsapp || '',
                 shipping_cost: resolvedShipping,
+                shipping_included_in_price: Boolean(order.shipping_included_in_price),
                 discount: order.discount || 0
             });
             
@@ -305,6 +311,7 @@ export default function OrderForm() {
     const shippingCost = Number.isFinite(parsedShipping) && parsedShipping > 0
         ? parsedShipping
         : getCityDeliveryCost(formData.city);
+    const shippingIncludedInPrice = Boolean(formData.shipping_included_in_price);
     const discountValue = parseFloat(formData.discount ?? 0) || 0;
 
     const calculateSubtotal = () => {
@@ -315,7 +322,7 @@ export default function OrderForm() {
 
     const calculateTotal = () => {
         const subtotal = calculateSubtotal();
-        return subtotal + shippingCost - discountValue;
+        return subtotal - discountValue;
     };
 
     const calculateEstimatedProfit = () => {
@@ -330,7 +337,9 @@ export default function OrderForm() {
         }, 0);
 
         const subtotal = calculateSubtotal();
-        return subtotal - baseCostTotal - discountValue;
+        const shippingExpense = shippingIncludedInPrice ? 0 : shippingCost;
+
+        return subtotal - baseCostTotal - shippingExpense - discountValue;
     };
 
     const baseCityOptions = isEditing ? cities : cities.filter(city => city.is_active);
@@ -371,6 +380,8 @@ export default function OrderForm() {
             } else {
                 setDeliveryCompanyCities([]);
             }
+            setDeliveryCitySearch('');
+            setShowCityDropdown(false);
         }, [formData.delivery_integration_id]);
 
     const handleSubmit = async (e) => {
@@ -381,6 +392,7 @@ export default function OrderForm() {
         try {
             const submitData = {
                 ...formData,
+                vendor_id: isVendorUser ? (user?.vendor?.id || formData.vendor_id || null) : (formData.vendor_id || null),
                 items: orderItems
             };
 
@@ -615,8 +627,18 @@ export default function OrderForm() {
                             </div>
                         )}
 
-                        {/* Hide seller selection for users who are sellers */}
-                        {!user?.vendor && (
+                        {isVendorUser ? (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Seller</label>
+                                <input
+                                    type="text"
+                                    value={authenticatedSellerName}
+                                    disabled
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Orders from this account are assigned automatically to this seller.</p>
+                            </div>
+                        ) : (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Seller</label>
                                 <select
@@ -633,10 +655,10 @@ export default function OrderForm() {
                         )}
 
                         {/* Hide Agent Confirmation and Delivery Person for sellers - only admin assigns these */}
-                        {!user?.vendor && (
+                        {!isVendorUser && (
                             <>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Agent Confirmation</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation Agent</label>
                                     <select
                                         value={formData.confirmation_agent_id}
                                         onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
@@ -730,21 +752,54 @@ export default function OrderForm() {
                                     {deliveryCitiesLoading ? (
                                         <p className="text-xs text-gray-500">Loading cities...</p>
                                     ) : deliveryCompanyCities.length > 0 ? (
-                                        <select
-                                            value={formData.delivery_city || ''}
-                                            onChange={(e) => setFormData({ ...formData, delivery_city: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                        >
-                                            <option value="">Select delivery city</option>
-                                            {deliveryCompanyCities.map((city, idx) => {
-                                                const cityName = typeof city === 'object' ? (city.name || city.ville || city.city || '') : city;
-                                                return (
-                                                    <option key={`${cityName}-${idx}`} value={cityName}>
-                                                        {cityName}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder="Search city..."
+                                                value={deliveryCitySearch}
+                                                onChange={(e) => setDeliveryCitySearch(e.target.value)}
+                                                onFocus={() => setShowCityDropdown(true)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                            />
+                                            {showCityDropdown && deliveryCitySearch && (
+                                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                                    {deliveryCompanyCities
+                                                        .filter((city) => {
+                                                            const cityName = typeof city === 'object' ? (city.name || city.ville || city.city || '') : city;
+                                                            return cityName.toLowerCase().includes(deliveryCitySearch.toLowerCase());
+                                                        })
+                                                        .map((city, idx) => {
+                                                            const cityName = typeof city === 'object' ? (city.name || city.ville || city.city || '') : city;
+                                                            return (
+                                                                <button
+                                                                    key={`${cityName}-${idx}`}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setFormData({ ...formData, delivery_city: cityName });
+                                                                        setDeliveryCitySearch('');
+                                                                        setShowCityDropdown(false);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm transition"
+                                                                >
+                                                                    {cityName}
+                                                                </button>
+                                                            );
+                                                        })
+                                                    }
+                                                    {deliveryCompanyCities.filter((city) => {
+                                                        const cityName = typeof city === 'object' ? (city.name || city.ville || city.city || '') : city;
+                                                        return cityName.toLowerCase().includes(deliveryCitySearch.toLowerCase());
+                                                    }).length === 0 && (
+                                                        <div className="px-3 py-2 text-xs text-gray-500 text-center">No cities found</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {formData.delivery_city && (
+                                                <div className="mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+                                                    Selected: <strong>{formData.delivery_city}</strong>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
                                         <p className="text-xs text-red-600">{deliveryCitiesError || 'No cities available for this company.'}</p>
                                     )}
@@ -862,7 +917,9 @@ export default function OrderForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Cost (from city settings)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    {shippingIncludedInPrice ? 'Shipping Cost (included in admin price)' : 'Shipping Cost (from city settings)'}
+                                </label>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="text"
@@ -892,7 +949,9 @@ export default function OrderForm() {
                                 <span className="font-medium">{formatCurrency(calculateSubtotal())}</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">Shipping:</span>
+                                <span className="text-gray-600">
+                                    {shippingIncludedInPrice ? 'Shipping (included):' : 'Shipping:'}
+                                </span>
                                 <span className="font-medium">{formatCurrency(shippingCost)}</span>
                             </div>
                             <div className="flex justify-between text-sm">

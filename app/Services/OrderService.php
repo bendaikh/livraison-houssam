@@ -24,7 +24,12 @@ class OrderService
                 $subtotal += $item['price'] * $item['quantity'];
             }
 
-            $total = $subtotal + ($data['shipping_cost'] ?? 0) + ($data['tax'] ?? 0) - ($data['discount'] ?? 0);
+            $shippingIncludedInPrice = (bool) ($data['shipping_included_in_price'] ?? false);
+            $total = $subtotal + ($data['tax'] ?? 0) - ($data['discount'] ?? 0);
+
+            if (!$shippingIncludedInPrice) {
+                $total += ($data['shipping_cost'] ?? 0);
+            }
 
             // Calculate commission if vendor order
             $commissionAmount = 0;
@@ -50,6 +55,7 @@ class OrderService
                 'shopify_name' => $data['shopify_name'] ?? null,
                 'subtotal' => $subtotal,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,
+                'shipping_included_in_price' => $shippingIncludedInPrice,
                 'tax' => $data['tax'] ?? 0,
                 'discount' => $data['discount'] ?? 0,
                 'total' => $total,
@@ -79,7 +85,7 @@ class OrderService
             // Update client stats
             $this->updateClientStats($order->client_id);
 
-            return $order->load(['items.product', 'client']);
+            return $order->load(['items.product', 'client', 'vendor']);
         });
     }
 
@@ -94,7 +100,12 @@ class OrderService
                 $subtotal += $item['price'] * $item['quantity'];
             }
 
-            $total = $subtotal + ($data['shipping_cost'] ?? 0) + ($data['tax'] ?? 0) - ($data['discount'] ?? 0);
+            $shippingIncludedInPrice = (bool) ($data['shipping_included_in_price'] ?? $order->shipping_included_in_price);
+            $total = $subtotal + ($data['tax'] ?? 0) - ($data['discount'] ?? 0);
+
+            if (!$shippingIncludedInPrice) {
+                $total += ($data['shipping_cost'] ?? 0);
+            }
 
             // Calculate commission if vendor order
             $commissionAmount = 0;
@@ -118,6 +129,7 @@ class OrderService
                 'shopify_name' => $data['shopify_name'] ?? null,
                 'subtotal' => $subtotal,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,
+                'shipping_included_in_price' => $shippingIncludedInPrice,
                 'tax' => $data['tax'] ?? 0,
                 'discount' => $data['discount'] ?? 0,
                 'total' => $total,
@@ -244,7 +256,7 @@ class OrderService
             // Create notification
             $this->createOrderNotification($order, $status);
 
-            $freshOrder = $order->fresh(['items.product', 'client', 'history', 'deliveryIntegration']);
+            $freshOrder = $order->fresh(['items.product', 'client', 'vendor', 'history', 'deliveryIntegration']);
             
             // If there was a delivery error, add it to the response
             if ($deliveryError) {

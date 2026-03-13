@@ -40,6 +40,47 @@ export function formatCurrency(amount, settings = {}) {
 }
 
 /**
+ * Normalize prices that are effectively whole numbers but may contain
+ * small decimal drift from prior calculations or imports.
+ * @param {number|string} amount - The amount to normalize
+ * @param {object} options - Normalization options
+ * @returns {number|null} Normalized numeric value
+ */
+export function normalizePrice(amount, options = {}) {
+    if (amount === null || amount === undefined || amount === '') return null;
+
+    const numAmount = parseFloat(amount);
+    if (Number.isNaN(numAmount)) return null;
+
+    const { integerTolerance = 0.05 } = options;
+    const nearestInteger = Math.round(numAmount);
+
+    if (Math.abs(numAmount - nearestInteger) <= integerTolerance) {
+        return nearestInteger;
+    }
+
+    return Number(numAmount.toFixed(2));
+}
+
+/**
+ * Format a numeric value for price inputs while keeping integer prices clean.
+ * @param {number|string} amount - The amount to format
+ * @param {object} options - Normalization options
+ * @returns {string} Formatted value for form inputs
+ */
+export function formatPriceInput(amount, options = {}) {
+    const normalizedAmount = normalizePrice(amount, options);
+
+    if (normalizedAmount === null) return '';
+
+    if (Number.isInteger(normalizedAmount)) {
+        return String(normalizedAmount);
+    }
+
+    return normalizedAmount.toFixed(2).replace(/\.?0+$/, '');
+}
+
+/**
  * Parse a formatted currency string back to a number
  * @param {string} formattedCurrency - The formatted currency string
  * @param {object} settings - Currency settings object

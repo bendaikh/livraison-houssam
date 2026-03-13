@@ -65,6 +65,25 @@ export default function GoogleSheetIntegrationPage() {
         }
     };
 
+    const ensureIntegration = async () => {
+        if (integration) {
+            return integration;
+        }
+
+        const payload = {
+            name: 'Google Sheets',
+            type: 'google_sheet',
+            provider: 'google_sheet',
+            is_active: true,
+            vendor_id: user?.vendor?.id || null,
+            credentials: {},
+        };
+
+        const response = await api.post('/api-integrations', payload);
+        setIntegration(response.data);
+        return response.data;
+    };
+
     const detectMapping = (normalizedHeaders) => {
         const preferred = {
             customer_name: 'first_name',
@@ -104,14 +123,22 @@ export default function GoogleSheetIntegrationPage() {
         }
         setLoadingTabs(true);
         try {
-            const response = await api.get(`/api-integrations/${integration.id}/google-sheet/tabs`, {
+            const activeIntegration = await ensureIntegration();
+            const response = await api.get(`/api-integrations/${activeIntegration.id}/google-sheet/tabs`, {
                 params: { sheet_url: sheetUrl },
             });
             setTabs(response.data.data || []);
             if ((response.data.data || []).length > 0) {
                 setSelectedTab(response.data.data[0]);
+            } else {
+                setSelectedTab('');
             }
-            setMessage({ type: 'success', text: 'Tabs loaded. Choose the tab that has your orders.' });
+            setMessage({
+                type: (response.data.data || []).length > 0 ? 'success' : 'error',
+                text: (response.data.data || []).length > 0
+                    ? 'Tabs loaded. Choose the tab that has your orders.'
+                    : 'No tabs were returned. Check that the sheet URL is correct and the sheet is shared for viewing.',
+            });
         } catch (error) {
             setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to load tabs.' });
         } finally {
@@ -231,10 +258,6 @@ export default function GoogleSheetIntegrationPage() {
     }, [mapping]);
 
     const persistAndImport = async () => {
-        if (!integration) {
-            setMessage({ type: 'error', text: 'Integration missing. Ask admin to enable Google Sheets.' });
-            return;
-        }
         if (!sheetUrl || !selectedTab) {
             setMessage({ type: 'error', text: 'Paste a sheet URL and select a tab first.' });
             return;
@@ -246,25 +269,30 @@ export default function GoogleSheetIntegrationPage() {
 
         setImporting(true);
         setMessage({});
-        const credentials = {
-            api_key: integration.credentials?.api_key || '',
-            sheet_id: extractSheetId(sheetUrl),
-            sheet_url: sheetUrl,
-            range: `${selectedTab}!A1:Z1000`,
-            header_row: 1,
-        };
-        const payload = {
-            name: integration.name || 'Google Sheets',
-            type: 'google_sheet',
-            provider: 'google_sheet',
-            is_active: true,
-            vendor_id: user?.vendor?.id || integration.vendor_id || null,
-            credentials,
-        };
 
         try {
-            await api.put(`/api-integrations/${integration.id}`, payload);
-            const res = await api.post(`/api-integrations/${integration.id}/sync`);
+            const activeIntegration = await ensureIntegration();
+            const credentials = {
+                api_key: activeIntegration.credentials?.api_key || '',
+                sheet_id: extractSheetId(sheetUrl),
+                sheet_url: sheetUrl,
+                range: `${selectedTab}!A1:Z1000`,
+                header_row: 1,
+            };
+            const payload = {
+                name: activeIntegration.name || 'Google Sheets',
+                type: 'google_sheet',
+                provider: 'google_sheet',
+                is_active: true,
+                vendor_id: user?.vendor?.id || activeIntegration.vendor_id || null,
+                credentials,
+            };
+            const mergedCredentials = {
+                ...(activeIntegration.credentials || {}),
+                ...credentials,
+            };
+            await api.put(`/api-integrations/${activeIntegration.id}`, { ...payload, credentials: mergedCredentials });
+            const res = await api.post(`/api-integrations/${activeIntegration.id}/sync`);
             const logMsg = res.data?.log?.message || res.data.message || 'Import started.';
             setMessage({ type: 'success', text: logMsg });
             fetchIntegration();
@@ -332,7 +360,7 @@ export default function GoogleSheetIntegrationPage() {
                         <button
                             type="button"
                             onClick={loadTabs}
-                            disabled={!integration || loadingTabs}
+                            disabled={loadingTabs}
                             className="px-4 py-2 bg-white text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50 disabled:opacity-40"
                         >
                             {loadingTabs ? 'Loading tabs...' : 'Load Tabs'}
@@ -416,7 +444,7 @@ export default function GoogleSheetIntegrationPage() {
                         >
                             {importing ? 'Importing...' : 'Confirm Import'}
                         </button>
-                        <p className="text-xs text-gray-500 self-center">Only valid, non-duplicate rows are imported. Required: customer, phone, city.</p>
+                        <p className="text-xs text-gray-500 self-center">Only valid, non-duplicate rows are imported. Required: customer, phone, and either city or address.</p>
                     </div>
                 </div>
 
@@ -425,7 +453,7 @@ export default function GoogleSheetIntegrationPage() {
                     <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
                         <li>Paste the Google Sheet URL; we extract the ID automatically.</li>
                         <li>Select the tab; the first row becomes headers.</li>
-                        <li>We auto-detect columns (client/phone/city are required).</li>
+                        <li>We auto-detect columns (client and phone are required; city or address is enough for location).</li>
                         <li>Defaults: status pending, quantity 1, source google_sheet, date = today if missing.</li>
                         <li>If a column named CHECK exists, only rows with a value in CHECK are imported.</li>
                     </ul>

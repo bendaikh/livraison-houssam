@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'google_sheets' => [
+        'api_key' => env('GOOGLE_SHEETS_API_KEY'),
+    ],
+
 ];
