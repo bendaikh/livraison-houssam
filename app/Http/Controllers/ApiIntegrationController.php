@@ -50,9 +50,17 @@ class ApiIntegrationController extends Controller
             'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
             'vendor_id' => 'nullable|exists:vendors,id',
             'is_active' => 'boolean',
-            'credentials' => 'required|array',
+            'credentials' => 'nullable|array',
             'settings' => 'nullable|array',
         ]);
+
+        if (($validated['type'] ?? null) !== 'google_sheet' && empty($validated['credentials'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'credentials' => ['The credentials field is required.'],
+            ]);
+        }
+
+        $validated['credentials'] = $validated['credentials'] ?? [];
 
         $integration = ApiIntegration::create($validated);
 
@@ -72,7 +80,7 @@ class ApiIntegrationController extends Controller
             'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
             'vendor_id' => 'nullable|exists:vendors,id',
             'is_active' => 'boolean',
-            'credentials' => 'array',
+            'credentials' => 'nullable|array',
             'settings' => 'nullable|array',
         ]);
 
