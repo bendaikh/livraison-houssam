@@ -835,7 +835,7 @@ class ApiIntegrationService
         $integration = ApiIntegration::findOrFail($integrationId);
         $apiKey = $this->resolveGoogleSheetsApiKey($integration);
         if (!$apiKey) {
-            throw new \Exception('Google Sheets API key is not configured on the server.');
+            throw new \Exception('Google Sheets API key is not configured. Add it to the integration or the server environment.');
         }
 
         $this->googleSheetService->setApiKey($apiKey);
@@ -850,7 +850,7 @@ class ApiIntegrationService
         $integration = ApiIntegration::findOrFail($integrationId);
         $apiKey = $this->resolveGoogleSheetsApiKey($integration);
         if (!$apiKey) {
-            throw new \Exception('Google Sheets API key is not configured on the server.');
+            throw new \Exception('Google Sheets API key is not configured. Add it to the integration or the server environment.');
         }
 
         $this->googleSheetService->setApiKey($apiKey);

@@ -30,8 +30,10 @@ const hashKey = (values) => values.join('|').toLowerCase();
 
 export default function GoogleSheetIntegrationPage() {
     const { user } = useAuth();
+    const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
     const [integration, setIntegration] = useState(null);
     const [sheetUrl, setSheetUrl] = useState('');
+    const [apiKeyInput, setApiKeyInput] = useState('');
     const [tabs, setTabs] = useState([]);
     const [selectedTab, setSelectedTab] = useState('');
     const [headers, setHeaders] = useState([]);
@@ -59,6 +61,7 @@ export default function GoogleSheetIntegrationPage() {
                 if (savedUrl) {
                     setSheetUrl(savedUrl);
                 }
+                setApiKeyInput(gs.credentials?.api_key || '');
             }
         } catch (error) {
             console.error('Error fetching Google Sheet integration', error);
@@ -80,6 +83,23 @@ export default function GoogleSheetIntegrationPage() {
         };
 
         const response = await api.post('/api-integrations', payload);
+        setIntegration(response.data);
+        return response.data;
+    };
+
+    const saveIntegration = async (activeIntegration, extraCredentials = {}) => {
+        const response = await api.put(`/api-integrations/${activeIntegration.id}`, {
+            name: activeIntegration.name || 'Google Sheets',
+            type: 'google_sheet',
+            provider: 'google_sheet',
+            is_active: true,
+            vendor_id: user?.vendor?.id || activeIntegration.vendor_id || null,
+            credentials: {
+                ...(activeIntegration.credentials || {}),
+                ...extraCredentials,
+            },
+        });
+
         setIntegration(response.data);
         return response.data;
     };
@@ -123,7 +143,10 @@ export default function GoogleSheetIntegrationPage() {
         }
         setLoadingTabs(true);
         try {
-            const activeIntegration = await ensureIntegration();
+            let activeIntegration = await ensureIntegration();
+            if (isAdminUser && apiKeyInput.trim() && apiKeyInput.trim() !== (activeIntegration.credentials?.api_key || '')) {
+                activeIntegration = await saveIntegration(activeIntegration, { api_key: apiKeyInput.trim() });
+            }
             const response = await api.get(`/api-integrations/${activeIntegration.id}/google-sheet/tabs`, {
                 params: { sheet_url: sheetUrl },
             });
@@ -154,7 +177,8 @@ export default function GoogleSheetIntegrationPage() {
         setLoadingPreview(true);
         setMessage({});
         try {
-            const response = await api.post(`/api-integrations/${integration.id}/google-sheet/preview`, {
+            const activeIntegration = await ensureIntegration();
+            const response = await api.post(`/api-integrations/${activeIntegration.id}/google-sheet/preview`, {
                 sheet_url: sheetUrl,
                 tab: selectedTab,
                 limit: 200,
@@ -271,27 +295,15 @@ export default function GoogleSheetIntegrationPage() {
         setMessage({});
 
         try {
-            const activeIntegration = await ensureIntegration();
+            let activeIntegration = await ensureIntegration();
             const credentials = {
-                api_key: activeIntegration.credentials?.api_key || '',
+                api_key: isAdminUser ? (apiKeyInput.trim() || activeIntegration.credentials?.api_key || '') : (activeIntegration.credentials?.api_key || ''),
                 sheet_id: extractSheetId(sheetUrl),
                 sheet_url: sheetUrl,
                 range: `${selectedTab}!A1:Z1000`,
                 header_row: 1,
             };
-            const payload = {
-                name: activeIntegration.name || 'Google Sheets',
-                type: 'google_sheet',
-                provider: 'google_sheet',
-                is_active: true,
-                vendor_id: user?.vendor?.id || activeIntegration.vendor_id || null,
-                credentials,
-            };
-            const mergedCredentials = {
-                ...(activeIntegration.credentials || {}),
-                ...credentials,
-            };
-            await api.put(`/api-integrations/${activeIntegration.id}`, { ...payload, credentials: mergedCredentials });
+            activeIntegration = await saveIntegration(activeIntegration, credentials);
             const res = await api.post(`/api-integrations/${activeIntegration.id}/sync`);
             const logMsg = res.data?.log?.message || res.data.message || 'Import started.';
             setMessage({ type: 'success', text: logMsg });
@@ -355,6 +367,20 @@ export default function GoogleSheetIntegrationPage() {
                         />
                         <p className="text-xs text-gray-500">We only need the URL. Tabs and headers are detected automatically.</p>
                     </div>
+
+                    {isAdminUser && (
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Google Sheets API Key</label>
+                            <input
+                                type="password"
+                                value={apiKeyInput}
+                                onChange={(e) => setApiKeyInput(e.target.value)}
+                                placeholder="AIza..."
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            />
+                            <p className="text-xs text-gray-500">Admin only. Save the key once in the integration record, then sellers can import without server env access.</p>
+                        </div>
+                    )}
 
                     <div className="flex flex-wrap gap-3 items-center">
                         <button
