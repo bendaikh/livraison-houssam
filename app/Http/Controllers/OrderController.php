@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\User;
 use App\Models\Vendor;
 use App\Services\OrderService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -18,15 +20,29 @@ class OrderController extends Controller
     {
         $query = Order::with(['client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'deliveryIntegration', 'items.product']);
 
-        // If user is a vendor, only show their orders
         $user = $request->user();
-        if ($user && $user->role && $user->role->slug === 'vendor') {
+
+        if ($user && $user->isVendor()) {
             $vendor = $this->getAuthenticatedVendor($request);
             if ($vendor) {
                 $query->where('vendor_id', $vendor->id);
             } else {
                 $query->whereRaw('1 = 0');
             }
+        } elseif ($user && $user->isConfirmationAgent()) {
+            $assignmentScope = $request->get('assignment_scope', 'my');
+
+            if ($assignmentScope === 'available') {
+                $query->whereNull('confirmation_agent_id')
+                    ->whereNotIn('status', ['delivered', 'returned']);
+            } else {
+                $query->where('confirmation_agent_id', $user->id);
+            }
+        }
+
+        if ($request->get('callback_due') === 'today') {
+            $query->whereDate('callback_date', '<=', Carbon::today())
+                ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned']);
         }
 
         if ($request->has('search')) {
@@ -76,6 +92,10 @@ class OrderController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->user()?->isConfirmationAgent()) {
+            abort(403, 'Confirmation agents cannot create orders.');
+        }
+
         $validated = $request->validate([
             'client_id' => 'nullable|exists:clients,id',
             'client_name' => 'required_without:client_id|string|max:255',
@@ -85,12 +105,14 @@ class OrderController extends Controller
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
+            'callback_date' => 'nullable|date',
             'delivery_city' => 'nullable|string|max:255',
-            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace',
+            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric|min:0',
+            'items.*.is_upsell' => 'nullable|boolean',
             'shipping_cost' => 'nullable|numeric|min:0',
             'shipping_included_in_price' => 'nullable|boolean',
             'tax' => 'nullable|numeric|min:0',
@@ -141,7 +163,7 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $this->authorizeVendorOrderAccess(request(), $order);
+        $this->authorizeOrderAccess(request(), $order);
 
         return response()->json($order->load([
             'client',
@@ -157,7 +179,11 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order)
     {
-        $this->authorizeVendorOrderAccess($request, $order);
+        $this->authorizeOrderAccess($request, $order);
+
+        if ($request->user()?->isConfirmationAgent()) {
+            abort(403, 'Confirmation agents must use the confirmation workflow endpoint.');
+        }
 
         $validated = $request->validate([
             'client_id' => 'nullable|exists:clients,id',
@@ -168,13 +194,15 @@ class OrderController extends Controller
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_person_id' => 'nullable|exists:users,id',
             'confirmation_agent_id' => 'nullable|exists:users,id',
+            'callback_date' => 'nullable|date',
             'delivery_city' => 'nullable|string|max:255',
             'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
-            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace',
+            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric|min:0',
+            'items.*.is_upsell' => 'nullable|boolean',
             'shipping_cost' => 'nullable|numeric|min:0',
             'shipping_included_in_price' => 'nullable|boolean',
             'tax' => 'nullable|numeric|min:0',
@@ -212,7 +240,8 @@ class OrderController extends Controller
         if (
             $order->confirmation_agent_id &&
             $request->filled('confirmation_agent_id') &&
-            $request->confirmation_agent_id != $order->confirmation_agent_id
+            $request->confirmation_agent_id != $order->confirmation_agent_id &&
+            !$request->user()?->isAdmin()
         ) {
             return response()->json([
                 'message' => 'Confirmation agent cannot be changed after it has been set.'
@@ -255,7 +284,7 @@ class OrderController extends Controller
 
     public function updateStatus(Request $request, Order $order)
     {
-        $this->authorizeVendorOrderAccess($request, $order);
+        $this->authorizeOrderAccess($request, $order);
 
         $validated = $request->validate([
             'status' => 'required|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
@@ -263,6 +292,8 @@ class OrderController extends Controller
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_city' => 'nullable|string', // The city selected from the delivery company's list
         ]);
+
+        $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $validated['status']);
 
         $deliveryIntegrationId = $validated['delivery_integration_id'] ?? $order->delivery_integration_id;
         $deliveryCity = $validated['delivery_city'] ?? $order->delivery_city ?? $order->city;
@@ -287,7 +318,7 @@ class OrderController extends Controller
 
     public function assignDeliveryAgent(Request $request, Order $order)
     {
-        $this->authorizeVendorOrderAccess($request, $order);
+        $this->authorizeOrderAccess($request, $order);
 
         $validated = $request->validate([
             'delivery_agent_id' => 'nullable|exists:users,id',
@@ -321,7 +352,11 @@ class OrderController extends Controller
 
     public function destroy(Order $order)
     {
-        $this->authorizeVendorOrderAccess(request(), $order);
+        $this->authorizeOrderAccess(request(), $order);
+
+        if (request()->user()?->isConfirmationAgent()) {
+            abort(403, 'Confirmation agents cannot delete orders.');
+        }
 
         $order->delete();
         return response()->json(['message' => 'Order deleted successfully']);
@@ -341,7 +376,7 @@ class OrderController extends Controller
      */
     public function syncDeliveryStatus(Order $order)
     {
-        $this->authorizeVendorOrderAccess(request(), $order);
+        $this->authorizeOrderAccess(request(), $order);
 
         try {
             if (!$order->delivery_integration_id) {
@@ -630,6 +665,73 @@ class OrderController extends Controller
         }
     }
 
+    public function assignToMe(Request $request, Order $order)
+    {
+        if (!$request->user()?->isConfirmationAgent()) {
+            abort(403, 'Only confirmation agents can assign orders to themselves.');
+        }
+
+        $this->authorizeOrderAccess($request, $order, true);
+
+        $order = $this->orderService->assignConfirmationAgentToSelf($order->id, $request->user());
+
+        return response()->json($order);
+    }
+
+    public function updateConfirmationWorkflow(Request $request, Order $order)
+    {
+        if (!$request->user()?->isConfirmationAgent()) {
+            abort(403, 'Only confirmation agents can use this workflow.');
+        }
+
+        $this->authorizeOrderAccess($request, $order);
+
+        $validated = $request->validate([
+            'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
+            'callback_date' => 'nullable|date',
+            'upsell_items' => 'nullable|array',
+            'upsell_items.*.product_id' => 'required|exists:products,id',
+            'upsell_items.*.quantity' => 'required|integer|min:1',
+            'upsell_items.*.price' => 'required|numeric|min:0',
+        ]);
+
+        $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $validated['status'] ?? null);
+
+        $order = $this->orderService->updateConfirmationWorkflow($order->id, $request->user(), $validated);
+
+        return response()->json($order);
+    }
+
+    public function updateConfirmationAssignment(Request $request, Order $order)
+    {
+        $this->authorizeAdmin($request);
+
+        $validated = $request->validate([
+            'confirmation_agent_id' => 'nullable|exists:users,id',
+            'reset_to_pending' => 'nullable|boolean',
+            'note' => 'nullable|string',
+        ]);
+
+        if (!empty($validated['confirmation_agent_id'])) {
+            $agent = User::with('role')->findOrFail($validated['confirmation_agent_id']);
+
+            if (!$agent->isConfirmationAgent()) {
+                throw ValidationException::withMessages([
+                    'confirmation_agent_id' => ['Selected user is not a confirmation agent.'],
+                ]);
+            }
+        }
+
+        $order = $this->orderService->updateConfirmationAssignment(
+            $order->id,
+            $validated['confirmation_agent_id'] ?? null,
+            (bool) ($validated['reset_to_pending'] ?? false),
+            $validated['note'] ?? null
+        );
+
+        return response()->json($order);
+    }
+
     /**
      * Fallback cities for Tawsilex if they don't have an API endpoint
      */
@@ -663,7 +765,7 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        if (!$user || !$user->role || $user->role->slug !== 'vendor') {
+        if (!$user || !$user->isVendor()) {
             return null;
         }
 
@@ -674,7 +776,7 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        if (!$user || !$user->role || $user->role->slug !== 'vendor') {
+        if (!$user || !$user->isVendor()) {
             return $validated;
         }
 
@@ -691,24 +793,114 @@ class OrderController extends Controller
         return $validated;
     }
 
-    private function authorizeVendorOrderAccess(Request $request, Order $order): void
+    private function authorizeOrderAccess(Request $request, Order $order, bool $allowUnassignedClaim = false): void
     {
         $user = $request->user();
 
-        if (!$user || !$user->role || $user->role->slug !== 'vendor') {
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        if ($user->isAdmin()) {
             return;
         }
 
-        $vendor = $this->getAuthenticatedVendor($request);
+        if ($user->isVendor()) {
+            $vendor = $this->getAuthenticatedVendor($request);
 
-        if (!$vendor) {
-            throw ValidationException::withMessages([
-                'vendor_id' => ['Authenticated seller does not have a vendor profile.'],
-            ]);
+            if (!$vendor) {
+                throw ValidationException::withMessages([
+                    'vendor_id' => ['Authenticated seller does not have a vendor profile.'],
+                ]);
+            }
+
+            if ((int) $order->vendor_id !== (int) $vendor->id) {
+                abort(403, 'You are not allowed to access this order.');
+            }
+
+            return;
         }
 
-        if ((int) $order->vendor_id !== (int) $vendor->id) {
+        if ($user->isConfirmationAgent()) {
+            if ((int) $order->confirmation_agent_id === (int) $user->id) {
+                return;
+            }
+
+            if ($allowUnassignedClaim && !$order->confirmation_agent_id) {
+                return;
+            }
+
             abort(403, 'You are not allowed to access this order.');
+        }
+    }
+
+    private function ensureConfirmationAgentCanManuallyUpdateStatus(Request $request, Order $order, ?string $requestedStatus = null): void
+    {
+        $user = $request->user();
+
+        if (!$user?->isConfirmationAgent()) {
+            return;
+        }
+
+        if ($requestedStatus !== null && $requestedStatus === $order->status) {
+            return;
+        }
+
+        if ($this->isConfirmationAgentStatusLocked($order, $requestedStatus)) {
+            abort(403, $this->getConfirmationAgentStatusLockMessage($order));
+        }
+    }
+
+    private function isConfirmationAgentStatusLocked(Order $order, ?string $requestedStatus = null): bool
+    {
+        if (!empty($order->delivery_tracking_code)) {
+            return true;
+        }
+
+        if (!$order->delivery_person_id) {
+            return false;
+        }
+
+        $deliveryManagedStatuses = [
+            'picked_up',
+            'ready_for_shipping',
+            'shipped',
+            'out_for_delivery',
+            'delivered',
+            'cancelled',
+            'refused',
+            'returned',
+            'return_requested',
+        ];
+
+        $deliveryStarted = in_array($order->status, $deliveryManagedStatuses, true)
+            || in_array($requestedStatus, $deliveryManagedStatuses, true)
+            || !empty($order->picked_up_at)
+            || !empty($order->ready_for_shipping_at)
+            || !empty($order->sent_to_delivery_at)
+            || !empty($order->out_for_delivery_at)
+            || !empty($order->shipped_at)
+            || !empty($order->delivered_at)
+            || !empty($order->cancelled_at)
+            || !empty($order->refused_at)
+            || !empty($order->returned_at);
+
+        return $deliveryStarted;
+    }
+
+    private function getConfirmationAgentStatusLockMessage(Order $order): string
+    {
+        if (!empty($order->delivery_tracking_code)) {
+            return 'Status is read-only for confirmation agents after the order is handed to a delivery company.';
+        }
+
+        return 'Status is read-only for confirmation agents after delivery handling has started.';
+    }
+
+    private function authorizeAdmin(Request $request): void
+    {
+        if (!$request->user()?->isAdmin()) {
+            abort(403, 'Only administrators can perform this action.');
         }
     }
 

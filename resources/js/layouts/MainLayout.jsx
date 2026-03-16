@@ -2,10 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { isAdminRole, isConfirmationAgentRole } from '../utils/roles';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle
+    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle, TrendingUp
 } from 'lucide-react';
 
 export default function MainLayout() {
@@ -29,7 +30,10 @@ export default function MainLayout() {
         navigate('/login');
     };
     
-    const isVendor = user?.role?.slug === 'vendor';
+    const roleSlug = user?.role?.slug;
+    const isVendor = roleSlug === 'vendor';
+    const isAdmin = isAdminRole(roleSlug);
+    const isConfirmationAgent = isConfirmationAgentRole(roleSlug);
 
     const menuItems = useMemo(() => [
         { path: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & Analytics' },
@@ -40,12 +44,14 @@ export default function MainLayout() {
             description: 'Manage inventory',
             hasSubItems: true,
             adminOnly: true,
+            hiddenForConfirmationAgent: true,
             subItems: [
                 { path: '/products', icon: List, label: 'List Products', description: 'View all products' },
-                { path: '/categories', icon: Tags, label: 'Categories', description: 'Product categories' }
+                { path: '/categories', icon: Tags, label: 'Categories', description: 'Product categories' },
+                { path: '/profit-dashboard', icon: TrendingUp, label: 'Profit Dashboard', description: 'Sales analytics' }
             ]
         },
-        { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Vendor products' },
+        { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Vendor products', hiddenForConfirmationAgent: true },
         { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control', adminOnly: true },
         { 
             path: '/orders', 
@@ -62,7 +68,7 @@ export default function MainLayout() {
                 { path: '/orders/cancelled', icon: X, label: 'Cancelled', description: 'Cancelled orders' }
             ]
         },
-        { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management', adminOnly: true },
+        { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management', adminOnly: true, hiddenForConfirmationAgent: true },
         { 
             path: '/expenses', 
             icon: DollarSign, 
@@ -70,6 +76,7 @@ export default function MainLayout() {
             description: 'Track expenses',
             hasSubItems: true,
             adminOnly: true,
+            hiddenForConfirmationAgent: true,
             subItems: [
                 { path: '/expenses', icon: Receipt, label: 'List Expenses', description: 'View all expenses' },
                 { path: '/expense-categories', icon: Tags, label: 'Expense Categories', description: 'Expense types' }
@@ -81,6 +88,7 @@ export default function MainLayout() {
             label: 'API Integrations', 
             description: 'Connect your store',
             hasSubItems: true,
+            hiddenForConfirmationAgent: true,
             subItems: isVendor
                 ? [
                     { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
@@ -100,13 +108,15 @@ export default function MainLayout() {
             description: 'Users & Roles',
             hasSubItems: true,
             adminOnly: true,
+            hiddenForConfirmationAgent: true,
             subItems: [
                 { path: '/users', icon: Users, label: 'Users', description: 'Manage users' },
                 { path: '/roles', icon: Shield, label: 'Roles', description: 'Manage roles' }
             ]
         },
-        { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings', adminOnly: true },
-    ], [isVendor]);
+        { path: '/confirmation-billing', icon: DollarSign, label: 'Billing', description: 'Commission & invoices', adminOrConfirmation: true },
+        { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings', adminOnly: true, hiddenForConfirmationAgent: true },
+    ], [isAdmin, isConfirmationAgent, isVendor]);
 
     const isActive = (path) => {
         if (path === '/') return location.pathname === '/';
@@ -153,7 +163,9 @@ export default function MainLayout() {
                 {/* Navigation */}
                 <nav className="p-3 space-y-1 overflow-y-auto h-[calc(100vh-180px)] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
                     {menuItems.map((item) => {
-                        if (item.adminOnly && !['admin', 'superadmin'].includes(user?.role?.slug)) return null;
+                        if (item.adminOnly && !isAdmin) return null;
+                        if (item.adminOrConfirmation && !(isAdmin || isConfirmationAgent)) return null;
+                        if (item.hiddenForConfirmationAgent && isConfirmationAgent) return null;
                         
                         // Handle items with sub-items
                         if (item.hasSubItems && !sidebarCollapsed) {
@@ -352,10 +364,12 @@ export default function MainLayout() {
                                             <p className="text-sm font-semibold text-slate-700">{user?.name}</p>
                                             <p className="text-xs text-slate-500">{user?.email}</p>
                                         </div>
-                                        <Link to="/settings" className="flex items-center space-x-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-                                            <Settings size={18} />
-                                            <span>Settings</span>
-                                        </Link>
+                                        {!isConfirmationAgent && (
+                                            <Link to="/settings" className="flex items-center space-x-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                                                <Settings size={18} />
+                                                <span>Settings</span>
+                                            </Link>
+                                        )}
                                         <button 
                                             onClick={handleLogout}
                                             className="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"

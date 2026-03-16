@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { isConfirmationAgentRole } from '../../utils/roles';
 
 export default function UserList() {
     const [users, setUsers] = useState([]);
@@ -121,6 +121,7 @@ export default function UserList() {
         const colors = {
             superadmin: 'bg-purple-100 text-purple-800',
             admin: 'bg-blue-100 text-blue-800',
+            confirmation_agent: 'bg-green-100 text-green-800',
             agent_confirmation: 'bg-green-100 text-green-800',
             manager: 'bg-yellow-100 text-yellow-800',
             delivery: 'bg-orange-100 text-orange-800',
@@ -350,7 +351,7 @@ export default function UserList() {
                                 {/* Commission Field - Only show for confirmation agents and delivery persons */}
                                 {formData.role_id && (() => {
                                     const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
-                                    return selectedRole && (selectedRole.slug === 'agent_confirmation' || selectedRole.slug === 'delivery');
+                                    return selectedRole && (isConfirmationAgentRole(selectedRole.slug) || selectedRole.slug === 'delivery');
                                 })() && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -368,8 +369,8 @@ export default function UserList() {
                                         <p className="text-xs text-gray-500 mt-1">
                                             {(() => {
                                                 const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
-                                                if (selectedRole?.slug === 'agent_confirmation') {
-                                                    return 'Commission earned per confirmed order';
+                                                if (isConfirmationAgentRole(selectedRole?.slug)) {
+                                                    return 'Commission earned per delivered order';
                                                 } else if (selectedRole?.slug === 'delivery') {
                                                     return 'Commission earned per delivered order';
                                                 }

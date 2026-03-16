@@ -66,11 +66,11 @@ export default function ProductDetail() {
     const recommendedSellPrice = product?.recommended_price != null
         ? parseFloat(product.recommended_price)
         : null;
-    // Buy price / company cost (what we pay to acquire the product)
+    // Seller cost for this product
     const buyPrice = parseFloat(
-        (product?.company_price ??
+        (product?.vendor_price ??
+        product?.company_price ??
         product?.cost_price ??
-        product?.vendor_price ??
         product?.price ??
         0)
     );

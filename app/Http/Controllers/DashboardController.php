@@ -16,13 +16,18 @@ class DashboardController extends Controller
         $period = $request->get('period', 'daily');
         $user = $request->user();
         $vendorId = null;
-        
-        // If user is a vendor, get their vendor ID
-        if ($user && $user->role && $user->role->slug === 'vendor') {
+
+        if ($user && $user->isConfirmationAgent()) {
+            return response()->json(
+                $this->dashboardService->getConfirmationAgentStatistics($period, $user)
+            );
+        }
+
+        if ($user && $user->isVendor()) {
             $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
             $vendorId = $vendor?->id;
         }
-        
+
         $statistics = $this->dashboardService->getStatistics($period, $vendorId);
 
         return response()->json($statistics);

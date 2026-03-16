@@ -4,6 +4,8 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown, FileText, X } from 'lucide-react';
+import ConfirmationAgentDashboard from './ConfirmationAgentDashboard';
+import { isConfirmationAgentRole } from '../../utils/roles';
 
 export default function Dashboard() {
     const { formatCurrency } = useSettings();
@@ -13,6 +15,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     
     const isVendor = user?.role?.slug === 'vendor';
+    const isConfirmationAgent = isConfirmationAgentRole(user?.role?.slug);
 
     useEffect(() => {
         fetchDashboardData();
@@ -40,6 +43,10 @@ export default function Dashboard() {
                 </div>
             </div>
         );
+    }
+
+    if (isConfirmationAgent) {
+        return <ConfirmationAgentDashboard stats={stats} period={period} setPeriod={setPeriod} />;
     }
 
     const toRateNumber = (value) => {

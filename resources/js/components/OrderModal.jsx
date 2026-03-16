@@ -19,9 +19,9 @@ export default function OrderModal({
     const { user } = useAuth();
     const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
     const buyPrice = parseFloat(
+        product?.vendor_price ??
         product?.company_price ??
         product?.cost_price ??
-        product?.vendor_price ??
         product?.price ??
         0
     );
@@ -79,13 +79,12 @@ export default function OrderModal({
     };
 
     const sellPrice = parseFloat(orderForm.sell_price || 0);
-    const companyPrice = buyPrice;
+    const sellerPrice = buyPrice;
     const shippingPrice = getCityDeliveryCost(orderForm.city);
     const shippingIncludedInPrice = isAdminUser;
     const customerTotal = sellPrice * quantity;
-    const estimatedBenefit = (sellPrice - companyPrice) * quantity - (shippingIncludedInPrice ? 0 : shippingPrice);
+    const estimatedBenefit = (sellPrice - sellerPrice) * quantity;
     const estimatedMargin = customerTotal > 0 ? (estimatedBenefit / customerTotal) * 100 : 0;
-    const customerTotalWithShipping = customerTotal + shippingPrice;
 
     const filteredCities = citySearch.trim() === '' 
         ? [] 

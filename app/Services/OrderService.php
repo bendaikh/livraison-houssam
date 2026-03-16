@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\Notification;
 use App\Models\StockMovement;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -18,18 +19,8 @@ class OrderService
     public function createOrder(array $data)
     {
         return DB::transaction(function () use ($data) {
-            // Calculate totals
-            $subtotal = 0;
-            foreach ($data['items'] as $item) {
-                $subtotal += $item['price'] * $item['quantity'];
-            }
-
-            $shippingIncludedInPrice = (bool) ($data['shipping_included_in_price'] ?? false);
-            $total = $subtotal + ($data['tax'] ?? 0) - ($data['discount'] ?? 0);
-
-            if (!$shippingIncludedInPrice) {
-                $total += ($data['shipping_cost'] ?? 0);
-            }
+            ['subtotal' => $subtotal, 'total' => $total, 'shipping_included_in_price' => $shippingIncludedInPrice] =
+                $this->calculateOrderTotals($data['items'], $data);
 
             // Calculate commission if vendor order
             $commissionAmount = 0;
@@ -48,6 +39,7 @@ class OrderService
                 'delivery_integration_id' => $data['delivery_integration_id'] ?? null,
                 'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
+                'callback_date' => $data['callback_date'] ?? null,
                 'delivery_city' => $data['delivery_city'] ?? null,
                 'status' => $data['status'] ?? 'pending',
                 'source' => $data['source'] ?? 'manual',
@@ -76,6 +68,7 @@ class OrderService
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
                     'subtotal' => $item['price'] * $item['quantity'],
+                    'is_upsell' => (bool) ($item['is_upsell'] ?? false),
                 ]);
             }
 
@@ -93,19 +86,8 @@ class OrderService
     {
         return DB::transaction(function () use ($orderId, $data) {
             $order = Order::findOrFail($orderId);
-            
-            // Calculate totals
-            $subtotal = 0;
-            foreach ($data['items'] as $item) {
-                $subtotal += $item['price'] * $item['quantity'];
-            }
-
-            $shippingIncludedInPrice = (bool) ($data['shipping_included_in_price'] ?? $order->shipping_included_in_price);
-            $total = $subtotal + ($data['tax'] ?? 0) - ($data['discount'] ?? 0);
-
-            if (!$shippingIncludedInPrice) {
-                $total += ($data['shipping_cost'] ?? 0);
-            }
+            ['subtotal' => $subtotal, 'total' => $total, 'shipping_included_in_price' => $shippingIncludedInPrice] =
+                $this->calculateOrderTotals($data['items'], $data, $order);
 
             // Calculate commission if vendor order
             $commissionAmount = 0;
@@ -124,6 +106,7 @@ class OrderService
                 'delivery_integration_id' => $data['delivery_integration_id'] ?? null,
                 'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
+                'callback_date' => $data['callback_date'] ?? null,
                 'delivery_city' => $data['delivery_city'] ?? $order->delivery_city,
                 'source' => $data['source'] ?? 'manual',
                 'shopify_name' => $data['shopify_name'] ?? null,
@@ -160,6 +143,7 @@ class OrderService
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
                     'subtotal' => $item['price'] * $item['quantity'],
+                    'is_upsell' => (bool) ($item['is_upsell'] ?? false),
                 ]);
             }
 
@@ -192,6 +176,10 @@ class OrderService
                 'return_requested' => $order->update(['returned_at' => now()]),
                 default => null
             };
+
+            if (in_array($status, ['delivered', 'cancelled', 'refused', 'returned'], true)) {
+                $order->update(['callback_date' => null]);
+            }
 
             // Send to delivery company when confirmed
             $deliveryError = null;
@@ -436,7 +424,7 @@ class OrderService
         // Notify admin and delivery agent
         $users = \App\Models\User::where('is_active', true)
             ->whereHas('role', function ($query) {
-                $query->whereIn('slug', ['admin', 'confirmation_agent']);
+                $query->whereIn('slug', ['admin', 'superadmin', 'confirmation_agent', 'agent_confirmation']);
             })
             ->get();
 
@@ -494,5 +482,194 @@ class OrderService
         }
 
         return $order->fresh(['deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'deliveryIntegration']);
+    }
+
+    public function assignConfirmationAgentToSelf(int $orderId, User $user)
+    {
+        return DB::transaction(function () use ($orderId, $user) {
+            $order = Order::lockForUpdate()->findOrFail($orderId);
+
+            if ($order->confirmation_agent_id && (int) $order->confirmation_agent_id !== (int) $user->id) {
+                abort(422, 'This order is already assigned to another confirmation agent.');
+            }
+
+            if (in_array($order->status, ['delivered', 'returned'], true)) {
+                abort(422, 'Completed orders cannot be assigned to a confirmation agent.');
+            }
+
+            if ((int) $order->confirmation_agent_id !== (int) $user->id) {
+                $order->update(['confirmation_agent_id' => $user->id]);
+                $this->addHistory($order->id, $order->status, 'Order assigned to confirmation agent ' . $user->name);
+            }
+
+            return $order->fresh(['client', 'vendor', 'items.product', 'confirmationAgent']);
+        });
+    }
+
+    public function updateConfirmationAssignment(int $orderId, ?int $confirmationAgentId, bool $resetToPending = false, ?string $note = null)
+    {
+        return DB::transaction(function () use ($orderId, $confirmationAgentId, $resetToPending, $note) {
+            $order = Order::lockForUpdate()->findOrFail($orderId);
+
+            $order->update([
+                'confirmation_agent_id' => $confirmationAgentId,
+                'callback_date' => $confirmationAgentId ? $order->callback_date : null,
+            ]);
+
+            $historyNote = $note;
+
+            if (!$historyNote) {
+                $historyNote = $confirmationAgentId
+                    ? 'Confirmation agent assignment updated.'
+                    : 'Confirmation agent assignment removed.';
+            }
+
+            $this->addHistory($order->id, $order->status, $historyNote);
+
+            if ($resetToPending && $order->status !== 'pending') {
+                $order = $this->updateOrderStatus(
+                    $order->id,
+                    'pending',
+                    'Order reset to pending for reassignment.'
+                );
+            }
+
+            return $order->fresh(['client', 'vendor', 'items.product', 'confirmationAgent']);
+        });
+    }
+
+    public function updateConfirmationWorkflow(int $orderId, User $user, array $data)
+    {
+        return DB::transaction(function () use ($orderId, $user, $data) {
+            $order = Order::with('items')->lockForUpdate()->findOrFail($orderId);
+
+            if ((int) $order->confirmation_agent_id !== (int) $user->id) {
+                abort(403, 'You are not allowed to manage this order.');
+            }
+
+            $baseItems = $order->items->where('is_upsell', false)->values();
+            $previousCallbackDate = $order->callback_date;
+            $existingUpsellCount = $order->items->where('is_upsell', true)->count();
+            $existingUpsellSubtotal = (float) $order->items->where('is_upsell', true)->sum('subtotal');
+            $upsellItems = collect($data['upsell_items'] ?? [])
+                ->filter(fn ($item) => !empty($item['product_id']) && (int) ($item['quantity'] ?? 0) > 0)
+                ->map(function ($item) {
+                    $price = (float) ($item['price'] ?? 0);
+                    $quantity = (int) $item['quantity'];
+
+                    return [
+                        'product_id' => (int) $item['product_id'],
+                        'quantity' => $quantity,
+                        'price' => $price,
+                        'subtotal' => $price * $quantity,
+                        'is_upsell' => true,
+                    ];
+                })
+                ->values();
+
+            $combinedItems = $baseItems
+                ->map(fn ($item) => [
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product_name,
+                    'sku' => $item->sku,
+                    'quantity' => $item->quantity,
+                    'price' => $item->price,
+                    'subtotal' => $item->subtotal,
+                    'is_upsell' => false,
+                ])
+                ->concat($upsellItems)
+                ->values()
+                ->all();
+
+            ['subtotal' => $subtotal, 'total' => $total] = $this->calculateOrderTotals($combinedItems, [
+                'shipping_cost' => $order->shipping_cost,
+                'shipping_included_in_price' => $order->shipping_included_in_price,
+                'tax' => $order->tax,
+                'discount' => $order->discount,
+            ], $order);
+
+            $callbackDate = $data['callback_date'] ?? null;
+            $order->update([
+                'callback_date' => $callbackDate ?: null,
+                'subtotal' => $subtotal,
+                'total' => $total,
+            ]);
+
+            $order->items()->where('is_upsell', true)->delete();
+
+            foreach ($upsellItems as $item) {
+                $product = \App\Models\Product::find($item['product_id']);
+
+                $order->items()->create([
+                    'product_id' => $item['product_id'],
+                    'product_name' => $product?->name,
+                    'sku' => $product?->sku,
+                    'quantity' => $item['quantity'],
+                    'price' => $item['price'],
+                    'subtotal' => $item['subtotal'],
+                    'is_upsell' => true,
+                ]);
+            }
+
+            if ($callbackDate) {
+                $this->addHistory($order->id, $order->status, 'Callback scheduled for ' . $callbackDate . '.');
+            } elseif ($previousCallbackDate) {
+                $this->addHistory($order->id, $order->status, 'Callback cleared.');
+            }
+
+            if (
+                $existingUpsellCount !== $upsellItems->count()
+                || abs($existingUpsellSubtotal - (float) $upsellItems->sum('subtotal')) > 0.001
+            ) {
+                $this->addHistory($order->id, $order->status, 'Upsell products updated by confirmation agent.');
+            }
+
+            if (!empty($data['status']) && $data['status'] !== $order->status) {
+                $order = $this->updateOrderStatus(
+                    $order->id,
+                    $data['status'],
+                    'Order updated by confirmation agent.'
+                );
+            }
+
+            return $order->fresh([
+                'client',
+                'vendor',
+                'items.product',
+                'history.user',
+                'confirmationAgent',
+                'deliveryAgent',
+                'deliveryPerson',
+                'deliveryIntegration',
+            ]);
+        });
+    }
+
+    private function calculateOrderTotals(array $items, array $data, ?Order $order = null): array
+    {
+        $subtotal = collect($items)->sum(function ($item) {
+            if (isset($item['subtotal'])) {
+                return (float) $item['subtotal'];
+            }
+
+            return ((float) ($item['price'] ?? 0)) * ((int) ($item['quantity'] ?? 0));
+        });
+
+        $shippingIncludedInPrice = (bool) ($data['shipping_included_in_price'] ?? $order?->shipping_included_in_price ?? false);
+        $shippingCost = (float) ($data['shipping_cost'] ?? $order?->shipping_cost ?? 0);
+        $tax = (float) ($data['tax'] ?? $order?->tax ?? 0);
+        $discount = (float) ($data['discount'] ?? $order?->discount ?? 0);
+
+        $total = $subtotal + $tax - $discount;
+
+        if (!$shippingIncludedInPrice) {
+            $total += $shippingCost;
+        }
+
+        return [
+            'subtotal' => $subtotal,
+            'total' => $total,
+            'shipping_included_in_price' => $shippingIncludedInPrice,
+        ];
     }
 }

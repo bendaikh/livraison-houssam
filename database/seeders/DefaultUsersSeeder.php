@@ -42,12 +42,13 @@ class DefaultUsersSeeder extends Seeder
         );
 
         $confirmationAgentRole = Role::firstOrCreate(
-            ['slug' => 'agent_confirmation'],
+            ['slug' => 'confirmation_agent'],
             [
-                'name' => 'Agent Confirmation',
-                'description' => 'Can confirm orders',
+                'name' => 'Confirmation Agent',
+                'description' => 'Calls customers, confirms orders, schedules callbacks, and tracks personal billing.',
                 'permissions' => json_encode([
-                    'view_orders', 'confirm_orders', 'view_clients', 'view_products', 'view_dashboard'
+                    'view_orders', 'update_order_status', 'schedule_callbacks', 'manage_upsells',
+                    'view_clients', 'view_products', 'view_dashboard', 'view_commission'
                 ]),
             ]
         );

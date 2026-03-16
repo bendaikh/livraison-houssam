@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -34,7 +34,7 @@ export default function ProductList() {
     const fetchProducts = async () => {
         try {
             setLoading(true);
-            const params = { search };
+            const params = { search, per_page: 1000 };
             
             if (filterStatus === 'active') params.is_active = 1;
             if (filterStatus === 'inactive') params.is_active = 0;
@@ -81,6 +81,23 @@ export default function ProductList() {
             setUpdatingMarketplace(null);
         }
     };
+
+    const getCompanyCostPrice = (product) => {
+        const value = parseFloat(product.company_price ?? product.price ?? 0);
+        return Number.isFinite(value) ? value : 0;
+    };
+
+    const getSellerPrice = (product) => {
+        const value = parseFloat(product.vendor_price ?? 0);
+        return Number.isFinite(value) ? value : 0;
+    };
+
+    const getSoldUnits = (product) => {
+        const value = parseFloat(product.sold_units ?? 0);
+        return Number.isFinite(value) ? value : 0;
+    };
+
+    const getAdminUnitProfit = (product) => getSellerPrice(product) - getCompanyCostPrice(product);
 
     const stats = {
         total: products.length,
@@ -158,6 +175,8 @@ export default function ProductList() {
                     </div>
                 </div>
             </div>
+
+
 
             {/* Filters and Search */}
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-6">

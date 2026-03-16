@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -37,6 +38,10 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+    ];
+
+    protected $appends = [
+        'effective_commission_per_order',
     ];
 
     /**
@@ -74,6 +79,16 @@ class User extends Authenticatable
         return $this->hasMany(Order::class, 'delivery_agent_id');
     }
 
+    public function confirmationOrders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'confirmation_agent_id');
+    }
+
+    public function confirmationBillings(): HasMany
+    {
+        return $this->hasMany(ConfirmationAgentBilling::class);
+    }
+
     public function notifications()
     {
         return $this->hasMany(Notification::class);
@@ -87,5 +102,36 @@ class User extends Authenticatable
     public function hasRole(string $role): bool
     {
         return $this->role && $this->role->slug === $role;
+    }
+
+    public function hasAnyRole(array $roles): bool
+    {
+        return $this->role && in_array($this->role->slug, $roles, true);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->hasAnyRole(['admin', 'superadmin']);
+    }
+
+    public function isVendor(): bool
+    {
+        return $this->hasRole('vendor');
+    }
+
+    public function isConfirmationAgent(): bool
+    {
+        return $this->hasAnyRole(['confirmation_agent', 'agent_confirmation']);
+    }
+
+    public function getEffectiveCommissionPerOrderAttribute(): float
+    {
+        $commission = (float) ($this->commission_per_order ?? 0);
+
+        if ($this->isConfirmationAgent() && $commission <= 0) {
+            return (float) Setting::get('confirmation_agent_commission_per_order', 0);
+        }
+
+        return $commission;
     }
 }

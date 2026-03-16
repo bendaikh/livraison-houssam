@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ConfirmationAgentBilling;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Expense;
@@ -45,6 +46,121 @@ class DashboardService
             'top_products' => $this->getTopProducts($dateRange, $vendorId),
             'top_clients' => $this->getTopClients($dateRange, $vendorId),
             'top_vendors' => $vendorId ? [] : $this->getTopVendors($dateRange), // Vendors don't see this
+        ];
+    }
+
+    public function getConfirmationAgentStatistics(string $period, User $user): array
+    {
+        $dateRange = $this->getDateRange($period);
+        $baseQuery = Order::where('confirmation_agent_id', $user->id)
+            ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+
+        $todayStart = Carbon::today();
+        $todayEnd = Carbon::today()->endOfDay();
+        $commissionPerOrder = (float) $user->effective_commission_per_order;
+        $inProgressStatuses = ['pending', 'picked_up', 'ready_for_shipping', 'out_for_delivery', 'return_requested'];
+
+        $currentMonthStart = Carbon::now()->startOfMonth();
+        $currentMonthEnd = Carbon::now()->endOfMonth();
+        $currentMonthDeliveredQuery = Order::where('confirmation_agent_id', $user->id)
+            ->where('status', 'delivered')
+            ->whereBetween('delivered_at', [$currentMonthStart, $currentMonthEnd]);
+        $currentMonthUnpaidDeliveredQuery = Order::where('confirmation_agent_id', $user->id)
+            ->where('status', 'delivered')
+            ->whereBetween('delivered_at', [$currentMonthStart, $currentMonthEnd])
+            ->whereDoesntHave('confirmationBillings', function ($query) {
+                $query->whereNotNull('confirmation_agent_billings.paid_at');
+            });
+        $currentMonthDelivered = (clone $currentMonthDeliveredQuery)->count();
+        $currentMonthUnpaidDelivered = (clone $currentMonthUnpaidDeliveredQuery)->count();
+
+        return [
+            'sales' => (clone $baseQuery)->where('status', 'delivered')->sum('total'),
+            'orders' => [
+                'total' => (clone $baseQuery)->count(),
+                'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
+                'confirmed' => (clone $baseQuery)->where('status', 'confirmed')->count(),
+                'in_progress' => (clone $baseQuery)->whereIn('status', $inProgressStatuses)->count(),
+                'shipped' => (clone $baseQuery)->where('status', 'shipped')->count(),
+                'delivered' => (clone $baseQuery)->where('status', 'delivered')->count(),
+                'cancelled' => (clone $baseQuery)->where('status', 'cancelled')->count(),
+                'refused' => (clone $baseQuery)->where('status', 'refused')->count(),
+                'returned' => (clone $baseQuery)->where('status', 'returned')->count(),
+                'by_source' => (clone $baseQuery)
+                    ->select('source', DB::raw('count(*) as count'))
+                    ->groupBy('source')
+                    ->get(),
+            ],
+            'revenue' => [
+                'revenue' => (clone $baseQuery)->where('status', 'delivered')->sum('total'),
+                'expenses' => 0,
+                'profit' => (clone $baseQuery)->where('status', 'delivered')->sum('total'),
+            ],
+            'expenses' => 0,
+            'low_stock_products' => [],
+            'recent_orders' => Order::with(['client', 'items.product'])
+                ->where('confirmation_agent_id', $user->id)
+                ->latest()
+                ->limit(10)
+                ->get(),
+            'charts' => $this->getConfirmationAgentDailyChartData($period, $user->id),
+            'clients' => [
+                'total' => Client::whereHas('orders', function ($query) use ($user) {
+                    $query->where('confirmation_agent_id', $user->id);
+                })->count(),
+                'new' => Client::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+                    ->whereHas('orders', function ($query) use ($user) {
+                        $query->where('confirmation_agent_id', $user->id);
+                    })
+                    ->count(),
+                'active' => Client::whereHas('orders', function ($query) use ($user, $dateRange) {
+                    $query->where('confirmation_agent_id', $user->id)
+                        ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+                })->count(),
+            ],
+            'vendors' => [],
+            'products' => [
+                'total' => Product::where('is_active', true)->count(),
+                'active' => Product::where('is_active', true)->count(),
+            ],
+            'top_products' => $this->getTopProductsForConfirmationAgent($dateRange, $user->id),
+            'top_clients' => $this->getTopClientsForConfirmationAgent($dateRange, $user->id),
+            'top_vendors' => [],
+            'confirmation_agent' => [
+                'today' => [
+                    'delivered' => Order::where('confirmation_agent_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->whereBetween('delivered_at', [$todayStart, $todayEnd])
+                        ->count(),
+                    'earnings' => Order::where('confirmation_agent_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->whereBetween('delivered_at', [$todayStart, $todayEnd])
+                        ->count() * $commissionPerOrder,
+                ],
+                'todo_today' => Order::with(['client', 'items.product'])
+                    ->where('confirmation_agent_id', $user->id)
+                    ->whereDate('callback_date', '<=', Carbon::today())
+                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned'])
+                    ->orderBy('callback_date')
+                    ->limit(10)
+                    ->get(),
+                'callbacks_upcoming' => Order::where('confirmation_agent_id', $user->id)
+                    ->whereDate('callback_date', '>', Carbon::today())
+                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned'])
+                    ->count(),
+                'commission' => [
+                    'per_order' => $commissionPerOrder,
+                    'current_month_delivered' => $currentMonthDelivered,
+                    'current_month_total' => $currentMonthDelivered * $commissionPerOrder,
+                    'current_month_unpaid_delivered' => $currentMonthUnpaidDelivered,
+                    'current_month_unpaid_total' => $currentMonthUnpaidDelivered * $commissionPerOrder,
+                    'current_month_paid_reset' => $currentMonthUnpaidDelivered === 0,
+                ],
+                'latest_invoice' => ConfirmationAgentBilling::with('paidBy')
+                    ->where('user_id', $user->id)
+                    ->latest('period_start')
+                    ->first(),
+            ],
         ];
     }
 
@@ -270,6 +386,79 @@ class DashboardService
         }
 
         return round(($numerator / $denominator) * 100, 2);
+    }
+
+    private function getConfirmationAgentDailyChartData(string $period, int $userId): array
+    {
+        if ($period === 'yearly') {
+            $data = [];
+            for ($i = 11; $i >= 0; $i--) {
+                $month = Carbon::now()->subMonths($i);
+                $base = Order::where('confirmation_agent_id', $userId)
+                    ->whereYear('created_at', $month->year)
+                    ->whereMonth('created_at', $month->month);
+
+                $data[] = [
+                    'label' => $month->format('M Y'),
+                    'orders' => (clone $base)->count(),
+                    'delivered' => (clone $base)->where('status', 'delivered')->count(),
+                    'callbacks' => (clone $base)->whereNotNull('callback_date')->count(),
+                ];
+            }
+
+            return $data;
+        }
+
+        $days = $period === 'monthly' ? 30 : 7;
+        $data = [];
+
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $day = Carbon::now()->subDays($i);
+            $base = Order::where('confirmation_agent_id', $userId)
+                ->whereDate('created_at', $day);
+
+            $data[] = [
+                'label' => $day->format('M d'),
+                'orders' => (clone $base)->count(),
+                'delivered' => (clone $base)->where('status', 'delivered')->count(),
+                'callbacks' => (clone $base)->whereDate('callback_date', $day)->count(),
+            ];
+        }
+
+        return $data;
+    }
+
+    private function getTopProductsForConfirmationAgent(array $dateRange, int $userId)
+    {
+        return DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->where('orders.confirmation_agent_id', $userId)
+            ->whereBetween('orders.created_at', [$dateRange['start'], $dateRange['end']])
+            ->select(
+                'order_items.product_id',
+                DB::raw('COALESCE(products.name, order_items.product_name, "Product") as name'),
+                DB::raw('SUM(order_items.quantity) as total_quantity')
+            )
+            ->groupBy('order_items.product_id', 'products.name', 'order_items.product_name')
+            ->orderByDesc('total_quantity')
+            ->limit(5)
+            ->get();
+    }
+
+    private function getTopClientsForConfirmationAgent(array $dateRange, int $userId)
+    {
+        return Client::whereHas('orders', function ($query) use ($dateRange, $userId) {
+            $query->where('confirmation_agent_id', $userId)
+                ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        })
+            ->withCount(['orders as orders_count' => function ($query) use ($dateRange, $userId) {
+                $query->where('confirmation_agent_id', $userId)
+                    ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+            }])
+            ->orderByDesc('orders_count')
+            ->limit(5)
+            ->get();
     }
 
     private function getClientsStats(array $dateRange, $vendorId = null)

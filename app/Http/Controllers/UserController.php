@@ -112,7 +112,7 @@ class UserController extends Controller
     public function confirmationAgents()
     {
         $agents = User::whereHas('role', function ($query) {
-            $query->where('slug', 'agent_confirmation');
+            $query->whereIn('slug', ['confirmation_agent', 'agent_confirmation']);
         })->where('is_active', true)->get();
 
         \Log::info('Confirmation Agents Query Result:', ['count' => $agents->count(), 'agents' => $agents->toArray()]);

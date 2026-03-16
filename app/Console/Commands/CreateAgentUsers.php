@@ -17,7 +17,7 @@ class CreateAgentUsers extends Command
         $this->info('Creating agent users...');
 
         // Get roles
-        $confirmationRole = Role::where('slug', 'agent_confirmation')->first();
+        $confirmationRole = Role::whereIn('slug', ['confirmation_agent', 'agent_confirmation'])->first();
         $deliveryRole = Role::where('slug', 'manager')->first();
         $deliveryRole2 = Role::where('slug', 'delivery')->first();
 
@@ -25,9 +25,9 @@ class CreateAgentUsers extends Command
             $this->error('Confirmation agent role not found! Creating it...');
             $confirmationRole = Role::create([
                 'name' => 'Agent Confirmation',
-                'slug' => 'agent_confirmation',
-                'description' => 'Can confirm orders',
-                'permissions' => ['view_orders', 'confirm_orders', 'view_clients', 'view_products', 'view_dashboard'],
+                'slug' => 'confirmation_agent',
+                'description' => 'Calls customers, confirms orders, schedules callbacks, and tracks personal billing.',
+                'permissions' => ['view_orders', 'update_order_status', 'schedule_callbacks', 'manage_upsells', 'view_clients', 'view_products', 'view_dashboard', 'view_commission'],
             ]);
         }
 

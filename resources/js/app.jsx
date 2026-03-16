@@ -14,6 +14,7 @@ import Login from './pages/Auth/Login';
 
 // Dashboard
 import Dashboard from './pages/Dashboard/Dashboard';
+import ProfitDashboard from './pages/Dashboard/ProfitDashboard';
 
 // Products
 import ProductList from './pages/Products/ProductList';
@@ -63,6 +64,7 @@ import RoleForm from './pages/Roles/RoleForm';
 
 // Settings
 import Settings from './pages/Settings/Settings';
+import ConfirmationAgentBilling from './pages/Billing/ConfirmationAgentBilling';
 
 function ProtectedRoute({ children }) {
     const { user, loading } = useAuth();
@@ -85,6 +87,7 @@ function App() {
                     {/* Protected Routes */}
                     <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                         <Route index element={<Dashboard />} />
+                        <Route path="profit-dashboard" element={<ProfitDashboard />} />
                         
                         {/* Products */}
                         <Route path="products" element={<ProductList />} />
@@ -140,6 +143,7 @@ function App() {
                         
                         {/* Settings */}
                         <Route path="settings" element={<Settings />} />
+                        <Route path="confirmation-billing" element={<ConfirmationAgentBilling />} />
                     </Route>
                 </Routes>
             </SettingsProvider>

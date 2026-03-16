@@ -36,15 +36,15 @@ export default function ProductForm() {
     const [errors, setErrors] = useState({});
     const toNumber = (value) => parseFloat(value || 0);
     const recommendedSellingPrice = toNumber(formData.recommended_price);
-    const companySellingPrice = toNumber(formData.company_price);
-    const productCostPrice = toNumber(formData.cost_price || formData.vendor_price);
-    const recommendedGrossProfit = recommendedSellingPrice - productCostPrice;
-    const companyGrossProfit = companySellingPrice - productCostPrice;
+    const companyCostPrice = toNumber(formData.company_price);
+    const sellerPrice = toNumber(formData.vendor_price);
+    const recommendedGrossProfit = recommendedSellingPrice - sellerPrice;
+    const companyGrossProfit = sellerPrice - companyCostPrice;
     const recommendedMargin = recommendedSellingPrice > 0
         ? (recommendedGrossProfit / recommendedSellingPrice) * 100
         : 0;
-    const companyMargin = companySellingPrice > 0
-        ? (companyGrossProfit / companySellingPrice) * 100
+    const companyMargin = sellerPrice > 0
+        ? (companyGrossProfit / sellerPrice) * 100
         : 0;
     const getImageSrc = (imagePath) => {
         if (!imagePath) return '';
@@ -488,7 +488,7 @@ export default function ProductForm() {
                                     required
                                 />
                             </div>
-                            <p className="text-xs text-slate-500 mt-1.5">Price for company orders</p>
+                            <p className="text-xs text-slate-500 mt-1.5">Cost price paid by the project owner to suppliers</p>
                             {errors.company_price && <p className="text-red-500 text-xs mt-1.5 flex items-center"><span className="mr-1">⚠</span>{errors.company_price[0]}</p>}
                         </div>
 
@@ -507,7 +507,7 @@ export default function ProductForm() {
                                     required
                                 />
                             </div>
-                            <p className="text-xs text-slate-500 mt-1.5">Purchase price from seller</p>
+                            <p className="text-xs text-slate-500 mt-1.5">Price at which the project owner sells the product to sellers</p>
                             {errors.vendor_price && <p className="text-red-500 text-xs mt-1.5 flex items-center"><span className="mr-1">⚠</span>{errors.vendor_price[0]}</p>}
                         </div>
                     </div>
@@ -542,7 +542,7 @@ export default function ProductForm() {
                                 <div className="flex items-start justify-between mb-4">
                                     <div>
                                         <h3 className="text-lg font-bold text-slate-800">Gross Profit Estimate</h3>
-                                        <p className="text-xs text-slate-600 mt-1">Standard ecommerce formula: Selling Price - Cost Price</p>
+                                        <p className="text-xs text-slate-600 mt-1">Seller formula: Selling Price - Seller Price</p>
                                     </div>
                                     <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
                                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -562,9 +562,9 @@ export default function ProductForm() {
 
                                     {/* Product Cost */}
                                     <div className="flex justify-between items-center py-2 border-b border-emerald-200">
-                                        <span className="text-sm text-slate-600">Cost Price</span>
+                                        <span className="text-sm text-slate-600">Seller Price</span>
                                         <span className="text-lg font-medium text-red-600">
-                                            - {formatCurrency(productCostPrice)}
+                                            - {formatCurrency(sellerPrice)}
                                         </span>
                                     </div>
 
@@ -589,7 +589,7 @@ export default function ProductForm() {
 
                                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                     <p className="text-xs text-blue-800">
-                                        <strong>Note:</strong> Margin = Gross Profit / Selling Price.
+                                        <strong>Note:</strong> Seller profit = recommended selling price - seller price.
                                     </p>
                                 </div>
                             </div>
@@ -602,7 +602,7 @@ export default function ProductForm() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-semibold text-slate-700">Profit Margin</p>
-                                    <p className="text-xs text-slate-600 mt-0.5">Based on company selling price and cost price</p>
+                                    <p className="text-xs text-slate-600 mt-0.5">Based on seller price minus company price</p>
                                 </div>
                                 <div className="text-right">
                                     <p className={`text-2xl font-bold ${companyGrossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>

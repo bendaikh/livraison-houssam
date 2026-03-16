@@ -59,15 +59,18 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $confirmationAgentRole = Role::create([
-            'name' => 'Agent Confirmation',
-            'slug' => 'agent_confirmation',
-            'description' => 'Can confirm orders',
+            'name' => 'Confirmation Agent',
+            'slug' => 'confirmation_agent',
+            'description' => 'Calls customers, confirms orders, schedules callbacks, and tracks personal billing.',
             'permissions' => [
                 'view_orders',
-                'confirm_orders',
+                'update_order_status',
+                'schedule_callbacks',
+                'manage_upsells',
                 'view_clients',
                 'view_products',
                 'view_dashboard',
+                'view_commission',
             ],
         ]);
 

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { isAdminRole } from '../../utils/roles';
 import { 
     Package, User, MapPin, Phone, Calendar, DollarSign, 
     Truck, UserCheck, ArrowLeft, Edit, Printer, CheckCircle,
@@ -11,11 +13,14 @@ import {
 export default function OrderDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const { formatCurrency, settings } = useSettings();
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
+    const [resettingAssignment, setResettingAssignment] = useState(false);
     const printRef = useRef(null);
+    const isAdminUser = isAdminRole(user?.role?.slug);
 
     useEffect(() => {
         fetchOrder();
@@ -409,6 +414,27 @@ export default function OrderDetail() {
         }, 250);
     };
 
+    const handleResetConfirmationAssignment = async () => {
+        if (!window.confirm('Remove the confirmation agent and reset this order to pending?')) {
+            return;
+        }
+
+        try {
+            setResettingAssignment(true);
+            await api.patch(`/orders/${id}/confirmation-assignment`, {
+                confirmation_agent_id: null,
+                reset_to_pending: true,
+                note: 'Admin removed confirmation assignment and reset order to pending.',
+            });
+            await fetchOrder();
+        } catch (error) {
+            console.error('Error resetting confirmation assignment:', error);
+            alert(error.response?.data?.message || 'Failed to reset confirmation assignment.');
+        } finally {
+            setResettingAssignment(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -462,6 +488,16 @@ export default function OrderDetail() {
                         <Printer size={18} />
                         <span>Print</span>
                     </button>
+                    {isAdminUser && order.confirmation_agent && (
+                        <button
+                            onClick={handleResetConfirmationAssignment}
+                            disabled={resettingAssignment}
+                            className="flex items-center space-x-2 px-4 py-2 bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 transition-colors disabled:opacity-50"
+                        >
+                            <RefreshCw size={18} className={resettingAssignment ? 'animate-spin' : ''} />
+                            <span>{resettingAssignment ? 'Resetting...' : 'Unassign & Reset'}</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -496,7 +532,14 @@ export default function OrderDetail() {
                                 {order.items?.map((item) => (
                                     <div key={item.id} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
                                         <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-900">{item.product?.name || item.product_name || 'Unknown Product'}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-semibold text-gray-900">{item.product?.name || item.product_name || 'Unknown Product'}</h3>
+                                                {item.is_upsell && (
+                                                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                                                        Upsell
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-sm text-gray-500">SKU: {item.product?.sku || item.sku || 'N/A'}</p>
                                             <p className="text-sm text-gray-600 mt-1">
                                                 {formatCurrency(item.price)} × {item.quantity}
@@ -642,6 +685,20 @@ export default function OrderDetail() {
                                     <div>
                                         <p className="text-sm text-gray-500">Confirmation Agent</p>
                                         <p className="font-semibold text-gray-900">{order.confirmation_agent.name}</p>
+                                        {order.callback_date && (
+                                            <p className="text-xs text-amber-700 mt-1">
+                                                Callback scheduled for {formatDate(order.callback_date)}
+                                            </p>
+                                        )}
+                                        {isAdminUser && (
+                                            <button
+                                                onClick={handleResetConfirmationAssignment}
+                                                disabled={resettingAssignment}
+                                                className="mt-2 inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
+                                            >
+                                                {resettingAssignment ? 'Resetting...' : 'Remove assignment & reset'}
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>

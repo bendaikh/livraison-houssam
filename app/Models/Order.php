@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
@@ -15,6 +16,7 @@ class Order extends Model
         'delivery_agent_id',
         'delivery_person_id',
         'confirmation_agent_id',
+        'callback_date',
         'delivery_integration_id',
         'status',
         'payment_status',
@@ -58,6 +60,7 @@ class Order extends Model
         'total' => 'decimal:2',
         'commission_amount' => 'decimal:2',
         'confirmed_at' => 'datetime',
+        'callback_date' => 'datetime',
         'picked_up_at' => 'datetime',
         'ready_for_shipping_at' => 'datetime',
         'sent_to_delivery_at' => 'datetime',
@@ -104,6 +107,11 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function upsellItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class)->where('is_upsell', true);
+    }
+
     public function history(): HasMany
     {
         return $this->hasMany(OrderHistory::class);
@@ -112,6 +120,16 @@ class Order extends Model
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    public function confirmationBillings(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            ConfirmationAgentBilling::class,
+            'confirmation_agent_billing_order',
+            'order_id',
+            'confirmation_agent_billing_id'
+        )->withTimestamps();
     }
 
     protected static function boot()

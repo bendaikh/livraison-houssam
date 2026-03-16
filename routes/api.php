@@ -18,6 +18,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\CityController;
+use App\Http\Controllers\ConfirmationAgentBillingController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -52,7 +53,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('orders', OrderController::class);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
     Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);
+    Route::post('/orders/{order}/assign-to-me', [OrderController::class, 'assignToMe']);
+    Route::patch('/orders/{order}/confirmation-workflow', [OrderController::class, 'updateConfirmationWorkflow']);
+    Route::patch('/orders/{order}/confirmation-assignment', [OrderController::class, 'updateConfirmationAssignment']);
     Route::post('/orders/{order}/sync-delivery-status', [OrderController::class, 'syncDeliveryStatus']);
+
+    // Confirmation billing
+    Route::get('/confirmation-billings', [ConfirmationAgentBillingController::class, 'index']);
+    Route::post('/confirmation-billings/generate', [ConfirmationAgentBillingController::class, 'generate']);
+    Route::patch('/confirmation-billings/{confirmationAgentBilling}/mark-paid', [ConfirmationAgentBillingController::class, 'markPaid']);
 
     // Clients
     Route::apiResource('clients', ClientController::class);

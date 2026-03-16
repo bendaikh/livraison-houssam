@@ -15,11 +15,13 @@ class OrderItem extends Model
         'quantity',
         'price',
         'subtotal',
+        'is_upsell',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
         'subtotal' => 'decimal:2',
+        'is_upsell' => 'boolean',
     ];
 
     public function order(): BelongsTo

@@ -5,14 +5,24 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'vendor', 'marketplaceProducts']);
+        $query = Product::with(['category', 'vendor', 'marketplaceProducts'])
+            ->withSum([
+                'orderItems as sold_units' => function ($orderItemsQuery) {
+                    $orderItemsQuery
+                        ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                        ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered']);
+                }
+            ], 'quantity')
+            ->addSelect([
+                'admin_unit_profit' => DB::raw('COALESCE(vendor_price, 0) - COALESCE(company_price, price, 0)')
+            ]);
 
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {

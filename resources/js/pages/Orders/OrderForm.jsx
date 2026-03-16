@@ -3,12 +3,16 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { isAdminRole, isConfirmationAgentRole } from '../../utils/roles';
+import ConfirmationWorkflowForm from './ConfirmationWorkflowForm';
 
 export default function OrderForm() {
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
-    const isVendorUser = user?.role?.slug === 'vendor';
-    const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
+    const roleSlug = user?.role?.slug;
+    const isVendorUser = roleSlug === 'vendor';
+    const isAdminUser = isAdminRole(roleSlug);
+    const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
     const authenticatedSellerName = user?.vendor?.name || user?.name || 'Current seller';
     const navigate = useNavigate();
     const { id } = useParams();
@@ -125,7 +129,7 @@ export default function OrderForm() {
             price: selectedProduct.vendor_price || selectedProduct.price || 0
         }]);
 
-        if (source && ['manual', 'shopify', 'google_sheet', 'delivery_company', 'marketplace'].includes(source)) {
+        if (source && ['manual', 'shopify', 'google_sheet', 'delivery_company', 'marketplace', 'whatsapp'].includes(source)) {
             setFormData((prev) => ({ ...prev, source }));
         }
 
@@ -330,16 +334,15 @@ export default function OrderForm() {
             const product = products.find((p) => String(p.id) === String(item.product_id));
             if (!product) return sum;
 
-            const baseCost = parseFloat(product.company_price ?? product.cost_price ?? product.price ?? 0);
+            const baseCost = parseFloat(product.vendor_price ?? product.company_price ?? product.cost_price ?? product.price ?? 0);
             const qty = parseInt(item.quantity || 0, 10);
 
             return sum + (baseCost * qty);
         }, 0);
 
         const subtotal = calculateSubtotal();
-        const shippingExpense = shippingIncludedInPrice ? 0 : shippingCost;
 
-        return subtotal - baseCostTotal - shippingExpense - discountValue;
+        return subtotal - baseCostTotal - discountValue;
     };
 
     const baseCityOptions = isEditing ? cities : cities.filter(city => city.is_active);
@@ -363,7 +366,7 @@ export default function OrderForm() {
     );
 
     // Once a confirmation agent has been set on an existing order, lock the field
-    const isConfirmationLocked = isEditing && !!formData.confirmation_agent_id;
+    const isConfirmationLocked = isEditing && !!formData.confirmation_agent_id && !isAdminUser;
 
         // Keep delivery city in sync with shipping city whenever company is selected.
         useEffect(() => {
@@ -415,6 +418,15 @@ export default function OrderForm() {
             setLoading(false);
         }
     };
+
+    if (isConfirmationAgentUser) {
+        return isEditing ? <ConfirmationWorkflowForm /> : (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8">
+                <h1 className="text-2xl font-bold text-slate-900">Create Order</h1>
+                <p className="text-slate-500 mt-2">Confirmation agents cannot create orders.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -712,6 +724,7 @@ export default function OrderForm() {
                                 <option value="google_sheet">Google Sheet</option>
                                 <option value="delivery_company">Delivery Company</option>
                                 <option value="marketplace">Marketplace</option>
+                                <option value="whatsapp">WhatsApp</option>
                             </select>
                         </div>
 

@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X } from 'lucide-react';
 import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
+import { isConfirmationAgentRole } from '../../utils/roles';
 
 export default function OrderList({ status = '' }) {
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [updatingStatus, setUpdatingStatus] = useState(null);
@@ -19,6 +21,7 @@ export default function OrderList({ status = '' }) {
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
     const [showAgentModal, setShowAgentModal] = useState(false);
     const [selectedOrderForAgent, setSelectedOrderForAgent] = useState(null);
+    const [assignmentScope, setAssignmentScope] = useState('my');
     const [pagination, setPagination] = useState({
         current_page: 1,
         last_page: 1,
@@ -33,7 +36,8 @@ export default function OrderList({ status = '' }) {
         shopify: 0,
         google_sheet: 0,
         delivery_company: 0,
-        marketplace: 0
+        marketplace: 0,
+        whatsapp: 0
     });
     const [filters, setFilters] = useState({
         search: '',
@@ -43,15 +47,26 @@ export default function OrderList({ status = '' }) {
         date_to: '',
         page: 1
     });
+    const roleSlug = user?.role?.slug;
+    const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
     
     useEffect(() => {
         setFilters(prev => ({ ...prev, status: status, page: 1 }));
     }, [status]);
+
+    useEffect(() => {
+        if (!isConfirmationAgentUser) return;
+
+        const searchParams = new URLSearchParams(location.search);
+        if (searchParams.get('todo') === 'today') {
+            setAssignmentScope('todo');
+        }
+    }, [isConfirmationAgentUser, location.search]);
     
     useEffect(() => {
         fetchOrders();
         fetchShopifyIntegration();
-    }, [filters]);
+    }, [filters, assignmentScope, location.search, isConfirmationAgentUser]);
 
     const fetchOrders = async () => {
         try {
@@ -64,6 +79,13 @@ export default function OrderList({ status = '' }) {
             if (filters.date_to) params.append('date_to', filters.date_to);
             params.append('page', filters.page);
             params.append('per_page', pagination.per_page);
+            if (isConfirmationAgentUser) {
+                params.append('assignment_scope', assignmentScope);
+                const searchParams = new URLSearchParams(location.search);
+                if (searchParams.get('todo') === 'today' || assignmentScope === 'todo') {
+                    params.append('callback_due', 'today');
+                }
+            }
             
             const response = await api.get(`/orders?${params.toString()}`);
             const fetchedOrders = response.data.data;
@@ -84,7 +106,8 @@ export default function OrderList({ status = '' }) {
                 shopify: fetchedOrders.filter(o => o.source === 'shopify').length,
                 google_sheet: fetchedOrders.filter(o => o.source === 'google_sheet').length,
                 delivery_company: fetchedOrders.filter(o => o.source === 'delivery_company').length,
-                marketplace: fetchedOrders.filter(o => o.source === 'marketplace').length
+                marketplace: fetchedOrders.filter(o => o.source === 'marketplace').length,
+                whatsapp: fetchedOrders.filter(o => o.source === 'whatsapp').length
             };
             setStats(orderStats);
         } catch (error) {
@@ -131,6 +154,8 @@ export default function OrderList({ status = '' }) {
             google_sheet: 'bg-emerald-100 text-emerald-800',
             delivery_company: 'bg-blue-100 text-blue-800',
             marketplace: 'bg-purple-100 text-purple-800'
+            ,
+            whatsapp: 'bg-emerald-100 text-emerald-800'
         };
         return colors[source] || 'bg-gray-100 text-gray-800';
     };
@@ -147,6 +172,49 @@ export default function OrderList({ status = '' }) {
         if (!status) return '';
         if (status === 'sent_to_pickup') return 'sent';
         return status.replace(/_/g, ' ');
+    };
+
+    const formatStatusLabel = (status) => String(status || '').replace(/_/g, ' ');
+
+    const isConfirmationAgentStatusLocked = (order) => {
+        if (order?.delivery_tracking_code) {
+            return true;
+        }
+
+        if (!order?.delivery_person_id) {
+            return false;
+        }
+
+        const deliveryManagedStatuses = [
+            'picked_up',
+            'ready_for_shipping',
+            'shipped',
+            'out_for_delivery',
+            'delivered',
+            'cancelled',
+            'refused',
+            'returned',
+            'return_requested',
+        ];
+
+        return deliveryManagedStatuses.includes(order.status)
+            || Boolean(order.picked_up_at)
+            || Boolean(order.ready_for_shipping_at)
+            || Boolean(order.sent_to_delivery_at)
+            || Boolean(order.out_for_delivery_at)
+            || Boolean(order.shipped_at)
+            || Boolean(order.delivered_at)
+            || Boolean(order.cancelled_at)
+            || Boolean(order.refused_at)
+            || Boolean(order.returned_at);
+    };
+
+    const getConfirmationAgentStatusLockMessage = (order) => {
+        if (order?.delivery_tracking_code) {
+            return 'Status is now controlled by the delivery company.';
+        }
+
+        return 'Status is now controlled by delivery handling updates.';
     };
 
     const getDeliveryAgentLabel = (order) => {
@@ -195,15 +263,13 @@ export default function OrderList({ status = '' }) {
     const calculateOrderBenefit = (order) => {
         const itemsProfit = (order.items || []).reduce((sum, item) => {
             const itemPrice = parseFloat(item.price) || 0;
-            const companyPrice = parseFloat(item.product?.company_price ?? item.product?.cost_price ?? item.product?.price ?? 0) || 0;
+            const sellerPrice = parseFloat(item.product?.vendor_price ?? item.product?.company_price ?? item.product?.cost_price ?? item.product?.price ?? 0) || 0;
             const qty = parseInt(item.quantity, 10) || 0;
 
-            return sum + ((itemPrice - companyPrice) * qty);
+            return sum + ((itemPrice - sellerPrice) * qty);
         }, 0);
 
-        const shippingExpense = order.shipping_included_in_price ? 0 : (parseFloat(order.shipping_cost) || 0);
-
-        return itemsProfit - shippingExpense - (parseFloat(order.discount) || 0);
+        return itemsProfit - (parseFloat(order.discount) || 0);
     };
 
     const calculateOrderAmount = (order) => {
@@ -264,7 +330,7 @@ export default function OrderList({ status = '' }) {
             ));
         } catch (error) {
             console.error('Error updating order status:', error);
-            alert('Failed to update order status');
+            alert(error.response?.data?.message || 'Failed to update order status');
         } finally {
             setUpdatingStatus(null);
         }
@@ -318,6 +384,16 @@ export default function OrderList({ status = '' }) {
         }
     };
 
+    const handleAssignToMe = async (orderId) => {
+        try {
+            await api.post(`/orders/${orderId}/assign-to-me`);
+            await fetchOrders();
+        } catch (error) {
+            console.error('Error assigning order to current confirmation agent:', error);
+            alert(error.response?.data?.message || 'Failed to assign this order.');
+        }
+    };
+
     const handleAgentClick = (order) => {
         setSelectedOrderForAgent(order);
         setShowAgentModal(true);
@@ -329,6 +405,9 @@ export default function OrderList({ status = '' }) {
     };
 
     const getPageTitle = () => {
+        if (isConfirmationAgentUser && assignmentScope === 'available') return 'Available Orders';
+        if (isConfirmationAgentUser && assignmentScope === 'todo') return 'Today Follow-Ups';
+        if (isConfirmationAgentUser) return 'My Orders';
         if (!status) return 'Orders';
         return `${status.charAt(0).toUpperCase() + status.slice(1)} Orders`;
     };
@@ -352,16 +431,58 @@ export default function OrderList({ status = '' }) {
                 <div>
                     <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
                 </div>
-                <button
-                    onClick={() => navigate('/orders/create')}
-                    className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
-                >
-                    + Create Order
-                </button>
+                {!isConfirmationAgentUser && (
+                    <button
+                        onClick={() => navigate('/orders/create')}
+                        className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+                    >
+                        + Create Order
+                    </button>
+                )}
             </div>
 
+            {isConfirmationAgentUser && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                    <button
+                        onClick={() => {
+                            setAssignmentScope('my');
+                            navigate('/orders');
+                        }}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                            assignmentScope === 'my' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                        }`}
+                    >
+                        My Orders
+                    </button>
+                    <button
+                        onClick={() => {
+                            setAssignmentScope('available');
+                            navigate('/orders');
+                        }}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                            assignmentScope === 'available' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                        }`}
+                    >
+                        Available Queue
+                    </button>
+                    <button
+                        onClick={() => {
+                            setAssignmentScope('todo');
+                            navigate('/orders?todo=today');
+                        }}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                            assignmentScope === 'todo' || new URLSearchParams(location.search).get('todo') === 'today'
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-white text-slate-700 border border-slate-200'
+                        }`}
+                    >
+                        Today Follow-Ups
+                    </button>
+                </div>
+            )}
+
             {/* Shopify Banner */}
-            {(isWebhookOnly || !isWebhookOnly) && (
+            {!isConfirmationAgentUser && (isWebhookOnly || !isWebhookOnly) && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 text-xs">
                     <div className="flex gap-2">
                         <svg className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -373,7 +494,7 @@ export default function OrderList({ status = '' }) {
             )}
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
                 <div 
                     onClick={() => setFilters({ ...filters, source: '', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-gray-400"
@@ -416,11 +537,18 @@ export default function OrderList({ status = '' }) {
                     <p className="text-[10px] text-purple-600 mb-0.5 font-medium uppercase">Market</p>
                     <p className="text-base font-bold text-purple-900">{stats.marketplace}</p>
                 </div>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'whatsapp', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-emerald-500"
+                >
+                    <p className="text-[10px] text-emerald-600 mb-0.5 font-medium uppercase">WhatsApp</p>
+                    <p className="text-base font-bold text-emerald-900">{stats.whatsapp}</p>
+                </div>
             </div>
 
             {/* Filters */}
             <div className="bg-white rounded-lg p-3 shadow-sm mb-3 border border-gray-100">
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                     <input
                         type="text"
                         placeholder="Search..."
@@ -439,6 +567,8 @@ export default function OrderList({ status = '' }) {
                         <option value="shipped">Shipped</option>
                         <option value="delivered">Delivered</option>
                         <option value="cancelled">Cancelled</option>
+                        <option value="refused">Refused</option>
+                        <option value="returned">Returned</option>
                     </select>
                     <select
                         value={filters.source}
@@ -451,6 +581,7 @@ export default function OrderList({ status = '' }) {
                         <option value="google_sheet">Google Sheet</option>
                         <option value="delivery_company">Delivery</option>
                         <option value="marketplace">Marketplace</option>
+                        <option value="whatsapp">WhatsApp</option>
                     </select>
                     <input
                         type="date"
@@ -477,7 +608,11 @@ export default function OrderList({ status = '' }) {
                 ) : orders.length === 0 ? (
                     <div className="bg-white rounded-lg p-12 text-center text-gray-500">
                         <p className="text-base font-medium">No orders found</p>
-                        <p className="text-sm mt-1">Try adjusting your filters or create a new order</p>
+                        <p className="text-sm mt-1">
+                            {isConfirmationAgentUser
+                                ? 'Try another queue or wait for new assignments.'
+                                : 'Try adjusting your filters or create a new order'}
+                        </p>
                     </div>
                 ) : (
                     orders.map(order => {
@@ -486,8 +621,12 @@ export default function OrderList({ status = '' }) {
                         const sellerLabel = getSellerLabel(order);
                         const orderAmount = calculateOrderAmount(order);
                         const orderBenefit = calculateOrderBenefit(order);
+                        const upsellItems = (order.items || []).filter((item) => item.is_upsell);
+                        const primaryItems = (order.items || []).filter((item) => !item.is_upsell);
+                        const canWorkOnOrder = !isConfirmationAgentUser || String(order.confirmation_agent_id) === String(user?.id);
+                        const confirmationStatusLocked = isConfirmationAgentUser && isConfirmationAgentStatusLocked(order);
+                        const statusLockMessage = confirmationStatusLocked ? getConfirmationAgentStatusLockMessage(order) : '';
                         const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
-                        const agentDisplayName = assignmentPrimaryLabel;
                         
                         const statusBorderColor = {
                             pending: 'border-l-yellow-400',
@@ -513,24 +652,43 @@ export default function OrderList({ status = '' }) {
                                             {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
                                         </span>
                                         <span className="text-[10px] text-gray-600 flex-shrink-0">{formatDate(order.created_at)}</span>
+                                        {order.callback_date && (
+                                            <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-800 flex-shrink-0">
+                                                Callback {formatDate(order.callback_date)}
+                                            </span>
+                                        )}
                                     </div>
-                                    <select
-                                        value={order.status}
-                                        onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                        disabled={updatingStatus === order.id}
-                                        className={`px-2 py-0.5 text-[10px] font-semibold rounded border-0 cursor-pointer flex-shrink-0 ${getStatusBadgeColor(order.status)} ${
-                                            updatingStatus === order.id ? 'opacity-50 cursor-wait' : 'hover:opacity-80 transition-opacity'
-                                        }`}
-                                    >
-                                        <option value="pending">Pending</option>
-                                        <option value="confirmed">Confirmed</option>
-                                        <option value="picked_up">Picked Up</option>
-                                        <option value="ready_for_shipping">Ready</option>
-                                        <option value="shipped">Shipped</option>
-                                        <option value="out_for_delivery">Out</option>
-                                        <option value="delivered">Delivered</option>
-                                        <option value="cancelled">Cancelled</option>
-                                    </select>
+                                    {confirmationStatusLocked ? (
+                                        <div className="flex flex-col items-end gap-1 flex-shrink-0" title={statusLockMessage}>
+                                            <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getStatusBadgeColor(order.status)}`}>
+                                                {formatStatusLabel(order.status)}
+                                            </span>
+                                            <span className="text-[9px] font-medium text-slate-500">
+                                                Delivery controlled
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <select
+                                            value={order.status}
+                                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                                            disabled={updatingStatus === order.id || !canWorkOnOrder}
+                                            title={statusLockMessage}
+                                            className={`px-2 py-0.5 text-[10px] font-semibold rounded border-0 cursor-pointer flex-shrink-0 ${getStatusBadgeColor(order.status)} ${
+                                                updatingStatus === order.id || !canWorkOnOrder ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 transition-opacity'
+                                            }`}
+                                        >
+                                            <option value="pending">Pending</option>
+                                            <option value="confirmed">Confirmed</option>
+                                            <option value="picked_up">Picked Up</option>
+                                            <option value="ready_for_shipping">Ready</option>
+                                            <option value="shipped">Shipped</option>
+                                            <option value="out_for_delivery">Out</option>
+                                            <option value="delivered">Delivered</option>
+                                            <option value="cancelled">Cancelled</option>
+                                            <option value="refused">Refused</option>
+                                            <option value="returned">Returned</option>
+                                        </select>
+                                    )}
                                 </div>
 
                                 {/* Content - Horizontal table layout */}
@@ -542,6 +700,9 @@ export default function OrderList({ status = '' }) {
                                         <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.client?.name || '-'}</p>
                                         <p className="text-gray-600 text-[10px] leading-tight truncate">{order.client?.phone || '-'}</p>
                                         <p className="text-gray-500 text-[10px] leading-tight truncate">{order.city || order.client?.city || '-'}</p>
+                                        {order.callback_date && (
+                                            <p className="text-amber-700 text-[10px] leading-tight truncate">Follow-up: {formatDate(order.callback_date)}</p>
+                                        )}
                                         {order.shipping_address && (
                                             <p className="text-gray-500 text-[10px] leading-tight truncate">{order.shipping_address}</p>
                                         )}
@@ -565,14 +726,19 @@ export default function OrderList({ status = '' }) {
                                     <div className="min-w-0 space-y-0.5">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Items</p>
                                         <div className="space-y-0.25">
-                                            {(order.items || []).slice(0, 2).map((item, idx) => (
+                                            {primaryItems.slice(0, 2).map((item, idx) => (
                                                 <div key={idx} className="text-[11px] text-gray-800 leading-snug truncate">
                                                     <span className="font-medium">{item.product?.name?.substring(0, 12) || item.product_name?.substring(0, 12) || 'Item'}</span>
                                                     <span className="text-gray-600"> ×{item.quantity}</span>
                                                 </div>
                                             ))}
-                                            {(order.items || []).length > 2 && (
-                                                <p className="text-[11px] text-blue-600 font-semibold leading-snug">+{(order.items || []).length - 2} more</p>
+                                            {primaryItems.length > 2 && (
+                                                <p className="text-[11px] text-blue-600 font-semibold leading-snug">+{primaryItems.length - 2} more</p>
+                                            )}
+                                            {upsellItems.length > 0 && (
+                                                <p className="text-[11px] text-emerald-700 font-semibold leading-snug">
+                                                    Upsell: {upsellItems.map((item) => item.product?.name || item.product_name || 'Product').join(', ')}
+                                                </p>
                                             )}
                                         </div>
                                     </div>
@@ -607,19 +773,45 @@ export default function OrderList({ status = '' }) {
                                         )}
                                     </div>
 
-                                  {/* DELIVERY COLUMN */}
-<div className="min-w-0 space-y-0.5 flex flex-col items-start">
-    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Delivery</p>
-    <button
-        onClick={() => handleAgentClick(order)}
-        className="inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-semibold border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all"
-        title={assignmentPrimaryLabel}
-    >
-        <span className="truncate max-w-[140px]">
-            {assignmentPrimaryLabel}
-        </span>
-    </button>
-</div>
+                                    <div className="min-w-0 space-y-0.5 flex flex-col items-start">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
+                                            {isConfirmationAgentUser ? 'Assignment' : 'Delivery'}
+                                        </p>
+                                        {isConfirmationAgentUser ? (
+                                            assignmentScope === 'available' && !order.confirmation_agent_id ? (
+                                                <button
+                                                    onClick={() => handleAssignToMe(order.id)}
+                                                    className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 hover:bg-emerald-100"
+                                                >
+                                                    Assign to me
+                                                </button>
+                                            ) : canWorkOnOrder ? (
+                                                <button
+                                                    onClick={() => handleAgentClick(order)}
+                                                    className="inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-semibold border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all"
+                                                    title={assignmentPrimaryLabel}
+                                                >
+                                                    <span className="truncate max-w-[140px]">
+                                                        {assignmentPrimaryLabel}
+                                                    </span>
+                                                </button>
+                                            ) : (
+                                                <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+                                                    {order.confirmation_agent?.name || 'Assigned to you'}
+                                                </span>
+                                            )
+                                        ) : (
+                                            <button
+                                                onClick={() => handleAgentClick(order)}
+                                                className="inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-semibold border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all"
+                                                title={assignmentPrimaryLabel}
+                                            >
+                                                <span className="truncate max-w-[140px]">
+                                                    {assignmentPrimaryLabel}
+                                                </span>
+                                            </button>
+                                        )}
+                                    </div>
 
                                     {/* ACTION ICONS COLUMN */}
                                     <div className="flex items-start gap-0.5">
@@ -641,28 +833,34 @@ export default function OrderList({ status = '' }) {
                                         >
                                             <RefreshCw size={15} />
                                         </button>
-                                        <Link
-                                            to={`/orders/${order.id}`}
-                                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors flex-shrink-0"
-                                            title="View Details"
-                                        >
-                                            <Eye size={15} />
-                                        </Link>
-                                        <Link
-                                            to={`/orders/${order.id}/edit`}
-                                            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors flex-shrink-0"
-                                            title="Edit Order"
-                                        >
-                                            <Edit size={15} />
-                                        </Link>
-                                        <button
-                                            onClick={() => handleDeleteOrder(order.id, order.order_number)}
-                                            disabled={deletingOrderId === order.id}
-                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 flex-shrink-0"
-                                            title="Delete Order"
-                                        >
-                                            <Trash2 size={15} />
-                                        </button>
+                                        {canWorkOnOrder && (
+                                            <Link
+                                                to={`/orders/${order.id}`}
+                                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors flex-shrink-0"
+                                                title="View Details"
+                                            >
+                                                <Eye size={15} />
+                                            </Link>
+                                        )}
+                                        {canWorkOnOrder && (
+                                            <Link
+                                                to={`/orders/${order.id}/edit`}
+                                                className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors flex-shrink-0"
+                                                title="Edit Order"
+                                            >
+                                                <Edit size={15} />
+                                            </Link>
+                                        )}
+                                        {!isConfirmationAgentUser && (
+                                            <button
+                                                onClick={() => handleDeleteOrder(order.id, order.order_number)}
+                                                disabled={deletingOrderId === order.id}
+                                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 flex-shrink-0"
+                                                title="Delete Order"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
