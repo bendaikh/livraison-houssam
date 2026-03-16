@@ -11,10 +11,16 @@ return new class extends Migration
         Schema::create('confirmation_agent_billing_order', function (Blueprint $table) {
             $table->id();
             $table->foreignId('confirmation_agent_billing_id')
-                ->constrained('confirmation_agent_billings')
+                ->constrained(
+                    table: 'confirmation_agent_billings',
+                    indexName: 'cabo_billing_fk'
+                )
                 ->cascadeOnDelete();
             $table->foreignId('order_id')
-                ->constrained('orders')
+                ->constrained(
+                    table: 'orders',
+                    indexName: 'cabo_order_fk'
+                )
                 ->cascadeOnDelete();
             $table->timestamps();
 
