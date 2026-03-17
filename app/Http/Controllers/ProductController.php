@@ -21,7 +21,7 @@ class ProductController extends Controller
                 }
             ], 'quantity')
             ->addSelect([
-                'admin_unit_profit' => DB::raw('COALESCE(vendor_price, 0) - COALESCE(company_price, price, 0)')
+                'admin_unit_profit' => DB::raw('COALESCE(company_price, price, 0) - COALESCE(vendor_price, cost_price, 0)')
             ]);
 
         if ($request->has('search')) {
@@ -77,9 +77,13 @@ class ProductController extends Controller
             'seller_ids.*' => 'exists:vendors,id',
         ]);
 
-        // Set price to company_price if not provided
-        if (!isset($validated['price']) && isset($validated['company_price'])) {
-            $validated['price'] = $validated['company_price'];
+        // Keep the legacy price field aligned with the selling price shown in order flows.
+        if (!isset($validated['price'])) {
+            if (isset($validated['company_price'])) {
+                $validated['price'] = $validated['company_price'];
+            } elseif (isset($validated['vendor_price'])) {
+                $validated['price'] = $validated['vendor_price'];
+            }
         }
 
         // Handle image uploads
@@ -137,9 +141,13 @@ class ProductController extends Controller
             'seller_ids.*' => 'exists:vendors,id',
         ]);
 
-        // Set price to company_price if not provided
-        if (!isset($validated['price']) && isset($validated['company_price'])) {
-            $validated['price'] = $validated['company_price'];
+        // Keep the legacy price field aligned with the selling price shown in order flows.
+        if (!isset($validated['price'])) {
+            if (isset($validated['company_price'])) {
+                $validated['price'] = $validated['company_price'];
+            } elseif (isset($validated['vendor_price'])) {
+                $validated['price'] = $validated['vendor_price'];
+            }
         }
 
         // Handle new image uploads

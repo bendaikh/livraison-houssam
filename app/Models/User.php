@@ -84,9 +84,19 @@ class User extends Authenticatable
         return $this->hasMany(Order::class, 'confirmation_agent_id');
     }
 
+    public function assignedDeliveryOrders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'delivery_person_id');
+    }
+
     public function confirmationBillings(): HasMany
     {
         return $this->hasMany(ConfirmationAgentBilling::class);
+    }
+
+    public function deliveryPersonBillings(): HasMany
+    {
+        return $this->hasMany(DeliveryPersonBilling::class, 'delivery_person_id');
     }
 
     public function notifications()
@@ -124,12 +134,26 @@ class User extends Authenticatable
         return $this->hasAnyRole(['confirmation_agent', 'agent_confirmation']);
     }
 
+    public function isDeliveryPerson(): bool
+    {
+        return $this->hasAnyRole(['delivery_person', 'delivery']);
+    }
+
+    public function isManager(): bool
+    {
+        return $this->hasRole('manager');
+    }
+
     public function getEffectiveCommissionPerOrderAttribute(): float
     {
         $commission = (float) ($this->commission_per_order ?? 0);
 
         if ($this->isConfirmationAgent() && $commission <= 0) {
             return (float) Setting::get('confirmation_agent_commission_per_order', 0);
+        }
+
+        if ($this->isDeliveryPerson() && $commission <= 0) {
+            return (float) Setting::get('delivery_person_commission_per_order', 0);
         }
 
         return $commission;

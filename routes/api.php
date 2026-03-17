@@ -16,9 +16,12 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MarketplaceController;
+use App\Http\Controllers\BlacklistController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConfirmationAgentBillingController;
+use App\Http\Controllers\DeliveryPersonBillingController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -52,16 +55,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/delivery-companies/{integration}/cities', [OrderController::class, 'getDeliveryCities']);
     Route::apiResource('orders', OrderController::class);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+    Route::patch('/orders/{order}/delivery-workflow', [OrderController::class, 'updateDeliveryWorkflow']);
     Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);
     Route::post('/orders/{order}/assign-to-me', [OrderController::class, 'assignToMe']);
     Route::patch('/orders/{order}/confirmation-workflow', [OrderController::class, 'updateConfirmationWorkflow']);
     Route::patch('/orders/{order}/confirmation-assignment', [OrderController::class, 'updateConfirmationAssignment']);
     Route::post('/orders/{order}/sync-delivery-status', [OrderController::class, 'syncDeliveryStatus']);
 
+    // Unified billing
+    Route::get('/billing', [BillingController::class, 'index']);
+    Route::post('/billing/generate', [BillingController::class, 'generate']);
+    Route::patch('/billing/{role}/{billingId}/mark-paid', [BillingController::class, 'markPaid']);
+
     // Confirmation billing
     Route::get('/confirmation-billings', [ConfirmationAgentBillingController::class, 'index']);
     Route::post('/confirmation-billings/generate', [ConfirmationAgentBillingController::class, 'generate']);
     Route::patch('/confirmation-billings/{confirmationAgentBilling}/mark-paid', [ConfirmationAgentBillingController::class, 'markPaid']);
+    Route::get('/delivery-billings', [DeliveryPersonBillingController::class, 'index']);
+    Route::post('/delivery-billings/generate', [DeliveryPersonBillingController::class, 'generate']);
+    Route::patch('/delivery-billings/{deliveryPersonBilling}/mark-paid', [DeliveryPersonBillingController::class, 'markPaid']);
 
     // Clients
     Route::apiResource('clients', ClientController::class);
@@ -94,6 +106,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/marketplace/bulk-assign', [MarketplaceController::class, 'bulkAssign']);
     Route::post('/marketplace/bulk-toggle', [MarketplaceController::class, 'bulkToggle']);
 
+    // Blacklist
+    Route::get('/blacklist', [BlacklistController::class, 'index']);
+    Route::post('/blacklist', [BlacklistController::class, 'store']);
+    Route::put('/blacklist/{blacklist}', [BlacklistController::class, 'update']);
+    Route::delete('/blacklist/{blacklist}', [BlacklistController::class, 'destroy']);
+
     // API Integrations
     Route::apiResource('api-integrations', ApiIntegrationController::class);
     Route::post('/api-integrations/{apiIntegration}/sync', [ApiIntegrationController::class, 'sync']);
@@ -116,10 +134,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/delivery-persons', [UserController::class, 'deliveryPersons']);
     Route::get('/confirmation-agents', [UserController::class, 'confirmationAgents']);
 
+    // Shared app settings
+    Route::get('/app-settings', [SettingController::class, 'appSettings']);
+
     // Settings
-    Route::get('/settings', [SettingController::class, 'index']);
-    Route::put('/settings', [SettingController::class, 'update']);
-    Route::get('/settings/{key}', [SettingController::class, 'get']);
+    Route::middleware(['role:admin,superadmin'])->group(function () {
+        Route::get('/settings', [SettingController::class, 'index']);
+        Route::put('/settings', [SettingController::class, 'update']);
+        Route::get('/settings/{key}', [SettingController::class, 'get']);
+    });
 
     // Cities
     Route::post('/cities/sync-sources', [CityController::class, 'syncFromSources']);

@@ -1,358 +1,326 @@
-import React, { useState, useEffect } from 'react';
-import { X, Truck, AlertCircle, MapPin } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, MapPin, Truck, UserCheck, X } from 'lucide-react';
 import api from '../utils/api';
 
 export default function DeliveryCompanyModal({
     isOpen,
     onClose,
     onConfirm,
-    orderId,
     preferredCompanyId = null,
     preferredCity = '',
+    preferredDeliveryPersonId = null,
 }) {
-    const [step, setStep] = useState(1); // 1 = select company, 2 = select city
+    const [assignmentType, setAssignmentType] = useState('person');
+    const [deliveryPersons, setDeliveryPersons] = useState([]);
     const [deliveryCompanies, setDeliveryCompanies] = useState([]);
-    const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+    const [selectedPersonId, setSelectedPersonId] = useState('');
+    const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [cities, setCities] = useState([]);
     const [selectedCity, setSelectedCity] = useState('');
     const [citySearch, setCitySearch] = useState('');
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [loadingCities, setLoadingCities] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        if (isOpen) {
-            const selectedCompany = preferredCompanyId ? parseInt(preferredCompanyId, 10) : null;
-
-            fetchDeliveryCompanies();
-            setStep(selectedCompany ? 2 : 1);
-            setSelectedCompanyId(selectedCompany);
-            setSelectedCity(preferredCity || '');
-            setCities([]);
-            setCitySearch('');
-            setError(null);
-
-            if (selectedCompany) {
-                fetchCities(selectedCompany);
-            }
+        if (!isOpen) {
+            return;
         }
-    }, [isOpen, preferredCompanyId, preferredCity]);
 
-    const fetchDeliveryCompanies = async () => {
+        const companyId = preferredCompanyId ? String(preferredCompanyId) : '';
+        const deliveryPersonId = preferredDeliveryPersonId ? String(preferredDeliveryPersonId) : '';
+
+        setAssignmentType(deliveryPersonId ? 'person' : 'company');
+        setSelectedPersonId(deliveryPersonId);
+        setSelectedCompanyId(companyId);
+        setSelectedCity(preferredCity || '');
+        setCitySearch('');
+        setCities([]);
+        setError('');
+        fetchAssignmentOptions(companyId);
+    }, [isOpen, preferredCity, preferredCompanyId, preferredDeliveryPersonId]);
+
+    const fetchAssignmentOptions = async (companyId = '') => {
         try {
             setLoading(true);
-            setError(null);
-            const response = await api.get('/orders/delivery-companies/available');
-            setDeliveryCompanies(response.data);
-            
-            if (response.data.length === 0) {
-                setError('No active delivery companies found. Please configure delivery integrations first.');
+            const [personsResponse, companiesResponse] = await Promise.all([
+                api.get('/delivery-persons'),
+                api.get('/orders/delivery-companies/available'),
+            ]);
+
+            setDeliveryPersons(personsResponse.data || []);
+            setDeliveryCompanies(companiesResponse.data || []);
+
+            if (companyId) {
+                await fetchCities(companyId);
             }
-        } catch (err) {
-            console.error('Error fetching delivery companies:', err);
-            setError('Failed to load delivery companies. Please try again.');
+        } catch (fetchError) {
+            console.error('Error loading delivery assignment options:', fetchError);
+            setError('Failed to load delivery options.');
         } finally {
             setLoading(false);
         }
     };
 
     const fetchCities = async (companyId) => {
+        if (!companyId) {
+            setCities([]);
+            return;
+        }
+
         try {
             setLoadingCities(true);
-            setError(null);
+            setError('');
             const response = await api.get(`/orders/delivery-companies/${companyId}/cities`);
-            
-            // Response may be array of objects or array of strings
-            const cityList = response.data;
+            const cityList = Array.isArray(response.data) ? response.data : [];
             setCities(cityList);
-            
             if (cityList.length === 0) {
-                setError('No cities available for this delivery company');
+                setError('No cities are configured for this delivery company.');
             }
-        } catch (err) {
-            console.error('Error fetching cities:', err);
-            setError('Failed to load cities. Please try again.');
+        } catch (fetchError) {
+            console.error('Error loading delivery company cities:', fetchError);
+            setCities([]);
+            setError('Failed to load delivery cities.');
         } finally {
             setLoadingCities(false);
         }
     };
 
-    const handleCompanySelect = async (companyId) => {
+    const filteredCities = useMemo(() => {
+        return cities.filter((city) => {
+            const cityName = typeof city === 'object' ? (city.name || city.ville || city.city || '') : city;
+            return cityName.toLowerCase().includes(citySearch.toLowerCase());
+        });
+    }, [cities, citySearch]);
+
+    const handleCompanyChange = async (companyId) => {
         setSelectedCompanyId(companyId);
+        setSelectedCity('');
         setCitySearch('');
-        setError(null);
-        setStep(2);
         await fetchCities(companyId);
     };
 
-    const handleBack = () => {
-        setStep(1);
-        setSelectedCity('');
-        setCities([]);
-        setCitySearch('');
-        setError(null);
-    };
+    const handleSubmit = async () => {
+        setError('');
 
-    const handleConfirm = async () => {
-        if (!selectedCity) {
-            setError('Please select a city');
-            return;
+        if (assignmentType === 'person') {
+            if (!selectedPersonId) {
+                setError('Select a delivery person.');
+                return;
+            }
+        } else {
+            if (!selectedCompanyId) {
+                setError('Select a delivery company.');
+                return;
+            }
+
+            if (!selectedCity) {
+                setError('Select a delivery city.');
+                return;
+            }
         }
 
-        setSubmitting(true);
         try {
-            await onConfirm(selectedCompanyId, selectedCity);
+            setSubmitting(true);
+            await onConfirm(
+                assignmentType === 'person'
+                    ? {
+                        delivery_person_id: Number(selectedPersonId),
+                        delivery_integration_id: null,
+                        delivery_city: null,
+                    }
+                    : {
+                        delivery_person_id: null,
+                        delivery_integration_id: Number(selectedCompanyId),
+                        delivery_city: selectedCity,
+                    }
+            );
             onClose();
-        } catch (err) {
-            console.error('Error confirming order:', err);
-            setError(err.response?.data?.message || 'Failed to send order to delivery company');
+        } catch (submitError) {
+            console.error('Error confirming delivery assignment:', submitError);
+            setError(submitError.response?.data?.message || 'Failed to save delivery assignment.');
         } finally {
             setSubmitting(false);
         }
     };
 
-    const getProviderLogo = (provider) => {
-        const logos = {
-            bmdelivery: 'https://bmdelivery.ma/assets/img/logo.png',
-            tawsilex: 'https://tawsilex.com/assets/img/logo.png',
-        };
-        return logos[provider] || null;
-    };
-
-    const getCityName = (city) => {
-        // Handle if city is object with 'name' property or just a string
-        return typeof city === 'object' ? (city.name || city.ville || city.city || 'Unknown') : city;
-    };
-
-    if (!isOpen) return null;
-
-    const hasCompanies = deliveryCompanies.length > 0;
-    const selectedCompany = deliveryCompanies.find(c => c.id === selectedCompanyId);
-    const hasPreferredCompany = !!preferredCompanyId;
-    const filteredCities = cities.filter((city) =>
-        getCityName(city).toLowerCase().includes(citySearch.toLowerCase())
-    );
+    if (!isOpen) {
+        return null;
+    }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Background overlay */}
-            <div 
-                className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-                onClick={onClose}
-            />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={onClose} />
 
-            {/* Modal panel */}
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-                {/* Header */}
-                <div className="bg-blue-600 px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                        {step === 1 ? (
-                            <Truck className="text-white" size={24} />
-                        ) : (
-                            <MapPin className="text-white" size={24} />
-                        )}
-                        <h3 className="text-xl font-semibold text-white">
-                            {step === 1 ? 'Select Delivery Company' : 'Select Delivery City'}
-                        </h3>
+            <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Confirm Order</p>
+                        <h3 className="text-xl font-bold text-white">Choose delivery type</h3>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="text-white hover:text-gray-200 transition-colors"
-                    >
-                        <X size={24} />
+                    <button onClick={onClose} className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white">
+                        <X size={18} />
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="px-6 py-5">
-                    {step === 1 && (
-                        <>
-                            {loading ? (
-                                <div className="flex flex-col items-center justify-center py-8">
-                                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3"></div>
-                                    <p className="text-gray-500 text-sm">Loading delivery companies...</p>
+                <div className="space-y-5 p-6">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            onClick={() => setAssignmentType('person')}
+                            className={`rounded-2xl border px-4 py-4 text-left transition-all ${
+                                assignmentType === 'person'
+                                    ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                            }`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`rounded-xl p-3 ${assignmentType === 'person' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                    <UserCheck size={18} />
                                 </div>
-                            ) : error && !hasCompanies ? (
-                                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
-                                    <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
-                                    <div className="flex-1">
-                                        <p className="text-sm text-red-800 font-medium">Error</p>
-                                        <p className="text-sm text-red-700 mt-1">{error}</p>
-                                    </div>
+                                <div>
+                                    <p className="font-semibold text-slate-900">Delivery person</p>
+                                    <p className="text-sm text-slate-500">Assign a specific delivery agent.</p>
                                 </div>
-                            ) : (
-                                <>
-                                    <p className="text-gray-600 mb-4">
-                                        Choose which delivery company should handle this order:
-                                    </p>
+                            </div>
+                        </button>
 
-                                    <div className="space-y-3">
-                                        {deliveryCompanies.map((company) => (
-                                            <div
-                                                key={company.id}
-                                                onClick={() => handleCompanySelect(company.id)}
-                                                className="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                                            >
-                                                <div className="flex-1 flex items-center justify-between">
-                                                    <div className="flex items-center space-x-3">
-                                                        {getProviderLogo(company.provider) && (
-                                                            <img
-                                                                src={getProviderLogo(company.provider)}
-                                                                alt={company.name}
-                                                                className="h-8 w-auto object-contain"
-                                                                onError={(e) => e.target.style.display = 'none'}
-                                                            />
-                                                        )}
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-gray-900">
-                                                                {company.name}
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 capitalize">
-                                                                {company.provider}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <Truck className="text-gray-400" size={20} />
-                                                </div>
-                                            </div>
-                                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setAssignmentType('company')}
+                            className={`rounded-2xl border px-4 py-4 text-left transition-all ${
+                                assignmentType === 'company'
+                                    ? 'border-blue-400 bg-blue-50 shadow-sm'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                            }`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`rounded-xl p-3 ${assignmentType === 'company' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                                    <Truck size={18} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-900">Delivery company</p>
+                                    <p className="text-sm text-slate-500">Send the order to an integration with tracking.</p>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+
+                    {loading ? (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                            Loading delivery options...
+                        </div>
+                    ) : assignmentType === 'person' ? (
+                        <div className="space-y-3">
+                            <label className="block text-sm font-medium text-slate-700">Delivery person</label>
+                            <select
+                                value={selectedPersonId}
+                                onChange={(event) => setSelectedPersonId(event.target.value)}
+                                className="w-full rounded-xl border border-slate-300 px-3 py-3"
+                            >
+                                <option value="">Select delivery person</option>
+                                {deliveryPersons.map((person) => (
+                                    <option key={person.id} value={person.id}>{person.name}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-slate-500">Once confirmed, the confirmation agent will no longer be able to change the order status manually.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700">Delivery company</label>
+                                <select
+                                    value={selectedCompanyId}
+                                    onChange={(event) => handleCompanyChange(event.target.value)}
+                                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-3"
+                                >
+                                    <option value="">Select delivery company</option>
+                                    {deliveryCompanies.map((company) => (
+                                        <option key={company.id} value={company.id}>
+                                            {company.name} ({company.provider})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {selectedCompanyId && (
+                                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                        <MapPin size={16} />
+                                        <span>Delivery city</span>
                                     </div>
-                                </>
+                                    <input
+                                        type="text"
+                                        value={citySearch}
+                                        onChange={(event) => setCitySearch(event.target.value)}
+                                        placeholder="Search city..."
+                                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5"
+                                    />
+
+                                    {loadingCities ? (
+                                        <p className="text-sm text-slate-500">Loading cities...</p>
+                                    ) : (
+                                        <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                                            {filteredCities.length === 0 && (
+                                                <div className="px-4 py-3 text-sm text-slate-500">No cities found.</div>
+                                            )}
+                                            {filteredCities.map((city, index) => {
+                                                const cityName = typeof city === 'object'
+                                                    ? (city.name || city.ville || city.city || '')
+                                                    : city;
+
+                                                return (
+                                                    <label
+                                                        key={`${cityName}-${index}`}
+                                                        className={`flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 ${
+                                                            selectedCity === cityName ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        <input
+                                                            type="radio"
+                                                            name="delivery_city"
+                                                            checked={selectedCity === cityName}
+                                                            onChange={() => setSelectedCity(cityName)}
+                                                            className="h-4 w-4"
+                                                        />
+                                                        <span>{cityName}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
                             )}
-                        </>
+                        </div>
                     )}
 
-                    {step === 2 && (
-                        <>
-                            {loadingCities ? (
-                                <div className="flex flex-col items-center justify-center py-8">
-                                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3"></div>
-                                    <p className="text-gray-500 text-sm">Loading cities...</p>
-                                </div>
-                            ) : (
-                                <>
-                                    {selectedCompany && (
-                                        <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center space-x-2">
-                                            <Truck className="text-blue-600" size={18} />
-                                            <span className="text-sm text-blue-900 font-medium">
-                                                {selectedCompany.name}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    <p className="text-gray-600 mb-4">
-                                        Select the client's delivery city:
-                                    </p>
-
-                                    <div className="mb-4">
-                                        <input
-                                            type="text"
-                                            value={citySearch}
-                                            onChange={(e) => setCitySearch(e.target.value)}
-                                            placeholder="Search city..."
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        />
-                                    </div>
-
-                                    {error && (
-                                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center space-x-2">
-                                            <AlertCircle className="text-red-600 flex-shrink-0" size={16} />
-                                            <p className="text-sm text-red-700">{error}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
-                                        {filteredCities.length === 0 && (
-                                            <div className="px-4 py-3 text-sm text-gray-500">
-                                                No cities found.
-                                            </div>
-                                        )}
-                                        {filteredCities.map((city, index) => {
-                                            const cityName = getCityName(city);
-                                            return (
-                                                <label
-                                                    key={index}
-                                                    className={`flex items-center px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
-                                                        selectedCity === cityName
-                                                            ? 'bg-blue-50 text-blue-900'
-                                                            : 'hover:bg-gray-50'
-                                                    }`}
-                                                >
-                                                    <input
-                                                        type="radio"
-                                                        name="delivery_city"
-                                                        value={cityName}
-                                                        checked={selectedCity === cityName}
-                                                        onChange={() => {
-                                                            setSelectedCity(cityName);
-                                                            setError(null);
-                                                        }}
-                                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                                                    />
-                                                    <span className="ml-3 text-sm font-medium text-gray-900">
-                                                        {cityName}
-                                                    </span>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                </>
-                            )}
-                        </>
+                    {error && (
+                        <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                            <span>{error}</span>
+                        </div>
                     )}
                 </div>
 
-                {/* Footer */}
-                {step === 1 && !loading && !hasCompanies && (
-                    <div className="bg-gray-50 px-6 py-4 flex items-center justify-end border-t border-gray-200">
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                            Close
-                        </button>
-                    </div>
-                )}
-
-                {step === 2 && !loadingCities && (
-                    <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
-                        {hasPreferredCompany ? (
-                            <button
-                                onClick={onClose}
-                                disabled={submitting}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                            >
-                                Close
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleBack}
-                                disabled={submitting}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                            >
-                                Back
-                            </button>
-                        )}
-                        <button
-                            onClick={handleConfirm}
-                            disabled={!selectedCity || submitting}
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                        >
-                            {submitting ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                    <span>Confirming...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Truck size={16} />
-                                    <span>Confirm & Send</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                )}
+                <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={submitting}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                        {submitting ? 'Saving...' : 'Confirm order'}
+                    </button>
+                </div>
             </div>
         </div>
     );

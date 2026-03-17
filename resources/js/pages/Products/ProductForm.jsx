@@ -36,15 +36,15 @@ export default function ProductForm() {
     const [errors, setErrors] = useState({});
     const toNumber = (value) => parseFloat(value || 0);
     const recommendedSellingPrice = toNumber(formData.recommended_price);
-    const companyCostPrice = toNumber(formData.company_price);
-    const sellerPrice = toNumber(formData.vendor_price);
-    const recommendedGrossProfit = recommendedSellingPrice - sellerPrice;
-    const companyGrossProfit = sellerPrice - companyCostPrice;
+    const sellingPrice = toNumber(formData.company_price);
+    const costPrice = toNumber(formData.vendor_price);
+    const recommendedGrossProfit = recommendedSellingPrice - sellingPrice;
+    const companyGrossProfit = sellingPrice - costPrice;
     const recommendedMargin = recommendedSellingPrice > 0
         ? (recommendedGrossProfit / recommendedSellingPrice) * 100
         : 0;
-    const companyMargin = sellerPrice > 0
-        ? (companyGrossProfit / sellerPrice) * 100
+    const companyMargin = sellingPrice > 0
+        ? (companyGrossProfit / sellingPrice) * 100
         : 0;
     const getImageSrc = (imagePath) => {
         if (!imagePath) return '';
@@ -474,26 +474,7 @@ export default function ProductForm() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="relative">
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Company Price *</label>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={formData.company_price}
-                                    onChange={(e) => setFormData({ ...formData, company_price: e.target.value })}
-                                    className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                                    placeholder="0.00"
-                                    required
-                                />
-                            </div>
-                            <p className="text-xs text-slate-500 mt-1.5">Cost price paid by the project owner to suppliers</p>
-                            {errors.company_price && <p className="text-red-500 text-xs mt-1.5 flex items-center"><span className="mr-1">⚠</span>{errors.company_price[0]}</p>}
-                        </div>
-
-                        <div className="relative">
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Seller Price *</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Cost Price (Prix de revient) *</label>
                             <div className="relative">
                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
                                 <input
@@ -507,8 +488,27 @@ export default function ProductForm() {
                                     required
                                 />
                             </div>
-                            <p className="text-xs text-slate-500 mt-1.5">Price at which the project owner sells the product to sellers</p>
+                            <p className="text-xs text-slate-500 mt-1.5">The price at which we bought the product</p>
                             {errors.vendor_price && <p className="text-red-500 text-xs mt-1.5 flex items-center"><span className="mr-1">⚠</span>{errors.vendor_price[0]}</p>}
+                        </div>
+
+                        <div className="relative">
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">Selling Price (Prix de vente) *</label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.company_price}
+                                    onChange={(e) => setFormData({ ...formData, company_price: e.target.value })}
+                                    className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                                    placeholder="0.00"
+                                    required
+                                />
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1.5">The price at which we sell the product on the marketplace</p>
+                            {errors.company_price && <p className="text-red-500 text-xs mt-1.5 flex items-center"><span className="mr-1">⚠</span>{errors.company_price[0]}</p>}
                         </div>
                     </div>
                     
@@ -537,12 +537,12 @@ export default function ProductForm() {
                         </div>
 
                         {/* Seller Profit Calculator */}
-                        {formData.recommended_price && formData.vendor_price && (
+                        {formData.recommended_price && formData.company_price && (
                             <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-6">
                                 <div className="flex items-start justify-between mb-4">
                                     <div>
                                         <h3 className="text-lg font-bold text-slate-800">Gross Profit Estimate</h3>
-                                        <p className="text-xs text-slate-600 mt-1">Seller formula: Selling Price - Seller Price</p>
+                                        <p className="text-xs text-slate-600 mt-1">Seller formula: Recommended Selling Price - Selling Price</p>
                                     </div>
                                     <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
                                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -562,9 +562,9 @@ export default function ProductForm() {
 
                                     {/* Product Cost */}
                                     <div className="flex justify-between items-center py-2 border-b border-emerald-200">
-                                        <span className="text-sm text-slate-600">Seller Price</span>
+                                        <span className="text-sm text-slate-600">Selling Price</span>
                                         <span className="text-lg font-medium text-red-600">
-                                            - {formatCurrency(sellerPrice)}
+                                            - {formatCurrency(sellingPrice)}
                                         </span>
                                     </div>
 
@@ -589,7 +589,7 @@ export default function ProductForm() {
 
                                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                     <p className="text-xs text-blue-800">
-                                        <strong>Note:</strong> Seller profit = recommended selling price - seller price.
+                                        <strong>Note:</strong> Seller profit = recommended selling price - selling price.
                                     </p>
                                 </div>
                             </div>
@@ -602,7 +602,7 @@ export default function ProductForm() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-semibold text-slate-700">Profit Margin</p>
-                                    <p className="text-xs text-slate-600 mt-0.5">Based on seller price minus company price</p>
+                                    <p className="text-xs text-slate-600 mt-0.5">Based on selling price minus cost price</p>
                                 </div>
                                 <div className="text-right">
                                     <p className={`text-2xl font-bold ${companyGrossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>

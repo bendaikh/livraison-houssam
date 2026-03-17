@@ -24,6 +24,7 @@ export default function VendorList() {
         phone: '',
         address: '',
         company_name: '',
+        billing_frequency: 'weekly',
         bank_name: '',
         rib: '',
         password: '',
@@ -86,6 +87,7 @@ export default function VendorList() {
             phone: vendor.phone || '',
             address: vendor.address || '',
             company_name: vendor.company_name || '',
+            billing_frequency: vendor.billing_frequency || 'weekly',
             bank_name: vendor.bank_name || '',
             rib: vendor.rib || '',
             password: '',
@@ -117,6 +119,7 @@ export default function VendorList() {
             phone: '',
             address: '',
             company_name: '',
+            billing_frequency: 'weekly',
             bank_name: '',
             rib: '',
             password: '',
@@ -326,6 +329,15 @@ export default function VendorList() {
                                     </div>
                                 </div>
                             )}
+
+                            <div className="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                <div className="flex items-center space-x-2 text-sm text-slate-700">
+                                    <FileText size={16} className="text-slate-500 flex-shrink-0" />
+                                    <span className="font-medium">
+                                        Billing cadence: {vendor.billing_frequency === 'twice_weekly' ? 'Twice weekly' : 'Weekly'}
+                                    </span>
+                                </div>
+                            </div>
 
                             {/* Contact Info */}
                             <div className="space-y-3 mb-4">
@@ -539,6 +551,23 @@ export default function VendorList() {
                                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
                                             placeholder="+1 (555) 123-4567"
                                         />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                            Billing Frequency
+                                        </label>
+                                        <select
+                                            value={formData.billing_frequency}
+                                            onChange={(e) => setFormData({ ...formData, billing_frequency: e.target.value })}
+                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                                        >
+                                            <option value="weekly">Weekly</option>
+                                            <option value="twice_weekly">Twice weekly</option>
+                                        </select>
+                                        <p className="text-xs text-slate-500 mt-1.5">
+                                            Weekly sellers get one settlement window. Twice-weekly sellers are billed in two windows per week.
+                                        </p>
                                     </div>
                                 </div>
                             </div>

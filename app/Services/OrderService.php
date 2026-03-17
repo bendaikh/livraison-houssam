@@ -7,6 +7,7 @@ use App\Models\OrderHistory;
 use App\Models\Notification;
 use App\Models\StockMovement;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -123,11 +124,8 @@ class OrderService
                 'notes' => $data['notes'] ?? null,
                 'whatsapp' => $data['whatsapp'] ?? null,
             ];
-            
-            // Only update status if it's explicitly provided and different from current
-            if (isset($data['status']) && $data['status'] !== $order->status) {
-                $updateData['status'] = $data['status'];
-            }
+
+            $updateData = array_merge($updateData, $this->prepareDeliveryAssignmentAttributes($order, $data));
             
             $order->update($updateData);
 
@@ -173,11 +171,12 @@ class OrderService
                 'cancelled' => $order->update(['cancelled_at' => now()]),
                 'refused' => $order->update(['refused_at' => now()]),
                 'returned' => $order->update(['returned_at' => now()]),
+                'no_response' => $order->update(['no_response_at' => now()]),
                 'return_requested' => $order->update(['returned_at' => now()]),
                 default => null
             };
 
-            if (in_array($status, ['delivered', 'cancelled', 'refused', 'returned'], true)) {
+            if (in_array($status, ['delivered', 'cancelled', 'refused', 'returned', 'no_response'], true)) {
                 $order->update(['callback_date' => null]);
             }
 
@@ -201,9 +200,9 @@ class OrderService
                 }
             }
 
-            // Deduct stock when order moves to confirmed (first time only)
+            // Deduct stock when order moves to picked up (first time only)
             $hasStockDeduction = StockMovement::where('order_id', $orderId)->where('type', 'out')->exists();
-            if ($status === 'confirmed' && !$hasStockDeduction) {
+            if ($status === 'picked_up' && !$hasStockDeduction) {
                 try {
                     $this->stockService->deductStockForOrder($orderId);
                 } catch (\Exception $e) {
@@ -215,13 +214,20 @@ class OrderService
                 }
             }
 
-            // Restore stock when order is cancelled and stock had been deducted
-            if ($status === 'cancelled' && $oldStatus !== 'cancelled' && $hasStockDeduction) {
+            $restoreStatuses = ['cancelled', 'refused', 'returned', 'no_response'];
+            $hasStockRestoration = StockMovement::where('order_id', $orderId)->where('type', 'in')->exists();
+
+            // Restore stock when a picked-up order ends in a return/failure status.
+            if (in_array($status, $restoreStatuses, true) && $oldStatus !== $status && $hasStockDeduction && !$hasStockRestoration) {
                 try {
-                    $this->stockService->restoreStockForOrder($orderId);
+                    $this->stockService->restoreStockForOrder(
+                        $orderId,
+                        "Stock restored after order status changed to {$status} for order #{$order->order_number}"
+                    );
                 } catch (\Exception $e) {
-                    \Log::error('Failed to restore stock for cancelled order: ' . $e->getMessage(), [
+                    \Log::error('Failed to restore stock for order: ' . $e->getMessage(), [
                         'order_id' => $orderId,
+                        'status' => $status,
                         'exception' => $e
                     ]);
                     // Continue with the order status update even if stock restoration fails
@@ -244,7 +250,16 @@ class OrderService
             // Create notification
             $this->createOrderNotification($order, $status);
 
-            $freshOrder = $order->fresh(['items.product', 'client', 'vendor', 'history', 'deliveryIntegration']);
+            $freshOrder = $order->fresh([
+                'items.product',
+                'client',
+                'vendor',
+                'history.user',
+                'deliveryIntegration',
+                'deliveryAgent',
+                'deliveryPerson',
+                'confirmationAgent',
+            ]);
             
             // If there was a delivery error, add it to the response
             if ($deliveryError) {
@@ -252,6 +267,112 @@ class OrderService
             }
             
             return $freshOrder;
+        });
+    }
+
+    public function updateDeliveryWorkflow(int $orderId, User $user, array $data)
+    {
+        return DB::transaction(function () use ($orderId, $user, $data) {
+            $order = Order::lockForUpdate()->findOrFail($orderId);
+
+            if ((int) $order->delivery_person_id !== (int) $user->id) {
+                abort(403, 'You are not allowed to manage this order.');
+            }
+
+            $motifStatuses = ['refused', 'cancelled', 'no_response', 'returned'];
+            $status = $data['status'] ?? null;
+            $note = isset($data['delivery_status_note']) ? trim((string) $data['delivery_status_note']) : null;
+            $callbackDate = isset($data['callback_date']) && $data['callback_date']
+                ? Carbon::parse($data['callback_date'])->startOfDay()
+                : null;
+
+            if ($callbackDate) {
+                if ($callbackDate->lte(Carbon::today())) {
+                    abort(422, 'Callback date must be in the future.');
+                }
+
+                $order->update([
+                    'callback_date' => $callbackDate,
+                    'delivery_status_note' => $note ?: $order->delivery_status_note,
+                ]);
+
+                $this->addHistory(
+                    $order->id,
+                    $order->status,
+                    trim('Delivery callback scheduled for ' . $callbackDate->toDateString() . '. ' . ($note ?: ''))
+                );
+            }
+
+            if (!$status) {
+                return $order->fresh([
+                    'client',
+                    'vendor',
+                    'items.product',
+                    'history.user',
+                    'confirmationAgent',
+                    'deliveryAgent',
+                    'deliveryPerson',
+                    'deliveryIntegration',
+                ]);
+            }
+
+            if (in_array($status, $motifStatuses, true) && !$note) {
+                abort(422, 'A reason is required for this status.');
+            }
+
+            if ($status === 'delivered') {
+                $collectedAmount = (float) ($data['collected_amount'] ?? 0);
+                $commission = (float) $user->effective_commission_per_order;
+
+                if ($collectedAmount <= 0) {
+                    abort(422, 'Collected amount is required for delivered orders.');
+                }
+
+                if ($collectedAmount < $commission) {
+                    abort(422, 'Collected amount cannot be lower than the delivery person commission.');
+                }
+
+                $order->update([
+                    'collected_amount' => $collectedAmount,
+                    'delivery_person_commission' => $commission,
+                    'amount_due_to_admin' => $collectedAmount - $commission,
+                    'delivery_status_note' => $note,
+                    'callback_date' => null,
+                ]);
+            } else {
+                $order->update([
+                    'delivery_status_note' => $note,
+                    'callback_date' => in_array($status, $motifStatuses, true) ? null : $order->callback_date,
+                ]);
+            }
+
+            $historyNote = $note;
+
+            if ($status === 'delivered' && isset($collectedAmount)) {
+                $historyNote = trim(collect([
+                    $note,
+                    'Collected: ' . number_format($collectedAmount, 2, '.', ''),
+                    'Commission: ' . number_format((float) $order->delivery_person_commission, 2, '.', ''),
+                    'Due to admin: ' . number_format((float) $order->amount_due_to_admin, 2, '.', ''),
+                ])->filter()->implode(' | '));
+            }
+
+            $order = $this->updateOrderStatus(
+                $order->id,
+                $status,
+                $historyNote ?: 'Delivery workflow updated.'
+            );
+
+            return $order->fresh([
+                'client',
+                'vendor',
+                'items.product',
+                'history.user',
+                'confirmationAgent',
+                'deliveryAgent',
+                'deliveryPerson',
+                'deliveryIntegration',
+            ]);
         });
     }
 
@@ -353,14 +474,13 @@ class OrderService
             'full_response' => $response,
         ]);
         
-            $order->update([
-                'delivery_integration_id' => $deliveryIntegrationId,
-                'city' => $deliveryCity ?: $order->city,
-                'delivery_city' => $deliveryCity ?: $order->delivery_city,
-                'delivery_tracking_code' => $trackingCode,
-                'sent_to_delivery_at' => now(),
-                'delivery_status' => 'sent',
-            ]);
+        $order->update([
+            'delivery_integration_id' => $deliveryIntegrationId,
+            'delivery_city' => $deliveryCity ?: $order->delivery_city,
+            'delivery_tracking_code' => $trackingCode,
+            'sent_to_delivery_at' => now(),
+            'delivery_status' => 'sent',
+        ]);
 
         $this->addHistory($order->id, $order->status, "Order sent to {$integration->name}. Tracking code: {$trackingCode}");
     }
@@ -419,6 +539,7 @@ class OrderService
             'shipped' => 'Order shipped',
             'delivered' => 'Order delivered',
             'cancelled' => 'Order cancelled',
+            'no_response' => 'No response recorded',
         ];
 
         // Notify admin and delivery agent
@@ -430,6 +551,10 @@ class OrderService
 
         if ($order->delivery_agent_id) {
             $users->push($order->deliveryAgent);
+        }
+
+        if ($order->delivery_person_id) {
+            $users->push($order->deliveryPerson);
         }
 
         foreach ($users->unique('id') as $user) {
@@ -450,31 +575,7 @@ class OrderService
     public function assignDeliveryAgent(int $orderId, array $attributes)
     {
         $order = Order::findOrFail($orderId);
-        $updatable = [];
-
-        if (array_key_exists('delivery_agent_id', $attributes)) {
-            $updatable['delivery_agent_id'] = $attributes['delivery_agent_id'];
-        }
-        if (array_key_exists('delivery_person_id', $attributes)) {
-            $updatable['delivery_person_id'] = $attributes['delivery_person_id'];
-        }
-        if (array_key_exists('delivery_integration_id', $attributes)) {
-            $updatable['delivery_integration_id'] = $attributes['delivery_integration_id'];
-        }
-        if (array_key_exists('delivery_city', $attributes)) {
-            $updatable['city'] = $attributes['delivery_city'];
-        }
-
-        // Keep assignment mutually exclusive:
-        // company assignment clears delivery people, person assignment clears company assignment.
-        if (array_key_exists('delivery_integration_id', $attributes) && $attributes['delivery_integration_id']) {
-            $updatable['delivery_person_id'] = null;
-            $updatable['delivery_agent_id'] = null;
-        }
-
-        if (array_key_exists('delivery_person_id', $attributes) && $attributes['delivery_person_id']) {
-            $updatable['delivery_integration_id'] = null;
-        }
+        $updatable = $this->prepareDeliveryAssignmentAttributes($order, $attributes);
 
         if (!empty($updatable)) {
             $order->update($updatable);
@@ -547,8 +648,18 @@ class OrderService
                 abort(403, 'You are not allowed to manage this order.');
             }
 
+            $assignmentPayload = $this->prepareDeliveryAssignmentAttributes($order, $data);
+            if (!empty($assignmentPayload)) {
+                $order->update($assignmentPayload);
+                $this->addHistory($order->id, $order->status, 'Delivery assignment updated by confirmation agent.');
+                $order->refresh();
+                $order->load('items');
+            }
+
             $baseItems = $order->items->where('is_upsell', false)->values();
             $previousCallbackDate = $order->callback_date;
+            $previousShippingAddress = $order->shipping_address;
+            $previousNotes = $order->notes;
             $existingUpsellCount = $order->items->where('is_upsell', true)->count();
             $existingUpsellSubtotal = (float) $order->items->where('is_upsell', true)->sum('subtotal');
             $upsellItems = collect($data['upsell_items'] ?? [])
@@ -593,7 +704,15 @@ class OrderService
                 'callback_date' => $callbackDate ?: null,
                 'subtotal' => $subtotal,
                 'total' => $total,
+                'shipping_address' => $data['shipping_address'] ?? $order->shipping_address,
+                'notes' => $data['notes'] ?? $order->notes,
             ]);
+
+            if (array_key_exists('shipping_address', $data) && $order->client) {
+                $order->client->update([
+                    'address' => $data['shipping_address'],
+                ]);
+            }
 
             $order->items()->where('is_upsell', true)->delete();
 
@@ -615,6 +734,14 @@ class OrderService
                 $this->addHistory($order->id, $order->status, 'Callback scheduled for ' . $callbackDate . '.');
             } elseif ($previousCallbackDate) {
                 $this->addHistory($order->id, $order->status, 'Callback cleared.');
+            }
+
+            if (array_key_exists('shipping_address', $data) && $previousShippingAddress !== $order->shipping_address) {
+                $this->addHistory($order->id, $order->status, 'Shipping address updated by confirmation agent.');
+            }
+
+            if (array_key_exists('notes', $data) && $previousNotes !== $order->notes) {
+                $this->addHistory($order->id, $order->status, 'Workflow notes updated by confirmation agent.');
             }
 
             if (
@@ -643,6 +770,55 @@ class OrderService
                 'deliveryIntegration',
             ]);
         });
+    }
+
+    private function prepareDeliveryAssignmentAttributes(Order $order, array $attributes): array
+    {
+        $updatable = [];
+
+        if (array_key_exists('delivery_agent_id', $attributes)) {
+            $updatable['delivery_agent_id'] = $attributes['delivery_agent_id'];
+        }
+
+        if (array_key_exists('delivery_person_id', $attributes)) {
+            $updatable['delivery_person_id'] = $attributes['delivery_person_id'];
+        }
+
+        if (array_key_exists('delivery_integration_id', $attributes)) {
+            $updatable['delivery_integration_id'] = $attributes['delivery_integration_id'];
+        }
+
+        if (array_key_exists('delivery_city', $attributes)) {
+            $updatable['delivery_city'] = $attributes['delivery_city'];
+        }
+
+        if (array_key_exists('delivery_integration_id', $attributes) && !empty($attributes['delivery_integration_id'])) {
+            $updatable['delivery_person_id'] = null;
+            $updatable['delivery_agent_id'] = null;
+        }
+
+        if (array_key_exists('delivery_person_id', $attributes) && !empty($attributes['delivery_person_id'])) {
+            $updatable['delivery_integration_id'] = null;
+            $updatable['delivery_tracking_code'] = null;
+            $updatable['delivery_status'] = null;
+            $updatable['sent_to_delivery_at'] = null;
+            $updatable['delivery_city'] = null;
+        }
+
+        if (array_key_exists('delivery_integration_id', $attributes) && empty($attributes['delivery_integration_id'])) {
+            $updatable['delivery_tracking_code'] = null;
+            $updatable['delivery_status'] = null;
+            $updatable['sent_to_delivery_at'] = null;
+            $updatable['delivery_city'] = array_key_exists('delivery_city', $updatable)
+                ? $updatable['delivery_city']
+                : null;
+        }
+
+        $currentValues = collect($updatable)
+            ->reject(fn ($value, $key) => $order->{$key} === $value)
+            ->all();
+
+        return $currentValues;
     }
 
     private function calculateOrderTotals(array $items, array $data, ?Order $order = null): array

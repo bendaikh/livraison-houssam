@@ -124,6 +124,7 @@ export default function UserList() {
             confirmation_agent: 'bg-green-100 text-green-800',
             agent_confirmation: 'bg-green-100 text-green-800',
             manager: 'bg-yellow-100 text-yellow-800',
+            delivery_person: 'bg-orange-100 text-orange-800',
             delivery: 'bg-orange-100 text-orange-800',
             vendor: 'bg-pink-100 text-pink-800'
         };
@@ -351,7 +352,7 @@ export default function UserList() {
                                 {/* Commission Field - Only show for confirmation agents and delivery persons */}
                                 {formData.role_id && (() => {
                                     const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
-                                    return selectedRole && (isConfirmationAgentRole(selectedRole.slug) || selectedRole.slug === 'delivery');
+                                    return selectedRole && (isConfirmationAgentRole(selectedRole.slug) || ['delivery_person', 'delivery'].includes(selectedRole.slug));
                                 })() && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -371,7 +372,7 @@ export default function UserList() {
                                                 const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
                                                 if (isConfirmationAgentRole(selectedRole?.slug)) {
                                                     return 'Commission earned per delivered order';
-                                                } else if (selectedRole?.slug === 'delivery') {
+                                                } else if (['delivery_person', 'delivery'].includes(selectedRole?.slug)) {
                                                     return 'Commission earned per delivered order';
                                                 }
                                             })()}

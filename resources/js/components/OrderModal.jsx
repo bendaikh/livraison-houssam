@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { X, Minus, Plus } from 'lucide-react';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { formatPriceInput, normalizePrice } from '../utils/currency';
+import { calculateProfit, getFulfillmentPrice, getProductBasePrice } from '../utils/profit';
 
 /**
  * Reusable modal for creating an order from a product.
@@ -17,14 +19,9 @@ export default function OrderModal({
     onOrderCreated
 }) {
     const { user } = useAuth();
+    const { settings } = useSettings();
     const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
-    const buyPrice = parseFloat(
-        product?.vendor_price ??
-        product?.company_price ??
-        product?.cost_price ??
-        product?.price ??
-        0
-    );
+    const buyPrice = getProductBasePrice(product);
 
     const recommendedSellPrice = product?.recommended_price != null
         ? parseFloat(product.recommended_price)
@@ -82,8 +79,14 @@ export default function OrderModal({
     const sellerPrice = buyPrice;
     const shippingPrice = getCityDeliveryCost(orderForm.city);
     const shippingIncludedInPrice = isAdminUser;
+    const fulfillmentPrice = getFulfillmentPrice(settings.order_fulfillment_cost);
     const customerTotal = sellPrice * quantity;
-    const estimatedBenefit = (sellPrice - sellerPrice) * quantity;
+    const estimatedBenefit = calculateProfit({
+        sellTotal: customerTotal,
+        productCostTotal: sellerPrice * quantity,
+        shippingPrice,
+        fulfillmentPrice,
+    });
     const estimatedMargin = customerTotal > 0 ? (estimatedBenefit / customerTotal) * 100 : 0;
 
     const filteredCities = citySearch.trim() === '' 
@@ -370,7 +373,7 @@ export default function OrderModal({
                                 <span className="text-sm text-gray-600">Product: <strong>{product?.name}</strong></span>
                                 <span className="text-sm text-gray-600">Quantity: <strong>×{quantity}</strong></span>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                                 <div>
                                     <p className="text-xs text-gray-500">Customer Total</p>
                                     <p className="font-bold text-gray-900">{formatCurrency(customerTotal)}</p>
@@ -382,7 +385,11 @@ export default function OrderModal({
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-gray-500">Benefit</p>
+                                    <p className="text-xs text-gray-500">Fulfillment</p>
+                                    <p className="font-bold text-gray-900">{formatCurrency(fulfillmentPrice)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Profit</p>
                                     <p className={`font-bold ${estimatedBenefit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         {formatCurrency(estimatedBenefit)}
                                     </p>

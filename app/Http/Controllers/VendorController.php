@@ -3,10 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Vendor;
+use App\Services\DashboardService;
 use Illuminate\Http\Request;
 
 class VendorController extends Controller
 {
+    public function __construct(
+        private DashboardService $dashboardService
+    ) {}
+
     public function index(Request $request)
     {
         $query = Vendor::query();
@@ -42,6 +47,7 @@ class VendorController extends Controller
             'bank_name' => 'nullable|string|max:255|required_with:rib',
             'rib' => ['nullable', 'string', 'max:34', 'required_with:bank_name', 'regex:/^[0-9 ]+$/'],
             'commission_rate' => 'nullable|numeric|min:0|max:100',
+            'billing_frequency' => 'nullable|in:weekly,twice_weekly',
             'is_active' => 'boolean',
         ]);
 
@@ -99,6 +105,7 @@ class VendorController extends Controller
             'vendor' => $vendor,
             'products' => $vendor->products()->with('category')->get(),
             'orders' => $vendor->orders()->with(['client', 'items.product'])->latest()->limit(20)->get(),
+            'billing' => $this->dashboardService->getSellerBillingStats($vendor->id),
             'statistics' => [
                 'total_products' => $vendor->products()->count(),
                 'active_products' => $vendor->products()->where('is_active', true)->count(),
@@ -122,6 +129,7 @@ class VendorController extends Controller
             'bank_name' => 'nullable|string|max:255|required_with:rib',
             'rib' => ['nullable', 'string', 'max:34', 'required_with:bank_name', 'regex:/^[0-9 ]+$/'],
             'commission_rate' => 'nullable|numeric|min:0|max:100',
+            'billing_frequency' => 'nullable|in:weekly,twice_weekly',
             'is_active' => 'boolean',
         ]);
 

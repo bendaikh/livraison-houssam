@@ -80,4 +80,24 @@ class Product extends Model
     {
         return $this->hasMany(MarketplaceProduct::class);
     }
+
+    public function getOrderCostAmount(): float
+    {
+        return (float) ($this->company_price ?? $this->price ?? $this->vendor_price ?? $this->cost_price ?? 0);
+    }
+
+    public function getAdminCostAmount(): float
+    {
+        return (float) ($this->vendor_price ?? $this->cost_price ?? 0);
+    }
+
+    public function getAdminSellAmount(): float
+    {
+        return (float) ($this->company_price ?? $this->price ?? 0);
+    }
+
+    public function getAdminUnitProfitAmount(): float
+    {
+        return $this->getAdminSellAmount() - $this->getAdminCostAmount();
+    }
 }

@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import OrderModal from '../../components/OrderModal';
 import { 
     Package, Store, Users, Search, ToggleLeft, ToggleRight, Trash2, TrendingUp, X,
-    CheckCircle, DollarSign, Hash, ChevronDown, ChevronUp, Grid, List as ListIcon, ShoppingBag
+    CheckCircle, DollarSign, Hash, ChevronDown, ChevronUp, Grid, List as ListIcon, Eye
 } from 'lucide-react';
 
 export default function MarketplaceProducts() {
@@ -17,12 +16,12 @@ export default function MarketplaceProducts() {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('grid');
     const [expandedProducts, setExpandedProducts] = useState(new Set());
-    const [orderProduct, setOrderProduct] = useState(null);
-    const [showOrderModal, setShowOrderModal] = useState(false);
     const [detailProduct, setDetailProduct] = useState(null);
     const [showDetailModal, setShowDetailModal] = useState(false);
     
     const isVendor = user?.role?.slug === 'vendor';
+    const isConfirmationAgent = ['confirmation_agent', 'agent_confirmation'].includes(user?.role?.slug);
+    const canManageAssignments = !isVendor && !isConfirmationAgent;
 
     useEffect(() => {
         fetchData();
@@ -42,16 +41,6 @@ export default function MarketplaceProducts() {
         } finally {
             setLoading(false);
         }
-    };
-
-    const openOrderModal = (product) => {
-        setOrderProduct(product);
-        setShowOrderModal(true);
-    };
-
-    const closeOrderModal = () => {
-        setShowOrderModal(false);
-        setOrderProduct(null);
     };
 
     const openProductDetails = (product) => {
@@ -116,7 +105,7 @@ export default function MarketplaceProducts() {
                         </div>
                         <span>Marketplace</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Browse marketplace products, view details, and place orders</p>
+                    <p className="text-slate-500 mt-1">Browse marketplace products and inspect product details.</p>
                 </div>
             </div>
 
@@ -159,7 +148,7 @@ export default function MarketplaceProducts() {
                         </div>
                     </div>
 
-                    {!isVendor && (
+                    {canManageAssignments && (
                         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200/50">
                             <div className="flex items-center justify-between">
                                 <div>
@@ -222,7 +211,7 @@ export default function MarketplaceProducts() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">
                     <div className="p-6 border-b border-slate-100">
                         <h3 className="text-lg font-semibold text-slate-800">Marketplace Products</h3>
-                        <p className="text-sm text-slate-500 mt-1">Click a card to view product details, then place an order</p>
+                        <p className="text-sm text-slate-500 mt-1">Marketplace is view-only. Open a product to inspect its details.</p>
                     </div>
 
                     <div className="divide-y divide-slate-100">
@@ -275,7 +264,7 @@ export default function MarketplaceProducts() {
                                                             </span>
                                                             <span className="flex items-center space-x-1">
                                                                 <DollarSign size={14} />
-                                                                <span>{formatCurrency(product.company_price || product.price)}</span>
+                                                                <span>{formatCurrency(product.company_price || product.price || product.recommended_price)}</span>
                                                             </span>
                                                             {hasAssignments && (
                                                                 <span className="flex items-center space-x-1 text-blue-600 font-medium">
@@ -288,11 +277,11 @@ export default function MarketplaceProducts() {
                                                 </div>
                                                 <div className="flex items-center space-x-2">
                                                     <button
-                                                        onClick={() => openOrderModal(product)}
+                                                        onClick={() => openProductDetails(product)}
                                                         className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all flex items-center space-x-2"
                                                     >
-                                                        <ShoppingBag size={18} />
-                                                        <span>Order</span>
+                                                        <Eye size={18} />
+                                                        <span>View</span>
                                                     </button>
                                                     {hasAssignments && (
                                                         <button
@@ -326,26 +315,28 @@ export default function MarketplaceProducts() {
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center space-x-2">
-                                                                <button
-                                                                    onClick={() => toggleActivation(assignment.id)}
-                                                                    className={`p-2 rounded-lg transition-all ${
-                                                                        assignment.is_active
-                                                                            ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
-                                                                            : 'bg-slate-200 text-slate-400 hover:bg-slate-300'
-                                                                    }`}
-                                                                    title={assignment.is_active ? 'Deactivate' : 'Activate'}
-                                                                >
-                                                                    {assignment.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => removeAssignment(assignment.id)}
-                                                                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                                                    title="Remove assignment"
-                                                                >
-                                                                    <Trash2 size={18} />
-                                                                </button>
-                                                            </div>
+                                                            {canManageAssignments && (
+                                                                <div className="flex items-center space-x-2">
+                                                                    <button
+                                                                        onClick={() => toggleActivation(assignment.id)}
+                                                                        className={`p-2 rounded-lg transition-all ${
+                                                                            assignment.is_active
+                                                                                ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
+                                                                                : 'bg-slate-200 text-slate-400 hover:bg-slate-300'
+                                                                        }`}
+                                                                        title={assignment.is_active ? 'Deactivate' : 'Activate'}
+                                                                    >
+                                                                        {assignment.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => removeAssignment(assignment.id)}
+                                                                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                                                        title="Remove assignment"
+                                                                    >
+                                                                        <Trash2 size={18} />
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -417,7 +408,7 @@ export default function MarketplaceProducts() {
                                         <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-200">
                                             <div>
                                                 <p className="text-xs text-slate-500">Price</p>
-                                                <p className="font-bold text-lg text-purple-600">{formatCurrency(product.company_price || product.price)}</p>
+                                                <p className="font-bold text-lg text-purple-600">{formatCurrency(product.company_price || product.price || product.recommended_price)}</p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-xs text-slate-500">Stock</p>
@@ -456,11 +447,11 @@ export default function MarketplaceProducts() {
 
                                         {/* Actions */}
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); openOrderModal(product); }}
+                                            onClick={(e) => { e.stopPropagation(); openProductDetails(product); }}
                                             className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
                                         >
-                                            <ShoppingBag size={16} />
-                                            <span>Order</span>
+                                            <Eye size={16} />
+                                            <span>View details</span>
                                         </button>
                                     </div>
                                 </div>
@@ -544,28 +535,13 @@ export default function MarketplaceProducts() {
                                     </div>
                                 )}
 
-                                <button
-                                    onClick={() => { closeProductDetails(); openOrderModal(detailProduct); }}
-                                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/20 transition-all flex items-center justify-center space-x-2"
-                                >
-                                    <ShoppingBag size={18} />
-                                    <span>Order</span>
-                                </button>
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                    Marketplace is view-only. Create or edit orders from the Orders section.
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            )}
-
-            {showOrderModal && orderProduct && (
-                <OrderModal
-                    product={orderProduct}
-                    initialQuantity={1}
-                    formatCurrency={formatCurrency}
-                    source="marketplace"
-                    onClose={closeOrderModal}
-                    onOrderCreated={fetchData}
-                />
             )}
         </div>
     );

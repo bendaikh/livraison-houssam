@@ -20,6 +20,7 @@ class Vendor extends Model
         'bank_name',
         'rib',
         'commission_rate',
+        'billing_frequency',
         'is_active',
         'total_sales',
         'total_commission',
@@ -62,5 +63,10 @@ class Vendor extends Model
     public function apiIntegrations(): HasMany
     {
         return $this->hasMany(ApiIntegration::class);
+    }
+
+    public function sellerBillings(): HasMany
+    {
+        return $this->hasMany(SellerBilling::class);
     }
 }

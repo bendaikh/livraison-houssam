@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('api_integrations', function (Blueprint $table) {
-            $table->string('provider')->nullable()->after('type');
-        });
+        if (!Schema::hasColumn('api_integrations', 'provider')) {
+            Schema::table('api_integrations', function (Blueprint $table) {
+                $table->string('provider')->nullable()->after('type');
+            });
+        }
     }
 
     /**
@@ -21,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('api_integrations', function (Blueprint $table) {
-            $table->dropColumn('provider');
-        });
+        if (Schema::hasColumn('api_integrations', 'provider')) {
+            Schema::table('api_integrations', function (Blueprint $table) {
+                $table->dropColumn('provider');
+            });
+        }
     }
 };

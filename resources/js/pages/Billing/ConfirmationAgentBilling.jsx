@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -90,6 +91,10 @@ export default function ConfirmationAgentBilling() {
             return acc;
         }, { total: 0, delivered: 0, pending: 0 });
     }, [billings]);
+
+    if (isAdmin) {
+        return <Navigate to="/billing?role=confirmation" replace />;
+    }
 
     if (!canView) {
         return (

@@ -9,11 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Create vendor role
+        // Create seller role while keeping the vendor slug for compatibility
         Role::create([
-            'name' => 'Vendor',
+            'name' => 'Seller',
             'slug' => 'vendor',
-            'description' => 'Vendor/Seller with limited access',
+            'description' => 'Seller with limited access',
             'permissions' => [
                 'view_dashboard',
                 'manage_orders',

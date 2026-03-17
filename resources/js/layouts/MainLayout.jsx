@@ -2,11 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { isAdminRole, isConfirmationAgentRole } from '../utils/roles';
+import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole } from '../utils/roles';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle, TrendingUp
+    Search, Moon, Sun, User, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle, TrendingUp, Ban
 } from 'lucide-react';
 
 export default function MainLayout() {
@@ -34,6 +34,7 @@ export default function MainLayout() {
     const isVendor = roleSlug === 'vendor';
     const isAdmin = isAdminRole(roleSlug);
     const isConfirmationAgent = isConfirmationAgentRole(roleSlug);
+    const isDeliveryPerson = isDeliveryPersonRole(roleSlug);
 
     const menuItems = useMemo(() => [
         { path: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & Analytics' },
@@ -45,14 +46,15 @@ export default function MainLayout() {
             hasSubItems: true,
             adminOnly: true,
             hiddenForConfirmationAgent: true,
+            hiddenForDeliveryPerson: true,
             subItems: [
                 { path: '/products', icon: List, label: 'List Products', description: 'View all products' },
                 { path: '/categories', icon: Tags, label: 'Categories', description: 'Product categories' },
                 { path: '/profit-dashboard', icon: TrendingUp, label: 'Profit Dashboard', description: 'Sales analytics' }
             ]
         },
-        { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Vendor products', hiddenForConfirmationAgent: true },
-        { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control', adminOnly: true },
+        { path: '/marketplace', icon: ShoppingBag, label: 'Marketplace', description: 'Browse products', hiddenForDeliveryPerson: true },
+        { path: '/stock', icon: Box, label: 'Stock', description: 'Inventory control', adminOnly: true, hiddenForDeliveryPerson: true },
         { 
             path: '/orders', 
             icon: ShoppingCart, 
@@ -68,7 +70,7 @@ export default function MainLayout() {
                 { path: '/orders/cancelled', icon: X, label: 'Cancelled', description: 'Cancelled orders' }
             ]
         },
-        { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management', adminOnly: true, hiddenForConfirmationAgent: true },
+        { path: '/vendors', icon: Store, label: 'Sellers', description: 'Seller management', adminOnly: true, hiddenForConfirmationAgent: true, hiddenForDeliveryPerson: true },
         { 
             path: '/expenses', 
             icon: DollarSign, 
@@ -77,6 +79,7 @@ export default function MainLayout() {
             hasSubItems: true,
             adminOnly: true,
             hiddenForConfirmationAgent: true,
+            hiddenForDeliveryPerson: true,
             subItems: [
                 { path: '/expenses', icon: Receipt, label: 'List Expenses', description: 'View all expenses' },
                 { path: '/expense-categories', icon: Tags, label: 'Expense Categories', description: 'Expense types' }
@@ -89,6 +92,7 @@ export default function MainLayout() {
             description: 'Connect your store',
             hasSubItems: true,
             hiddenForConfirmationAgent: true,
+            hiddenForDeliveryPerson: true,
             subItems: isVendor
                 ? [
                     { path: '/api-integrations/shopify', icon: ShoppingCart, label: 'Shopify', description: 'E-commerce' },
@@ -109,14 +113,18 @@ export default function MainLayout() {
             hasSubItems: true,
             adminOnly: true,
             hiddenForConfirmationAgent: true,
+            hiddenForDeliveryPerson: true,
             subItems: [
                 { path: '/users', icon: Users, label: 'Users', description: 'Manage users' },
                 { path: '/roles', icon: Shield, label: 'Roles', description: 'Manage roles' }
             ]
         },
-        { path: '/confirmation-billing', icon: DollarSign, label: 'Billing', description: 'Commission & invoices', adminOrConfirmation: true },
-        { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings', adminOnly: true, hiddenForConfirmationAgent: true },
-    ], [isAdmin, isConfirmationAgent, isVendor]);
+        { path: '/billing', icon: DollarSign, label: 'Billing', description: 'Settlements & invoices', adminOnly: true, hiddenForConfirmationAgent: true, hiddenForDeliveryPerson: true },
+        { path: '/confirmation-billing', icon: DollarSign, label: 'Billing', description: 'Commission & invoices', confirmationOnly: true },
+        { path: '/blacklist', icon: Ban, label: 'Blacklist', description: 'Blocked numbers', adminOrConfirmation: true },
+        { path: '/delivery-billing', icon: DollarSign, label: 'Delivery Billing', description: 'Cash & invoices', deliveryOnly: true },
+        { path: '/settings', icon: Settings, label: 'Settings', description: 'System settings', adminOnly: true, hiddenForConfirmationAgent: true, hiddenForDeliveryPerson: true },
+    ], [isAdmin, isConfirmationAgent, isDeliveryPerson, isVendor]);
 
     const isActive = (path) => {
         if (path === '/') return location.pathname === '/';
@@ -165,7 +173,11 @@ export default function MainLayout() {
                     {menuItems.map((item) => {
                         if (item.adminOnly && !isAdmin) return null;
                         if (item.adminOrConfirmation && !(isAdmin || isConfirmationAgent)) return null;
+                        if (item.adminOrDelivery && !(isAdmin || isDeliveryPerson)) return null;
+                        if (item.confirmationOnly && !isConfirmationAgent) return null;
+                        if (item.deliveryOnly && !isDeliveryPerson) return null;
                         if (item.hiddenForConfirmationAgent && isConfirmationAgent) return null;
+                        if (item.hiddenForDeliveryPerson && isDeliveryPerson) return null;
                         
                         // Handle items with sub-items
                         if (item.hasSubItems && !sidebarCollapsed) {
@@ -364,7 +376,7 @@ export default function MainLayout() {
                                             <p className="text-sm font-semibold text-slate-700">{user?.name}</p>
                                             <p className="text-xs text-slate-500">{user?.email}</p>
                                         </div>
-                                        {!isConfirmationAgent && (
+                                        {isAdmin && (
                                             <Link to="/settings" className="flex items-center space-x-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
                                                 <Settings size={18} />
                                                 <span>Settings</span>

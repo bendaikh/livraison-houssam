@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAdminProductCost, getAdminProductSellPrice } from '../../utils/profit';
 import { 
     Plus, Search, Edit, Trash2, Package, Filter, 
     Download, Eye, AlertCircle, TrendingUp, TrendingDown,
@@ -82,22 +83,10 @@ export default function ProductList() {
         }
     };
 
-    const getCompanyCostPrice = (product) => {
-        const value = parseFloat(product.company_price ?? product.price ?? 0);
-        return Number.isFinite(value) ? value : 0;
-    };
-
-    const getSellerPrice = (product) => {
-        const value = parseFloat(product.vendor_price ?? 0);
-        return Number.isFinite(value) ? value : 0;
-    };
-
     const getSoldUnits = (product) => {
         const value = parseFloat(product.sold_units ?? 0);
         return Number.isFinite(value) ? value : 0;
     };
-
-    const getAdminUnitProfit = (product) => getSellerPrice(product) - getCompanyCostPrice(product);
 
     const stats = {
         total: products.length,
@@ -345,13 +334,13 @@ export default function ProductList() {
                                                 <div className="space-y-1">
                                                     {product.company_price && (
                                                         <div className="flex items-center space-x-2">
-                                                            <span className="text-xs text-slate-500">Company:</span>
+                                                            <span className="text-xs text-slate-500">Prix de vente:</span>
                                                             <span className="font-semibold text-emerald-600">{formatCurrency(product.company_price)}</span>
                                                         </div>
                                                     )}
                                                     {product.vendor_price && (
                                                         <div className="flex items-center space-x-2">
-                                                            <span className="text-xs text-slate-500">Seller:</span>
+                                                            <span className="text-xs text-slate-500">Prix de revient:</span>
                                                             <span className="font-semibold text-slate-700">{formatCurrency(product.vendor_price)}</span>
                                                         </div>
                                                     )}
@@ -430,8 +419,8 @@ export default function ProductList() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {products.map((product) => {
                         const stockStatus = getStockStatus(product);
-                        const sellingPrice = parseFloat(product.company_price || product.price || product.vendor_price || 0);
-                        const costPrice = parseFloat(product.cost_price || product.vendor_price || 0);
+                        const sellingPrice = getAdminProductSellPrice(product);
+                        const costPrice = getAdminProductCost(product);
                         
                         return (
                             <div key={product.id} className="bg-white rounded-2xl shadow-md hover:shadow-2xl border border-slate-200/50 overflow-hidden transition-all duration-300 group flex flex-col h-full">

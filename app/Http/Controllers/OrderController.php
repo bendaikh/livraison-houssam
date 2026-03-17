@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BlacklistEntry;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Services\OrderService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
@@ -34,15 +37,17 @@ class OrderController extends Controller
 
             if ($assignmentScope === 'available') {
                 $query->whereNull('confirmation_agent_id')
-                    ->whereNotIn('status', ['delivered', 'returned']);
+                    ->whereNotIn('status', ['delivered', 'returned', 'no_response']);
             } else {
                 $query->where('confirmation_agent_id', $user->id);
             }
+        } elseif ($user && $user->isDeliveryPerson()) {
+            $query->where('delivery_person_id', $user->id);
         }
 
         if ($request->get('callback_due') === 'today') {
             $query->whereDate('callback_date', '<=', Carbon::today())
-                ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned']);
+                ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned', 'no_response']);
         }
 
         if ($request->has('search')) {
@@ -86,6 +91,11 @@ class OrderController extends Controller
 
         $perPage = $request->get('per_page', 15);
         $orders = $query->latest()->paginate($perPage);
+        $orders->getCollection()->transform(function (Order $order) {
+            $order->setAttribute('delivery_workflow_locked', $this->isDeliveryWorkflowLocked($order));
+            return $order;
+        });
+        $this->attachBlacklistMetadata($request, $orders->getCollection());
 
         return response()->json($orders);
     }
@@ -94,6 +104,10 @@ class OrderController extends Controller
     {
         if ($request->user()?->isConfirmationAgent()) {
             abort(403, 'Confirmation agents cannot create orders.');
+        }
+
+        if ($request->user()?->isDeliveryPerson()) {
+            abort(403, 'Delivery people cannot create orders.');
         }
 
         $validated = $request->validate([
@@ -124,6 +138,7 @@ class OrderController extends Controller
         ]);
         $validated = $this->applyAuthenticatedVendor($request, $validated);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated);
+        $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated);
 
         // If client_id is not provided, create or find client by name and phone
         if (!isset($validated['client_id'])) {
@@ -158,6 +173,8 @@ class OrderController extends Controller
             );
         }
 
+        $this->attachBlacklistMetadata($request, $order);
+
         return response()->json($order, 201);
     }
 
@@ -165,7 +182,9 @@ class OrderController extends Controller
     {
         $this->authorizeOrderAccess(request(), $order);
 
-        return response()->json($order->load([
+        $order->setAttribute('delivery_workflow_locked', $this->isDeliveryWorkflowLocked($order));
+
+        $order = $order->load([
             'client',
             'vendor',
             'deliveryAgent',
@@ -174,7 +193,10 @@ class OrderController extends Controller
             'deliveryIntegration',
             'items.product',
             'history.user'
-        ]));
+        ]);
+        $this->attachBlacklistMetadata(request(), $order);
+
+        return response()->json($order);
     }
 
     public function update(Request $request, Order $order)
@@ -183,6 +205,10 @@ class OrderController extends Controller
 
         if ($request->user()?->isConfirmationAgent()) {
             abort(403, 'Confirmation agents must use the confirmation workflow endpoint.');
+        }
+
+        if ($request->user()?->isDeliveryPerson()) {
+            abort(403, 'Delivery people cannot edit orders directly.');
         }
 
         $validated = $request->validate([
@@ -196,7 +222,7 @@ class OrderController extends Controller
             'confirmation_agent_id' => 'nullable|exists:users,id',
             'callback_date' => 'nullable|date',
             'delivery_city' => 'nullable|string|max:255',
-            'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
+            'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
@@ -214,6 +240,7 @@ class OrderController extends Controller
         ]);
         $validated = $this->applyAuthenticatedVendor($request, $validated);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated, $order);
+        $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
 
         // If client_id is not provided, create or find client by name and phone
         if (!isset($validated['client_id']) && isset($validated['client_name'])) {
@@ -279,6 +306,8 @@ class OrderController extends Controller
             );
         }
 
+        $this->attachBlacklistMetadata($request, $order);
+
         return response()->json($order);
     }
 
@@ -287,13 +316,25 @@ class OrderController extends Controller
         $this->authorizeOrderAccess($request, $order);
 
         $validated = $request->validate([
-            'status' => 'required|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
+            'status' => 'required|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'note' => 'nullable|string',
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
+            'delivery_person_id' => 'nullable|exists:users,id',
             'delivery_city' => 'nullable|string', // The city selected from the delivery company's list
         ]);
 
+        if ($request->user()?->isDeliveryPerson()) {
+            abort(403, 'Delivery people must use the delivery workflow endpoint.');
+        }
+
         $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $validated['status']);
+
+        $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
+
+        $assignmentPayload = $this->extractAssignmentPayload($request, $validated);
+        if (!empty($assignmentPayload)) {
+            $order = $this->orderService->assignDeliveryAgent($order->id, $assignmentPayload);
+        }
 
         $deliveryIntegrationId = $validated['delivery_integration_id'] ?? $order->delivery_integration_id;
         $deliveryCity = $validated['delivery_city'] ?? $order->delivery_city ?? $order->city;
@@ -312,6 +353,7 @@ class OrderController extends Controller
         if (isset($order->delivery_error)) {
             $response['delivery_error'] = $order->delivery_error;
         }
+        $response = $this->attachBlacklistMetadataToArray($request, $response, $order);
 
         return response()->json($response);
     }
@@ -319,6 +361,10 @@ class OrderController extends Controller
     public function assignDeliveryAgent(Request $request, Order $order)
     {
         $this->authorizeOrderAccess($request, $order);
+
+        if ($request->user()?->isDeliveryPerson()) {
+            abort(403, 'Delivery people cannot assign orders.');
+        }
 
         $validated = $request->validate([
             'delivery_agent_id' => 'nullable|exists:users,id',
@@ -346,8 +392,10 @@ class OrderController extends Controller
         }
 
         $order = $this->orderService->assignDeliveryAgent($order->id, $payload);
+        $order->load(['deliveryAgent', 'deliveryPerson', 'deliveryIntegration']);
+        $this->attachBlacklistMetadata($request, $order);
 
-        return response()->json($order->load(['deliveryAgent', 'deliveryPerson', 'deliveryIntegration']));
+        return response()->json($order);
     }
 
     public function destroy(Order $order)
@@ -356,6 +404,10 @@ class OrderController extends Controller
 
         if (request()->user()?->isConfirmationAgent()) {
             abort(403, 'Confirmation agents cannot delete orders.');
+        }
+
+        if (request()->user()?->isDeliveryPerson()) {
+            abort(403, 'Delivery people cannot delete orders.');
         }
 
         $order->delete();
@@ -483,11 +535,13 @@ class OrderController extends Controller
 
             // Reload order to get fresh data
             $order->refresh();
+            $order->load(['client', 'deliveryIntegration', 'history']);
+            $this->attachBlacklistMetadata(request(), $order);
 
             return response()->json([
                 'message' => 'Order status synced successfully',
                 'result' => $result,
-                'order' => $order->load(['client', 'deliveryIntegration', 'history']),
+                'order' => $order,
             ]);
 
         } catch (\Exception $e) {
@@ -524,6 +578,7 @@ class OrderController extends Controller
             'delivered' => 'delivered',
             'cancelled' => 'cancelled',
             'returned' => 'returned',
+            'no_response' => 'no_response',
             'failed' => 'cancelled',
             'refused' => 'refused',
             
@@ -548,8 +603,8 @@ class OrderController extends Controller
             'annule' => 'cancelled',
             'demande de retour' => 'return_requested',
             'demande_de_retour' => 'return_requested',
-            'injoignable' => 'cancelled',
-            'injoignable client' => 'cancelled',
+            'injoignable' => 'no_response',
+            'injoignable client' => 'no_response',
             'hors zone' => 'cancelled',
             'adresse incomplète' => 'cancelled',
             'adresse incomplete' => 'cancelled',
@@ -674,6 +729,7 @@ class OrderController extends Controller
         $this->authorizeOrderAccess($request, $order, true);
 
         $order = $this->orderService->assignConfirmationAgentToSelf($order->id, $request->user());
+        $this->attachBlacklistMetadata($request, $order);
 
         return response()->json($order);
     }
@@ -687,8 +743,13 @@ class OrderController extends Controller
         $this->authorizeOrderAccess($request, $order);
 
         $validated = $request->validate([
-            'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,return_requested',
+            'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'callback_date' => 'nullable|date',
+            'shipping_address' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'delivery_person_id' => 'nullable|exists:users,id',
+            'delivery_integration_id' => 'nullable|exists:api_integrations,id',
+            'delivery_city' => 'nullable|string|max:255',
             'upsell_items' => 'nullable|array',
             'upsell_items.*.product_id' => 'required|exists:products,id',
             'upsell_items.*.quantity' => 'required|integer|min:1',
@@ -696,8 +757,10 @@ class OrderController extends Controller
         ]);
 
         $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $validated['status'] ?? null);
+        $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
 
         $order = $this->orderService->updateConfirmationWorkflow($order->id, $request->user(), $validated);
+        $this->attachBlacklistMetadata($request, $order);
 
         return response()->json($order);
     }
@@ -728,6 +791,50 @@ class OrderController extends Controller
             (bool) ($validated['reset_to_pending'] ?? false),
             $validated['note'] ?? null
         );
+        $this->attachBlacklistMetadata($request, $order);
+
+        return response()->json($order);
+    }
+
+    public function updateDeliveryWorkflow(Request $request, Order $order)
+    {
+        if (!$request->user()?->isDeliveryPerson()) {
+            abort(403, 'Only delivery people can use this workflow.');
+        }
+
+        $this->authorizeOrderAccess($request, $order);
+        $this->ensureDeliveryWorkflowUnlocked($order);
+
+        $validated = $request->validate([
+            'status' => 'nullable|in:delivered,refused,cancelled,no_response,returned',
+            'delivery_status_note' => 'nullable|string',
+            'callback_date' => 'nullable|date|after:today',
+            'collected_amount' => 'nullable|numeric|min:0',
+        ]);
+
+        if (empty($validated['status']) && empty($validated['callback_date'])) {
+            throw ValidationException::withMessages([
+                'status' => ['Provide a status or a callback date.'],
+            ]);
+        }
+
+        if (!empty($validated['status']) && in_array($validated['status'], ['refused', 'cancelled', 'no_response', 'returned'], true)) {
+            if (empty(trim((string) ($validated['delivery_status_note'] ?? '')))) {
+                throw ValidationException::withMessages([
+                    'delivery_status_note' => ['A reason is required for this status.'],
+                ]);
+            }
+        }
+
+        if (($validated['status'] ?? null) === 'delivered' && !array_key_exists('collected_amount', $validated)) {
+            throw ValidationException::withMessages([
+                'collected_amount' => ['Collected amount is required for delivered orders.'],
+            ]);
+        }
+
+        $order = $this->orderService->updateDeliveryWorkflow($order->id, $request->user(), $validated);
+        $order->setAttribute('delivery_workflow_locked', $this->isDeliveryWorkflowLocked($order));
+        $this->attachBlacklistMetadata($request, $order);
 
         return response()->json($order);
     }
@@ -805,6 +912,10 @@ class OrderController extends Controller
             return;
         }
 
+        if ($user->isManager()) {
+            return;
+        }
+
         if ($user->isVendor()) {
             $vendor = $this->getAuthenticatedVendor($request);
 
@@ -832,6 +943,16 @@ class OrderController extends Controller
 
             abort(403, 'You are not allowed to access this order.');
         }
+
+        if ($user->isDeliveryPerson()) {
+            if ((int) $order->delivery_person_id === (int) $user->id) {
+                return;
+            }
+
+            abort(403, 'You are not allowed to access this order.');
+        }
+
+        abort(403, 'You are not allowed to access this order.');
     }
 
     private function ensureConfirmationAgentCanManuallyUpdateStatus(Request $request, Order $order, ?string $requestedStatus = null): void
@@ -857,35 +978,19 @@ class OrderController extends Controller
             return true;
         }
 
-        if (!$order->delivery_person_id) {
+        $isInitialConfirmation = $order->status === 'pending'
+            && $requestedStatus === 'confirmed'
+            && empty($order->confirmed_at);
+
+        if ($isInitialConfirmation) {
             return false;
         }
 
-        $deliveryManagedStatuses = [
-            'picked_up',
-            'ready_for_shipping',
-            'shipped',
-            'out_for_delivery',
-            'delivered',
-            'cancelled',
-            'refused',
-            'returned',
-            'return_requested',
-        ];
+        if ($order->delivery_person_id) {
+            return true;
+        }
 
-        $deliveryStarted = in_array($order->status, $deliveryManagedStatuses, true)
-            || in_array($requestedStatus, $deliveryManagedStatuses, true)
-            || !empty($order->picked_up_at)
-            || !empty($order->ready_for_shipping_at)
-            || !empty($order->sent_to_delivery_at)
-            || !empty($order->out_for_delivery_at)
-            || !empty($order->shipped_at)
-            || !empty($order->delivered_at)
-            || !empty($order->cancelled_at)
-            || !empty($order->refused_at)
-            || !empty($order->returned_at);
-
-        return $deliveryStarted;
+        return !empty($order->confirmed_at) || $order->status === 'confirmed';
     }
 
     private function getConfirmationAgentStatusLockMessage(Order $order): string
@@ -894,7 +999,32 @@ class OrderController extends Controller
             return 'Status is read-only for confirmation agents after the order is handed to a delivery company.';
         }
 
-        return 'Status is read-only for confirmation agents after delivery handling has started.';
+        if ($order->delivery_person_id) {
+            return 'Status is read-only for confirmation agents once a delivery person is assigned.';
+        }
+
+        return 'Status is read-only for confirmation agents once the order has been confirmed.';
+    }
+
+    private function ensureDeliveryWorkflowUnlocked(Order $order): void
+    {
+        if ($this->isDeliveryWorkflowLocked($order)) {
+            abort(403, 'This order is locked because its delivery invoice has been marked as paid.');
+        }
+    }
+
+    private function isDeliveryWorkflowLocked(Order $order): bool
+    {
+        if (
+            !Schema::hasTable('delivery_person_billings')
+            || !Schema::hasTable('delivery_person_billing_order')
+        ) {
+            return false;
+        }
+
+        return $order->deliveryPersonBillings()
+            ->whereNotNull('delivery_person_billings.paid_at')
+            ->exists();
     }
 
     private function authorizeAdmin(Request $request): void
@@ -902,6 +1032,125 @@ class OrderController extends Controller
         if (!$request->user()?->isAdmin()) {
             abort(403, 'Only administrators can perform this action.');
         }
+    }
+
+    private function ensureDeliveryAssignmentExistsForConfirmedStatus(array $validated, ?Order $order = null): void
+    {
+        if (($validated['status'] ?? null) !== 'confirmed') {
+            return;
+        }
+
+        $hasDeliveryPerson = array_key_exists('delivery_person_id', $validated)
+            ? !empty($validated['delivery_person_id'])
+            : !empty($order?->delivery_person_id);
+        $hasDeliveryIntegration = array_key_exists('delivery_integration_id', $validated)
+            ? !empty($validated['delivery_integration_id'])
+            : !empty($order?->delivery_integration_id);
+        $deliveryCity = array_key_exists('delivery_city', $validated)
+            ? ($validated['delivery_city'] ?? null)
+            : ($order?->delivery_city ?? $order?->city);
+
+        if (!$hasDeliveryPerson && !$hasDeliveryIntegration) {
+            throw ValidationException::withMessages([
+                'delivery_assignment' => ['Choose a delivery person or a delivery company before confirming the order.'],
+            ]);
+        }
+
+        if ($hasDeliveryIntegration && empty($deliveryCity)) {
+            throw ValidationException::withMessages([
+                'delivery_city' => ['Select a delivery city before confirming the order.'],
+            ]);
+        }
+    }
+
+    private function extractAssignmentPayload(Request $request, array $validated): array
+    {
+        $payload = [];
+
+        if ($request->exists('delivery_agent_id')) {
+            $payload['delivery_agent_id'] = $validated['delivery_agent_id'] ?? null;
+        }
+
+        if ($request->exists('delivery_person_id')) {
+            $payload['delivery_person_id'] = $validated['delivery_person_id'] ?? null;
+        }
+
+        if ($request->exists('delivery_integration_id')) {
+            $payload['delivery_integration_id'] = $validated['delivery_integration_id'] ?? null;
+        }
+
+        if ($request->exists('delivery_city')) {
+            $payload['delivery_city'] = $validated['delivery_city'] ?? null;
+        }
+
+        return $payload;
+    }
+
+    private function attachBlacklistMetadata(Request $request, Order|Collection $orders): void
+    {
+        $collection = $orders instanceof Order ? collect([$orders]) : $orders;
+
+        if (!Schema::hasTable('blacklist_entries')) {
+            $collection->each(function (Order $order) {
+                $order->setAttribute('is_blacklisted', false);
+                $order->setAttribute('blacklist_badge', null);
+                $order->setAttribute('blacklist_entry', null);
+            });
+
+            return;
+        }
+
+        $normalizedPhones = $collection
+            ->flatMap(function (Order $order) {
+                return [
+                    BlacklistEntry::normalizePhone($order->phone),
+                    BlacklistEntry::normalizePhone($order->client?->phone),
+                ];
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($normalizedPhones->isEmpty()) {
+            $collection->each(function (Order $order) {
+                $order->setAttribute('is_blacklisted', false);
+                $order->setAttribute('blacklist_badge', null);
+                $order->setAttribute('blacklist_entry', null);
+            });
+
+            return;
+        }
+
+        $canSeeDetails = $request->user()?->isAdmin() || $request->user()?->isConfirmationAgent();
+        $entriesByPhone = BlacklistEntry::whereIn('normalized_phone', $normalizedPhones->all())
+            ->get()
+            ->keyBy('normalized_phone');
+
+        $collection->each(function (Order $order) use ($entriesByPhone, $canSeeDetails) {
+            $entry = $entriesByPhone->get(BlacklistEntry::normalizePhone($order->phone))
+                ?? $entriesByPhone->get(BlacklistEntry::normalizePhone($order->client?->phone));
+
+            $order->setAttribute('is_blacklisted', (bool) $entry);
+            $order->setAttribute('blacklist_badge', $entry ? 'Banned / Blacklisted' : null);
+            $order->setAttribute('blacklist_entry', $entry && $canSeeDetails ? [
+                'id' => $entry->id,
+                'phone_number' => $entry->phone_number,
+                'reason' => $entry->reason,
+                'cancellation_timing' => $entry->cancellation_timing,
+                'created_at' => $entry->created_at,
+            ] : null);
+        });
+    }
+
+    private function attachBlacklistMetadataToArray(Request $request, array $payload, Order $order): array
+    {
+        $this->attachBlacklistMetadata($request, $order);
+
+        $payload['is_blacklisted'] = (bool) $order->getAttribute('is_blacklisted');
+        $payload['blacklist_badge'] = $order->getAttribute('blacklist_badge');
+        $payload['blacklist_entry'] = $order->getAttribute('blacklist_entry');
+
+        return $payload;
     }
 
     private function resolveShippingIncludedInPrice(Request $request, array $validated, ?Order $order = null): bool

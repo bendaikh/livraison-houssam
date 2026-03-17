@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { isAdminRole } from '../../utils/roles';
+import { isAdminRole, isDeliveryPersonRole } from '../../utils/roles';
 import { 
     Package, User, MapPin, Phone, Calendar, DollarSign, 
     Truck, UserCheck, ArrowLeft, Edit, Printer, CheckCircle,
@@ -21,6 +21,7 @@ export default function OrderDetail() {
     const [resettingAssignment, setResettingAssignment] = useState(false);
     const printRef = useRef(null);
     const isAdminUser = isAdminRole(user?.role?.slug);
+    const isDeliveryPersonUser = isDeliveryPersonRole(user?.role?.slug);
 
     useEffect(() => {
         fetchOrder();
@@ -90,6 +91,7 @@ export default function OrderDetail() {
             out_for_delivery: 'bg-violet-100 text-violet-800 border-violet-200',
             delivered: 'bg-green-100 text-green-800 border-green-200',
             cancelled: 'bg-red-100 text-red-800 border-red-200',
+            no_response: 'bg-amber-100 text-amber-800 border-amber-200',
             refused: 'bg-orange-100 text-orange-800 border-orange-200',
             returned: 'bg-pink-100 text-pink-800 border-pink-200',
             return_requested: 'bg-rose-100 text-rose-800 border-rose-200'
@@ -107,6 +109,7 @@ export default function OrderDetail() {
             out_for_delivery: Truck,
             delivered: CheckCircle,
             cancelled: XCircle,
+            no_response: AlertCircle,
             refused: XCircle,
             returned: XCircle,
             return_requested: AlertCircle
@@ -471,16 +474,23 @@ export default function OrderDetail() {
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Order Details</h1>
                         <p className="text-gray-500 mt-1">Order #{order.order_number}</p>
+                        {order.is_blacklisted && (
+                            <span className="mt-2 inline-flex items-center rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white">
+                                {order.blacklist_badge || 'Banned / Blacklisted'}
+                            </span>
+                        )}
                     </div>
                 </div>
                 <div className="flex items-center space-x-3">
-                    <Link
-                        to={`/orders/${order.id}/edit`}
-                        className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        <Edit size={18} />
-                        <span>Edit Order</span>
-                    </Link>
+                    {!isDeliveryPersonUser && (
+                        <Link
+                            to={`/orders/${order.id}/edit`}
+                            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            <Edit size={18} />
+                            <span>Edit Order</span>
+                        </Link>
+                    )}
                     <button
                         onClick={handlePrint}
                         className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
@@ -502,7 +512,7 @@ export default function OrderDetail() {
             </div>
 
             {/* Status Banner */}
-            <div className={`flex items-center justify-between p-6 rounded-xl border-2 ${getStatusColor(order.status)}`}>
+            <div className={`flex items-center justify-between p-6 rounded-xl border-2 ${order.is_blacklisted ? 'border-rose-300 bg-rose-50 text-rose-900' : getStatusColor(order.status)}`}>
                 <div className="flex items-center space-x-3">
                     {getStatusIcon(order.status)}
                     <div>
@@ -587,10 +597,18 @@ export default function OrderDetail() {
                     </div>
 
                     {/* Notes */}
-                    {order.notes && (
+                    {(order.notes || order.delivery_status_note) && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <h2 className="text-lg font-semibold text-gray-900 mb-3">Order Notes</h2>
-                            <p className="text-gray-600 whitespace-pre-wrap">{order.notes}</p>
+                            {order.notes && (
+                                <p className="text-gray-600 whitespace-pre-wrap">{order.notes}</p>
+                            )}
+                            {order.delivery_status_note && (
+                                <div className={order.notes ? 'mt-4 pt-4 border-t border-gray-100' : ''}>
+                                    <p className="text-sm text-gray-500">Delivery motif</p>
+                                    <p className="text-rose-700 whitespace-pre-wrap">{order.delivery_status_note}</p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -619,6 +637,15 @@ export default function OrderDetail() {
                                 <div>
                                     <p className="text-sm text-gray-500">Email</p>
                                     <p className="font-medium text-gray-900">{order.client.email}</p>
+                                </div>
+                            )}
+                            {order.blacklist_entry?.reason && (
+                                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                                    <p className="text-sm font-medium text-rose-700">Blacklist reason</p>
+                                    <p className="mt-1 text-sm text-rose-900">{order.blacklist_entry.reason}</p>
+                                    <p className="mt-1 text-xs uppercase tracking-wide text-rose-600">
+                                        {String(order.blacklist_entry.cancellation_timing || '').replace(/_/g, ' ')}
+                                    </p>
                                 </div>
                             )}
                             {order.whatsapp && (
@@ -712,6 +739,36 @@ export default function OrderDetail() {
                             {order.source || 'Manual'}
                         </span>
                     </div>
+
+                    {(order.collected_amount || order.delivery_person_commission || order.amount_due_to_admin) && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                <DollarSign className="mr-2" size={20} />
+                                Delivery Finance
+                            </h2>
+                            <div className="space-y-3">
+                                <div>
+                                    <p className="text-sm text-gray-500">Collected amount</p>
+                                    <p className="font-semibold text-gray-900">{formatCurrency(order.collected_amount || 0)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Delivery person commission</p>
+                                    <p className="font-semibold text-emerald-700">{formatCurrency(order.delivery_person_commission || 0)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Amount due to admin</p>
+                                    <p className="font-semibold text-amber-700">{formatCurrency(order.amount_due_to_admin || 0)}</p>
+                                </div>
+                                {order.delivery_workflow_locked && (
+                                    <div className="pt-2 border-t border-gray-100">
+                                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                                            Locked by paid invoice
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Delivery Tracking */}
                     {order.delivery_tracking_code && (

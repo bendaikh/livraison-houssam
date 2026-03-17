@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { isAdminRole } from './utils/roles';
 
 // Layout
 import MainLayout from './layouts/MainLayout';
@@ -54,6 +55,7 @@ import GoogleSheetIntegrationPage from './pages/ApiIntegrations/GoogleSheetInteg
 
 // Marketplace
 import MarketplaceProducts from './pages/Marketplace/MarketplaceProducts';
+import BlacklistPage from './pages/Blacklist/BlacklistPage';
 
 // Users
 import UserList from './pages/Users/UserList';
@@ -64,7 +66,9 @@ import RoleForm from './pages/Roles/RoleForm';
 
 // Settings
 import Settings from './pages/Settings/Settings';
+import AdminBillingDashboard from './pages/Billing/AdminBillingDashboard';
 import ConfirmationAgentBilling from './pages/Billing/ConfirmationAgentBilling';
+import DeliveryPersonBilling from './pages/Billing/DeliveryPersonBilling';
 
 function ProtectedRoute({ children }) {
     const { user, loading } = useAuth();
@@ -74,6 +78,28 @@ function ProtectedRoute({ children }) {
     }
 
     return user ? children : <Navigate to="/login" />;
+}
+
+function AdminRoute({ children }) {
+    const { user, loading } = useAuth();
+
+    if (loading) {
+        return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    }
+
+    if (isAdminRole(user?.role?.slug)) {
+        return children;
+    }
+
+    return (
+        <div className="flex min-h-[60vh] items-center justify-center px-6">
+            <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white p-8 text-center shadow-sm">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-red-500">403</p>
+                <h1 className="mt-3 text-2xl font-bold text-slate-900">Unauthorized</h1>
+                <p className="mt-2 text-sm text-slate-600">Only admin users can access this page.</p>
+            </div>
+        </div>
+    );
 }
 
 function App() {
@@ -134,6 +160,7 @@ function App() {
                         
                         {/* Marketplace */}
                         <Route path="marketplace" element={<MarketplaceProducts />} />
+                        <Route path="blacklist" element={<BlacklistPage />} />
                         
                         {/* Users & Roles */}
                         <Route path="users" element={<UserList />} />
@@ -142,8 +169,10 @@ function App() {
                         <Route path="roles/:id/edit" element={<RoleForm />} />
                         
                         {/* Settings */}
-                        <Route path="settings" element={<Settings />} />
+                        <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
+                        <Route path="billing" element={<AdminBillingDashboard />} />
                         <Route path="confirmation-billing" element={<ConfirmationAgentBilling />} />
+                        <Route path="delivery-billing" element={<DeliveryPersonBilling />} />
                     </Route>
                 </Routes>
             </SettingsProvider>

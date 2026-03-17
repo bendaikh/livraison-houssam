@@ -3,14 +3,19 @@
 namespace App\Services;
 
 use App\Models\ConfirmationAgentBilling;
+use App\Models\DeliveryPersonBilling;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Expense;
 use App\Models\Client;
+use App\Models\SellerBilling;
+use App\Models\Setting;
 use App\Models\Vendor;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
@@ -27,15 +32,19 @@ class DashboardService
         // If no orders in range, expand to show all orders
         if ($ordersInRange->count() === 0) {
             $dateRange = [
-                'start' => Order::min('created_at') ?: Carbon::now()->subYear(),
+                'start' => $vendorId
+                    ? (Order::where('vendor_id', $vendorId)->min('created_at') ?: Carbon::now()->subYear())
+                    : (Order::min('created_at') ?: Carbon::now()->subYear()),
                 'end' => Carbon::now(),
             ];
         }
 
         return [
+            'seller_overview' => $vendorId ? $this->getSellerOverviewStats($vendorId) : null,
             'sales' => $this->getSalesStats($dateRange, $vendorId),
             'orders' => $this->getOrdersStats($dateRange, $vendorId),
             'revenue' => $this->getRevenueStats($dateRange, $vendorId),
+            'seller_billing' => $vendorId ? $this->getSellerBillingStats($vendorId) : null,
             'expenses' => $vendorId ? 0 : $this->getExpensesStats($dateRange), // Vendors don't see expenses
             'low_stock_products' => $vendorId ? [] : $this->getLowStockProducts(), // Vendors don't see stock
             'recent_orders' => $this->getRecentOrders($vendorId),
@@ -94,7 +103,7 @@ class DashboardService
             'revenue' => [
                 'revenue' => (clone $baseQuery)->where('status', 'delivered')->sum('total'),
                 'expenses' => 0,
-                'profit' => (clone $baseQuery)->where('status', 'delivered')->sum('total'),
+                'profit' => (clone $baseQuery)->where('status', 'delivered')->count() * $commissionPerOrder,
             ],
             'expenses' => 0,
             'low_stock_products' => [],
@@ -140,13 +149,13 @@ class DashboardService
                 'todo_today' => Order::with(['client', 'items.product'])
                     ->where('confirmation_agent_id', $user->id)
                     ->whereDate('callback_date', '<=', Carbon::today())
-                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned'])
+                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned', 'no_response'])
                     ->orderBy('callback_date')
                     ->limit(10)
                     ->get(),
                 'callbacks_upcoming' => Order::where('confirmation_agent_id', $user->id)
                     ->whereDate('callback_date', '>', Carbon::today())
-                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned'])
+                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned', 'no_response'])
                     ->count(),
                 'commission' => [
                     'per_order' => $commissionPerOrder,
@@ -158,6 +167,193 @@ class DashboardService
                 ],
                 'latest_invoice' => ConfirmationAgentBilling::with('paidBy')
                     ->where('user_id', $user->id)
+                    ->latest('period_start')
+                    ->first(),
+            ],
+        ];
+    }
+
+    public function getSellerOverviewStats(int $vendorId): array
+    {
+        $baseQuery = Order::where('vendor_id', $vendorId);
+        $profitOrders = Order::where('vendor_id', $vendorId)->with(['items.product'])->get();
+
+        return [
+            'orders' => [
+                'total' => (clone $baseQuery)->count(),
+                'pending' => (clone $baseQuery)->where('status', 'pending')->count(),
+                'confirmed' => (clone $baseQuery)->where('status', 'confirmed')->count(),
+                'shipped' => (clone $baseQuery)->where('status', 'shipped')->count(),
+                'delivered' => (clone $baseQuery)->where('status', 'delivered')->count(),
+                'cancelled' => (clone $baseQuery)->where('status', 'cancelled')->count(),
+                'refused' => (clone $baseQuery)->where('status', 'refused')->count(),
+                'returned' => (clone $baseQuery)->where('status', 'returned')->count(),
+            ],
+            'total_revenue' => (float) (clone $baseQuery)->sum('total'),
+            'total_profit' => (float) $profitOrders->sum(fn (Order $order) => $this->calculateSellerOrderProfit($order)),
+        ];
+    }
+
+    public function getDeliveryPersonStatistics(string $period, User $user): array
+    {
+        if (
+            !Schema::hasColumn('orders', 'collected_amount')
+            || !Schema::hasColumn('orders', 'delivery_person_commission')
+            || !Schema::hasColumn('orders', 'amount_due_to_admin')
+            || !Schema::hasTable('delivery_person_billings')
+        ) {
+            return [
+                'sales' => 0,
+                'orders' => [
+                    'total' => 0,
+                    'active_assigned' => 0,
+                    'delivered' => 0,
+                    'no_response' => 0,
+                    'refused_cancelled' => 0,
+                    'returned' => 0,
+                    'by_source' => [],
+                ],
+                'revenue' => ['revenue' => 0, 'expenses' => 0, 'profit' => 0],
+                'expenses' => 0,
+                'low_stock_products' => [],
+                'recent_orders' => [],
+                'charts' => [],
+                'clients' => ['total' => 0, 'new' => 0, 'active' => 0],
+                'vendors' => [],
+                'products' => ['total' => 0, 'active' => 0],
+                'top_products' => [],
+                'top_clients' => [],
+                'top_vendors' => [],
+                'delivery_person' => [
+                    'today' => ['delivered' => 0, 'collected' => 0, 'due_to_admin' => 0, 'earnings' => 0],
+                    'todo_today' => [],
+                    'callbacks_upcoming' => 0,
+                    'finance' => [
+                        'unpaid_collected' => 0,
+                        'unpaid_due_to_admin' => 0,
+                        'unpaid_earnings' => 0,
+                        'all_time_collected' => 0,
+                        'all_time_due_to_admin' => 0,
+                        'all_time_earnings' => 0,
+                    ],
+                    'latest_invoice' => null,
+                ],
+            ];
+        }
+
+        $dateRange = $this->getDateRange($period);
+        $baseQuery = Order::where('delivery_person_id', $user->id)
+            ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        $todayStart = Carbon::today();
+        $todayEnd = Carbon::today()->endOfDay();
+        $activeStatuses = ['confirmed', 'picked_up', 'ready_for_shipping', 'shipped', 'out_for_delivery'];
+
+        $currentMonthStart = Carbon::now()->startOfMonth();
+        $currentMonthEnd = Carbon::now()->endOfMonth();
+        $unpaidDeliveredQuery = Order::where('delivery_person_id', $user->id)
+            ->where('status', 'delivered')
+            ->whereBetween('delivered_at', [$currentMonthStart, $currentMonthEnd])
+            ->whereDoesntHave('deliveryPersonBillings', function ($query) {
+                $query->whereNotNull('delivery_person_billings.paid_at');
+            });
+
+        return [
+            'sales' => (clone $baseQuery)->where('status', 'delivered')->sum('collected_amount'),
+            'orders' => [
+                'total' => (clone $baseQuery)->count(),
+                'active_assigned' => Order::where('delivery_person_id', $user->id)
+                    ->whereIn('status', $activeStatuses)
+                    ->count(),
+                'delivered' => (clone $baseQuery)->where('status', 'delivered')->count(),
+                'no_response' => (clone $baseQuery)->where('status', 'no_response')->count(),
+                'refused_cancelled' => (clone $baseQuery)->whereIn('status', ['refused', 'cancelled'])->count(),
+                'returned' => (clone $baseQuery)->where('status', 'returned')->count(),
+                'by_source' => (clone $baseQuery)
+                    ->select('source', DB::raw('count(*) as count'))
+                    ->groupBy('source')
+                    ->get(),
+            ],
+            'revenue' => [
+                'revenue' => (clone $baseQuery)->where('status', 'delivered')->sum('collected_amount'),
+                'expenses' => 0,
+                'profit' => (clone $baseQuery)->where('status', 'delivered')->sum('delivery_person_commission'),
+            ],
+            'expenses' => 0,
+            'low_stock_products' => [],
+            'recent_orders' => Order::with(['client', 'items.product'])
+                ->where('delivery_person_id', $user->id)
+                ->latest()
+                ->limit(10)
+                ->get(),
+            'charts' => $this->getDeliveryPersonChartData($period, $user->id),
+            'clients' => [
+                'total' => Client::whereHas('orders', function ($query) use ($user) {
+                    $query->where('delivery_person_id', $user->id);
+                })->count(),
+                'new' => Client::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+                    ->whereHas('orders', function ($query) use ($user) {
+                        $query->where('delivery_person_id', $user->id);
+                    })
+                    ->count(),
+                'active' => Client::whereHas('orders', function ($query) use ($user, $dateRange) {
+                    $query->where('delivery_person_id', $user->id)
+                        ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+                })->count(),
+            ],
+            'vendors' => [],
+            'products' => [
+                'total' => Product::where('is_active', true)->count(),
+                'active' => Product::where('is_active', true)->count(),
+            ],
+            'top_products' => $this->getTopProductsForDeliveryPerson($dateRange, $user->id),
+            'top_clients' => $this->getTopClientsForDeliveryPerson($dateRange, $user->id),
+            'top_vendors' => [],
+            'delivery_person' => [
+                'today' => [
+                    'delivered' => Order::where('delivery_person_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->whereBetween('delivered_at', [$todayStart, $todayEnd])
+                        ->count(),
+                    'collected' => Order::where('delivery_person_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->whereBetween('delivered_at', [$todayStart, $todayEnd])
+                        ->sum('collected_amount'),
+                    'due_to_admin' => Order::where('delivery_person_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->whereBetween('delivered_at', [$todayStart, $todayEnd])
+                        ->sum('amount_due_to_admin'),
+                    'earnings' => Order::where('delivery_person_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->whereBetween('delivered_at', [$todayStart, $todayEnd])
+                        ->sum('delivery_person_commission'),
+                ],
+                'todo_today' => Order::with(['client', 'items.product'])
+                    ->where('delivery_person_id', $user->id)
+                    ->whereDate('callback_date', '<=', Carbon::today())
+                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned', 'no_response'])
+                    ->orderBy('callback_date')
+                    ->limit(10)
+                    ->get(),
+                'callbacks_upcoming' => Order::where('delivery_person_id', $user->id)
+                    ->whereDate('callback_date', '>', Carbon::today())
+                    ->whereNotIn('status', ['delivered', 'cancelled', 'refused', 'returned', 'no_response'])
+                    ->count(),
+                'finance' => [
+                    'unpaid_collected' => (clone $unpaidDeliveredQuery)->sum('collected_amount'),
+                    'unpaid_due_to_admin' => (clone $unpaidDeliveredQuery)->sum('amount_due_to_admin'),
+                    'unpaid_earnings' => (clone $unpaidDeliveredQuery)->sum('delivery_person_commission'),
+                    'all_time_collected' => Order::where('delivery_person_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->sum('collected_amount'),
+                    'all_time_due_to_admin' => Order::where('delivery_person_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->sum('amount_due_to_admin'),
+                    'all_time_earnings' => Order::where('delivery_person_id', $user->id)
+                        ->where('status', 'delivered')
+                        ->sum('delivery_person_commission'),
+                ],
+                'latest_invoice' => DeliveryPersonBilling::with('paidBy')
+                    ->where('delivery_person_id', $user->id)
                     ->latest('period_start')
                     ->first(),
             ],
@@ -235,21 +431,122 @@ class DashboardService
     {
         $revenueQuery = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
             ->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+        $profitQuery = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+            ->where('status', 'delivered');
         
         if ($vendorId) {
             $revenueQuery->where('vendor_id', $vendorId);
+            $profitQuery->where('vendor_id', $vendorId);
         }
         
         $revenue = $revenueQuery->sum('total');
-
         $expenses = $vendorId ? 0 : Expense::whereBetween('expense_date', [$dateRange['start'], $dateRange['end']])
             ->sum('amount');
+        $profit = $this->calculateOrderProfitTotal($profitQuery) - $expenses;
 
         return [
             'revenue' => $revenue,
             'expenses' => $expenses,
-            'profit' => $revenue - $expenses,
+            'profit' => $profit,
         ];
+    }
+
+    public function getSellerBillingStats(int $vendorId): array
+    {
+        $vendor = Vendor::find($vendorId);
+
+        if (!$vendor) {
+            return [
+                'billing_frequency' => 'weekly',
+                'billing_frequency_label' => 'Weekly',
+                'commission_rate' => 0,
+                'unpaid_orders_count' => 0,
+                'gross_sales' => 0,
+                'commission_amount' => 0,
+                'estimated_payout' => 0,
+                'open_invoices' => 0,
+                'latest_invoice' => null,
+            ];
+        }
+
+        $unpaidDeliveredOrders = Order::where('vendor_id', $vendorId)
+            ->where('status', 'delivered');
+
+        if ($this->sellerBillingTablesExist()) {
+            $unpaidDeliveredOrders->whereDoesntHave('sellerBillings', function ($query) {
+                $query->whereNotNull('seller_billings.paid_at');
+            });
+        }
+
+        $grossSales = (float) (clone $unpaidDeliveredOrders)->sum('total');
+        $commissionAmount = (float) (clone $unpaidDeliveredOrders)->sum('commission_amount');
+        $openInvoices = 0;
+        $latestInvoice = null;
+
+        if ($this->sellerBillingTablesExist()) {
+            $openInvoices = SellerBilling::where('vendor_id', $vendorId)
+                ->whereNull('paid_at')
+                ->where('delivered_orders_count', '>', 0)
+                ->count();
+
+            $latestBilling = SellerBilling::with('paidBy')
+                ->where('vendor_id', $vendorId)
+                ->where('delivered_orders_count', '>', 0)
+                ->latest('period_start')
+                ->first();
+
+            if ($latestBilling) {
+                $latestInvoice = [
+                    'period_start' => $latestBilling->period_start?->toDateString(),
+                    'period_end' => $latestBilling->period_end?->toDateString(),
+                    'orders_count' => (int) $latestBilling->delivered_orders_count,
+                    'gross_amount' => (float) $latestBilling->gross_sales,
+                    'fee_amount' => (float) $latestBilling->commission_amount,
+                    'settlement_amount' => (float) $latestBilling->net_amount,
+                    'status' => $latestBilling->paid_at ? 'paid' : 'unpaid',
+                    'generated_at' => $latestBilling->generated_at?->toIso8601String(),
+                    'paid_at' => $latestBilling->paid_at?->toIso8601String(),
+                    'paid_by_name' => $latestBilling->paidBy?->name,
+                ];
+            }
+        }
+
+        return [
+            'billing_frequency' => $vendor->billing_frequency ?: 'weekly',
+            'billing_frequency_label' => ($vendor->billing_frequency ?: 'weekly') === 'twice_weekly' ? 'Twice weekly' : 'Weekly',
+            'commission_rate' => (float) ($vendor->commission_rate ?? 0),
+            'unpaid_orders_count' => (clone $unpaidDeliveredOrders)->count(),
+            'gross_sales' => $grossSales,
+            'commission_amount' => $commissionAmount,
+            'estimated_payout' => $grossSales - $commissionAmount,
+            'open_invoices' => $openInvoices,
+            'latest_invoice' => $latestInvoice,
+        ];
+    }
+
+    private function calculateOrderProfitTotal(Builder $query): float
+    {
+        $fulfillmentCost = (float) Setting::get('order_fulfillment_cost', 10);
+
+        return (float) $query
+            ->with(['items.product'])
+            ->get()
+            ->sum(fn (Order $order) => $order->calculateProfit($fulfillmentCost));
+    }
+
+    private function calculateSellerOrderProfit(Order $order): float
+    {
+        $itemsProfit = $order->items->sum(function ($item) {
+            $quantity = (float) ($item->quantity ?? 0);
+            $sellTotal = (float) ($item->price ?? 0) * $quantity;
+            $productCost = (float) ($item->product?->getOrderCostAmount() ?? 0) * $quantity;
+
+            return $sellTotal - $productCost;
+        });
+
+        return (float) $itemsProfit
+            - (float) ($order->shipping_cost ?? 0)
+            - (float) ($order->discount ?? 0);
     }
 
     private function getExpensesStats(array $dateRange)
@@ -278,6 +575,12 @@ class DashboardService
         }
         
         return $query->get();
+    }
+
+    private function sellerBillingTablesExist(): bool
+    {
+        return Schema::hasTable('seller_billings')
+            && Schema::hasTable('seller_billing_order');
     }
 
     private function getChartsData(string $period, $vendorId = null)
@@ -428,6 +731,46 @@ class DashboardService
         return $data;
     }
 
+    private function getDeliveryPersonChartData(string $period, int $userId): array
+    {
+        if ($period === 'yearly') {
+            $data = [];
+            for ($i = 11; $i >= 0; $i--) {
+                $month = Carbon::now()->subMonths($i);
+                $base = Order::where('delivery_person_id', $userId)
+                    ->whereYear('created_at', $month->year)
+                    ->whereMonth('created_at', $month->month);
+
+                $data[] = [
+                    'label' => $month->format('M Y'),
+                    'assigned' => (clone $base)->count(),
+                    'delivered' => (clone $base)->where('status', 'delivered')->count(),
+                    'callbacks' => (clone $base)->whereNotNull('callback_date')->count(),
+                ];
+            }
+
+            return $data;
+        }
+
+        $days = $period === 'monthly' ? 30 : 7;
+        $data = [];
+
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $day = Carbon::now()->subDays($i);
+            $base = Order::where('delivery_person_id', $userId)
+                ->whereDate('created_at', $day);
+
+            $data[] = [
+                'label' => $day->format('M d'),
+                'assigned' => (clone $base)->count(),
+                'delivered' => (clone $base)->where('status', 'delivered')->count(),
+                'callbacks' => (clone $base)->whereDate('callback_date', $day)->count(),
+            ];
+        }
+
+        return $data;
+    }
+
     private function getTopProductsForConfirmationAgent(array $dateRange, int $userId)
     {
         return DB::table('order_items')
@@ -454,6 +797,39 @@ class DashboardService
         })
             ->withCount(['orders as orders_count' => function ($query) use ($dateRange, $userId) {
                 $query->where('confirmation_agent_id', $userId)
+                    ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+            }])
+            ->orderByDesc('orders_count')
+            ->limit(5)
+            ->get();
+    }
+
+    private function getTopProductsForDeliveryPerson(array $dateRange, int $userId)
+    {
+        return DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->where('orders.delivery_person_id', $userId)
+            ->whereBetween('orders.created_at', [$dateRange['start'], $dateRange['end']])
+            ->select(
+                'order_items.product_id',
+                DB::raw('COALESCE(products.name, order_items.product_name, "Product") as name'),
+                DB::raw('SUM(order_items.quantity) as total_quantity')
+            )
+            ->groupBy('order_items.product_id', 'products.name', 'order_items.product_name')
+            ->orderByDesc('total_quantity')
+            ->limit(5)
+            ->get();
+    }
+
+    private function getTopClientsForDeliveryPerson(array $dateRange, int $userId)
+    {
+        return Client::whereHas('orders', function ($query) use ($dateRange, $userId) {
+            $query->where('delivery_person_id', $userId)
+                ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        })
+            ->withCount(['orders as orders_count' => function ($query) use ($dateRange, $userId) {
+                $query->where('delivery_person_id', $userId)
                     ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
             }])
             ->orderByDesc('orders_count')
@@ -516,7 +892,10 @@ class DashboardService
             
             return [
                 'total' => $marketplaceProducts->count(),
-                'active' => (clone $marketplaceProducts)->where('is_active', true)->count(),
+                'active' => (clone $marketplaceProducts)
+                    ->wherePivot('is_active', true)
+                    ->where('products.is_active', true)
+                    ->count(),
                 'low_stock' => 0, // Vendors don't manage stock directly
                 'out_of_stock' => 0,
             ];

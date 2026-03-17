@@ -13,6 +13,7 @@ export const SettingsProvider = ({ children }) => {
         currency_decimals: 2,
         currency_decimal_separator: '.',
         currency_thousand_separator: ',',
+        order_fulfillment_cost: 10,
     });
     const [loading, setLoading] = useState(true);
 
@@ -28,7 +29,7 @@ export const SettingsProvider = ({ children }) => {
 
     const fetchSettings = async () => {
         try {
-            const response = await api.get('/settings');
+            const response = await api.get('/app-settings');
             setSettings(prevSettings => ({ ...prevSettings, ...response.data }));
         } catch (error) {
             console.error('Error fetching settings:', error);

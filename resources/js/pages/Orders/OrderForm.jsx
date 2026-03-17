@@ -3,16 +3,18 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { isAdminRole, isConfirmationAgentRole } from '../../utils/roles';
+import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
+import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import ConfirmationWorkflowForm from './ConfirmationWorkflowForm';
 
 export default function OrderForm() {
-    const { formatCurrency } = useSettings();
+    const { formatCurrency, settings } = useSettings();
     const { user } = useAuth();
     const roleSlug = user?.role?.slug;
     const isVendorUser = roleSlug === 'vendor';
     const isAdminUser = isAdminRole(roleSlug);
     const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
+    const isDeliveryPersonUser = isDeliveryPersonRole(roleSlug);
     const authenticatedSellerName = user?.vendor?.name || user?.name || 'Current seller';
     const navigate = useNavigate();
     const { id } = useParams();
@@ -61,6 +63,15 @@ export default function OrderForm() {
 
     const [errors, setErrors] = useState({});
     const [queryPrefillApplied, setQueryPrefillApplied] = useState(false);
+
+    if (isDeliveryPersonUser) {
+        return (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+                <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
+                <p className="text-slate-500 mt-2">Delivery people cannot create or edit orders directly.</p>
+            </div>
+        );
+    }
 
     const normalizeCity = (value) =>
         (value || '')
@@ -126,7 +137,7 @@ export default function OrderForm() {
         setOrderItems([{
             product_id: String(selectedProduct.id),
             quantity: Number.isNaN(quantity) ? 1 : Math.max(1, quantity),
-            price: selectedProduct.vendor_price || selectedProduct.price || 0
+            price: selectedProduct.company_price || selectedProduct.price || selectedProduct.recommended_price || 0
         }]);
 
         if (source && ['manual', 'shopify', 'google_sheet', 'delivery_company', 'marketplace', 'whatsapp'].includes(source)) {
@@ -290,7 +301,7 @@ export default function OrderForm() {
         newItems[index] = {
             ...newItems[index],
             product_id: productId,
-            price: product?.price || 0
+            price: product?.company_price || product?.price || product?.recommended_price || 0
         };
         setOrderItems(newItems);
     };
@@ -317,6 +328,7 @@ export default function OrderForm() {
         : getCityDeliveryCost(formData.city);
     const shippingIncludedInPrice = Boolean(formData.shipping_included_in_price);
     const discountValue = parseFloat(formData.discount ?? 0) || 0;
+    const fulfillmentPrice = getFulfillmentPrice(settings.order_fulfillment_cost);
 
     const calculateSubtotal = () => {
         return orderItems.reduce((sum, item) => {
@@ -330,19 +342,15 @@ export default function OrderForm() {
     };
 
     const calculateEstimatedProfit = () => {
-        const baseCostTotal = orderItems.reduce((sum, item) => {
-            const product = products.find((p) => String(p.id) === String(item.product_id));
-            if (!product) return sum;
-
-            const baseCost = parseFloat(product.vendor_price ?? product.company_price ?? product.cost_price ?? product.price ?? 0);
-            const qty = parseInt(item.quantity || 0, 10);
-
-            return sum + (baseCost * qty);
-        }, 0);
-
-        const subtotal = calculateSubtotal();
-
-        return subtotal - baseCostTotal - discountValue;
+        return calculateOrderProfit({
+            items: orderItems.map((item) => ({
+                ...item,
+                product: products.find((product) => String(product.id) === String(item.product_id)) || null,
+            })),
+            shippingPrice: shippingCost,
+            fulfillmentPrice,
+            discount: discountValue,
+        });
     };
 
     const baseCityOptions = isEditing ? cities : cities.filter(city => city.is_active);
@@ -430,8 +438,29 @@ export default function OrderForm() {
 
     return (
         <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-6 text-white shadow-lg">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                            {isEditing ? 'Order Update' : 'New Order'}
+                        </p>
+                        <h1 className="mt-2 text-3xl font-bold">{isEditing ? 'Edit Order' : 'Create Order'}</h1>
+                        <p className="mt-1 text-sm text-slate-300">
+                            Update customer details, shipping notes, and delivery assignment from one screen.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
+                        <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1">
+                            {formData.city || 'No city selected'}
+                        </span>
+                        <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1">
+                            Shipping {formatCurrency(shippingCost)}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-900">{isEditing ? 'Edit Order' : 'Create Order'}</h1>
                 <button
                     onClick={() => navigate('/orders')}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
@@ -442,8 +471,18 @@ export default function OrderForm() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Order Details */}
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div className="mb-5 flex items-start justify-between gap-4">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900">Customer & Shipping</h2>
+                            <p className="mt-1 text-sm text-slate-500">Edit phone, city, shipping address, and order notes here.</p>
+                        </div>
+                        {isEditing && (
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                                {formData.status}
+                            </span>
+                        )}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -618,6 +657,10 @@ export default function OrderForm() {
                                 placeholder="Enter shipping address"
                             />
                         </div>
+                    </div>
+
+                    <div className="mb-3 border-t border-slate-200 pt-5">
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Assignment & Workflow</h3>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -821,6 +864,9 @@ export default function OrderForm() {
                                     )}
                                 </div>
                             )}
+                            {errors.delivery_assignment && (
+                                <p className="mt-2 text-xs text-red-600">{errors.delivery_assignment[0]}</p>
+                            )}
                         </div>
                     </div>
 
@@ -926,7 +972,7 @@ export default function OrderForm() {
 
                 {/* Pricing Summary */}
                 <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Pricing & Benefit</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Pricing & Profit</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <div>
@@ -941,6 +987,21 @@ export default function OrderForm() {
                                         className="w-40 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-700"
                                     />
                                     <span className="text-xs text-gray-500">Auto-filled when you choose a city.</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Fulfillment Price</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={formatCurrency(fulfillmentPrice)}
+                                        className="w-40 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-700"
+                                    />
+                                    <span className="text-xs text-gray-500">
+                                        Fixed packaging and handling cost from settings.
+                                    </span>
                                 </div>
                             </div>
 
@@ -968,6 +1029,10 @@ export default function OrderForm() {
                                 <span className="font-medium">{formatCurrency(shippingCost)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Fulfillment:</span>
+                                <span className="font-medium">{formatCurrency(fulfillmentPrice)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">Discount:</span>
                                 <span className="font-medium text-red-600">-{formatCurrency(discountValue)}</span>
                             </div>
@@ -976,7 +1041,7 @@ export default function OrderForm() {
                                 <span className="font-bold text-lg text-blue-600">{formatCurrency(calculateTotal())}</span>
                             </div>
                             <div className="border-t pt-2 flex justify-between">
-                                <span className="font-semibold text-lg">Benefit:</span>
+                                <span className="font-semibold text-lg">Profit:</span>
                                 <span className={`font-bold text-lg ${calculateEstimatedProfit() >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                     {formatCurrency(calculateEstimatedProfit())}
                                 </span>

@@ -103,7 +103,7 @@ class UserController extends Controller
     public function deliveryPersons()
     {
         $persons = User::whereHas('role', function ($query) {
-            $query->where('slug', 'delivery');
+            $query->whereIn('slug', ['delivery_person', 'delivery']);
         })->where('is_active', true)->get();
 
         return response()->json($persons);

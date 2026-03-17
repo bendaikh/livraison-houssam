@@ -26,6 +26,9 @@ class Order extends Model
         'delivery_tracking_code',
         'delivery_status',
         'subtotal',
+        'collected_amount',
+        'delivery_person_commission',
+        'amount_due_to_admin',
         'shipping_cost',
         'shipping_included_in_price',
         'tax',
@@ -38,6 +41,7 @@ class Order extends Model
         'delivery_city',
         'phone',
         'notes',
+        'delivery_status_note',
         'whatsapp',
         'confirmed_at',
         'picked_up_at',
@@ -49,10 +53,14 @@ class Order extends Model
         'cancelled_at',
         'refused_at',
         'returned_at',
+        'no_response_at',
     ];
 
     protected $casts = [
         'subtotal' => 'decimal:2',
+        'collected_amount' => 'decimal:2',
+        'delivery_person_commission' => 'decimal:2',
+        'amount_due_to_admin' => 'decimal:2',
         'shipping_cost' => 'decimal:2',
         'shipping_included_in_price' => 'boolean',
         'tax' => 'decimal:2',
@@ -70,6 +78,7 @@ class Order extends Model
         'cancelled_at' => 'datetime',
         'refused_at' => 'datetime',
         'returned_at' => 'datetime',
+        'no_response_at' => 'datetime',
     ];
 
     public function client(): BelongsTo
@@ -132,6 +141,31 @@ class Order extends Model
         )->withTimestamps();
     }
 
+    public function deliveryPersonBillings(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            DeliveryPersonBilling::class,
+            'delivery_person_billing_order',
+            'order_id',
+            'delivery_person_billing_id'
+        )->withTimestamps();
+    }
+
+    public function sellerBillings(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            SellerBilling::class,
+            'seller_billing_order',
+            'order_id',
+            'seller_billing_id'
+        )->withTimestamps();
+    }
+
+    public function paidDeliveryPersonBillings(): BelongsToMany
+    {
+        return $this->deliveryPersonBillings()->whereNotNull('delivery_person_billings.paid_at');
+    }
+
     protected static function boot()
     {
         parent::boot();
@@ -141,5 +175,34 @@ class Order extends Model
                 $order->order_number = 'ORD-' . strtoupper(uniqid());
             }
         });
+    }
+
+    public function calculateProfit(float $fulfillmentCost = 10.0): float
+    {
+        $baseSellTotal = 0.0;
+        $baseCostTotal = 0.0;
+        $upsellSellTotal = 0.0;
+        $upsellCostTotal = 0.0;
+
+        foreach ($this->items as $item) {
+            $quantity = (float) ($item->quantity ?? 0);
+            $sellTotal = (float) ($item->price ?? 0) * $quantity;
+            $productCost = (float) ($item->product?->getOrderCostAmount() ?? 0) * $quantity;
+
+            if ($item->is_upsell) {
+                $upsellSellTotal += $sellTotal;
+                $upsellCostTotal += $productCost;
+                continue;
+            }
+
+            $baseSellTotal += $sellTotal;
+            $baseCostTotal += $productCost;
+        }
+
+        $shippingCost = (float) ($this->shipping_cost ?? 0);
+        $discount = (float) ($this->discount ?? 0);
+
+        return ($baseSellTotal - $discount - $baseCostTotal - $shippingCost - $fulfillmentCost)
+            + ($upsellSellTotal - $upsellCostTotal);
     }
 }

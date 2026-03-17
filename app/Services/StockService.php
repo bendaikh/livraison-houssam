@@ -10,9 +10,16 @@ use Illuminate\Support\Facades\DB;
 
 class StockService
 {
-    public function addStock(int $productId, int $quantity, ?float $unitCost = null, ?string $note = null, ?string $reference = null)
+    public function addStock(
+        int $productId,
+        int $quantity,
+        ?float $unitCost = null,
+        ?string $note = null,
+        ?string $reference = null,
+        ?int $orderId = null
+    )
     {
-        return DB::transaction(function () use ($productId, $quantity, $unitCost, $note, $reference) {
+        return DB::transaction(function () use ($productId, $quantity, $unitCost, $note, $reference, $orderId) {
             $product = Product::findOrFail($productId);
             $previousStock = $product->stock_quantity;
             $newStock = $previousStock + $quantity;
@@ -22,6 +29,7 @@ class StockService
             $movement = StockMovement::create([
                 'product_id' => $productId,
                 'user_id' => Auth::id(),
+                'order_id' => $orderId,
                 'type' => 'in',
                 'quantity' => $quantity,
                 'previous_stock' => $previousStock,
@@ -146,11 +154,19 @@ class StockService
         });
     }
 
-    public function restoreStockForOrder(int $orderId)
+    public function restoreStockForOrder(int $orderId, ?string $note = null)
     {
         $order = \App\Models\Order::with('items.product')->findOrFail($orderId);
 
-        DB::transaction(function () use ($order) {
+        $alreadyRestored = \App\Models\StockMovement::where('order_id', $orderId)
+            ->where('type', 'in')
+            ->exists();
+        if ($alreadyRestored) {
+            \Log::info('Skipping stock restoration, already restored for order', ['order_id' => $orderId]);
+            return;
+        }
+
+        DB::transaction(function () use ($order, $note) {
             foreach ($order->items as $item) {
                 // Skip items without a product_id (manual items with only product name)
                 if (!$item->product_id) {
@@ -167,8 +183,9 @@ class StockService
                         $item->product_id,
                         $item->quantity,
                         null,
-                        "Stock restored for cancelled order #{$order->order_number}",
-                        $order->order_number
+                        $note ?? "Stock restored for order #{$order->order_number}",
+                        $order->order_number,
+                        $order->id
                     );
                 } catch (\Exception $e) {
                     \Log::error('Failed to restore stock for order item', [

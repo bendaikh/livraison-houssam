@@ -65,12 +65,13 @@ class DefaultUsersSeeder extends Seeder
         );
 
         $deliveryRole = Role::firstOrCreate(
-            ['slug' => 'delivery'],
+            ['slug' => 'delivery_person'],
             [
-                'name' => 'Delivery',
-                'description' => 'Delivery personnel',
+                'name' => 'Delivery Person',
+                'description' => 'Can only manage assigned orders, schedule callbacks, and track delivery billing.',
                 'permissions' => json_encode([
-                    'view_assigned_orders', 'update_delivery_status', 'view_clients'
+                    'view_assigned_orders', 'update_delivery_status', 'schedule_delivery_callbacks',
+                    'view_dashboard', 'view_delivery_billing'
                 ]),
             ]
         );
@@ -78,8 +79,8 @@ class DefaultUsersSeeder extends Seeder
         $vendorRole = Role::firstOrCreate(
             ['slug' => 'vendor'],
             [
-                'name' => 'Vendor',
-                'description' => 'Vendor/Supplier',
+                'name' => 'Seller',
+                'description' => 'Seller with limited access',
                 'permissions' => json_encode([
                     'view_own_products', 'view_own_orders', 'view_dashboard'
                 ]),

@@ -23,6 +23,12 @@ class DashboardController extends Controller
             );
         }
 
+        if ($user && $user->isDeliveryPerson()) {
+            return response()->json(
+                $this->dashboardService->getDeliveryPersonStatistics($period, $user)
+            );
+        }
+
         if ($user && $user->isVendor()) {
             $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
             $vendorId = $vendor?->id;

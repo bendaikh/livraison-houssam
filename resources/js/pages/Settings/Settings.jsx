@@ -53,6 +53,7 @@ export default function Settings() {
         order_auto_confirm: false,
         order_low_stock_warning: true,
         order_low_stock_threshold: 10,
+        order_fulfillment_cost: 10,
         
         // Notification Settings
         notifications_enabled: true,
@@ -605,6 +606,26 @@ export default function Settings() {
                                             min="0"
                                         />
                                         <p className="text-xs text-gray-500 mt-1">Alert when stock falls below this number</p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Fulfillment Cost
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={settings.order_fulfillment_cost}
+                                                onChange={(e) => handleChange('order_fulfillment_cost', parseFloat(e.target.value) || 0)}
+                                                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                min="0"
+                                                step="0.01"
+                                            />
+                                            <span className="absolute right-4 top-2.5 text-gray-500">{settings.currency_symbol}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Fixed emballage and handling cost used in profit calculations. Default: 10 {settings.currency_symbol}
+                                        </p>
                                     </div>
 
                                     <div className="md:col-span-2 space-y-4">

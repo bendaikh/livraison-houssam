@@ -68,10 +68,10 @@ export default function ProductDetail() {
         : null;
     // Seller cost for this product
     const buyPrice = parseFloat(
-        (product?.vendor_price ??
-        product?.company_price ??
-        product?.cost_price ??
+        (product?.company_price ??
         product?.price ??
+        product?.vendor_price ??
+        product?.cost_price ??
         0)
     );
 

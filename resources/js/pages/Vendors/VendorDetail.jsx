@@ -14,6 +14,7 @@ export default function VendorDetail() {
     const navigate = useNavigate();
     const { formatCurrency } = useSettings();
     const [vendor, setVendor] = useState(null);
+    const [billing, setBilling] = useState(null);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -30,8 +31,13 @@ export default function VendorDetail() {
             ]);
             
             // Handle the response structure from backend
-            const vendorData = vendorResponse.data.vendor || vendorResponse.data.data || vendorResponse.data;
+            const vendorPayload = vendorResponse.data || {};
+            const vendorData = {
+                ...(vendorPayload.vendor || vendorPayload.data || vendorPayload),
+                ...(vendorPayload.statistics || {}),
+            };
             setVendor(vendorData);
+            setBilling(vendorPayload.billing || null);
             setProducts(productsResponse.data.data || productsResponse.data);
         } catch (error) {
             console.error('Error fetching vendor details:', error);
@@ -47,6 +53,16 @@ export default function VendorDetail() {
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
+        });
+    };
+
+    const formatShortDate = (dateString) => {
+        if (!dateString) return 'Not generated yet';
+
+        return new Date(dateString).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
         });
     };
 
@@ -224,6 +240,16 @@ export default function VendorDetail() {
                             </div>
                         </div>
 
+                        <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-xl">
+                            <FileText size={20} className="text-orange-600 mt-1 flex-shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium text-slate-500">Billing Frequency</p>
+                                <p className="text-lg font-semibold text-slate-800">
+                                    {vendor.billing_frequency === 'twice_weekly' ? 'Twice weekly' : 'Weekly'}
+                                </p>
+                            </div>
+                        </div>
+
                         {/* Created Date */}
                         <div className="flex items-start space-x-3 p-4 bg-slate-50 rounded-xl">
                             <Calendar size={20} className="text-orange-600 mt-1 flex-shrink-0" />
@@ -260,6 +286,101 @@ export default function VendorDetail() {
                             </div>
                         </div>
                     </div>
+
+                    {billing && (
+                        <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-800">Commission Billing</h2>
+                                    <p className="text-sm text-slate-500 mt-1">How much this seller will receive after commission.</p>
+                                </div>
+                                <FileText size={24} className="text-orange-500" />
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <DollarSign size={24} className="text-emerald-600" />
+                                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                                            {billing.unpaid_orders_count || 0} unpaid orders
+                                        </span>
+                                    </div>
+                                    <p className="text-sm font-medium text-slate-600">What Seller Will Get</p>
+                                    <p className="text-3xl font-bold text-emerald-700 mt-1">
+                                        {formatCurrency(billing.estimated_payout || 0)}
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Delivered Sales</p>
+                                        <p className="text-lg font-bold text-slate-800 mt-2">
+                                            {formatCurrency(billing.gross_sales || 0)}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                                        <p className="text-xs font-medium text-amber-700 uppercase tracking-wide">Platform Commission</p>
+                                        <p className="text-lg font-bold text-amber-800 mt-2">
+                                            {formatCurrency(billing.commission_amount || 0)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-slate-600">Billing cadence</span>
+                                        <span className="font-semibold text-slate-900">{billing.billing_frequency_label || 'Weekly'}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-slate-600">Commission rate</span>
+                                        <span className="font-semibold text-slate-900">{Number(billing.commission_rate || 0).toFixed(2)}%</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-slate-600">Open billing reports</span>
+                                        <span className="font-semibold text-slate-900">{billing.open_invoices || 0}</span>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <p className="text-sm font-semibold text-orange-900">Latest Billing Report</p>
+                                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                            billing.latest_invoice?.status === 'paid'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                            {billing.latest_invoice?.status === 'paid' ? 'Paid' : 'Unpaid'}
+                                        </span>
+                                    </div>
+
+                                    {billing.latest_invoice ? (
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-600">Period</span>
+                                                <span className="font-semibold text-slate-900">
+                                                    {formatShortDate(billing.latest_invoice.period_start)} - {formatShortDate(billing.latest_invoice.period_end)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-600">Payout</span>
+                                                <span className="font-semibold text-emerald-700">
+                                                    {formatCurrency(billing.latest_invoice.settlement_amount || 0)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-slate-600">Generated</span>
+                                                <span className="font-semibold text-slate-900">
+                                                    {formatShortDate(billing.latest_invoice.generated_at)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-slate-600">No billing report generated yet for this seller.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

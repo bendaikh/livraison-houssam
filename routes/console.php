@@ -16,3 +16,7 @@ Schedule::command('orders:sync-delivery-statuses --provider=bmdelivery')->everyT
 Schedule::command('orders:sync-delivery-statuses --provider=tawsilex')
     ->everyTenMinutes()
     ->withoutOverlapping();
+
+Schedule::command('delivery-billings:generate-daily')
+    ->dailyAt('00:00')
+    ->withoutOverlapping();

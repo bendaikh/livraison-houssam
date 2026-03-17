@@ -5,10 +5,11 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X } from 'lucide-react';
 import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
-import { isConfirmationAgentRole } from '../../utils/roles';
+import { isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
+import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 
 export default function OrderList({ status = '' }) {
-    const { formatCurrency } = useSettings();
+    const { formatCurrency, settings } = useSettings();
     const { user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -21,6 +22,17 @@ export default function OrderList({ status = '' }) {
     const [pendingStatusChange, setPendingStatusChange] = useState(null);
     const [showAgentModal, setShowAgentModal] = useState(false);
     const [selectedOrderForAgent, setSelectedOrderForAgent] = useState(null);
+    const [deliveryWorkflowModal, setDeliveryWorkflowModal] = useState({
+        isOpen: false,
+        order: null,
+        nextStatus: '',
+        mode: 'status',
+        collectedAmount: '',
+        note: '',
+        callbackDate: '',
+        errors: {},
+        saving: false,
+    });
     const [assignmentScope, setAssignmentScope] = useState('my');
     const [pagination, setPagination] = useState({
         current_page: 1,
@@ -49,24 +61,25 @@ export default function OrderList({ status = '' }) {
     });
     const roleSlug = user?.role?.slug;
     const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
+    const isDeliveryPersonUser = isDeliveryPersonRole(roleSlug);
     
     useEffect(() => {
         setFilters(prev => ({ ...prev, status: status, page: 1 }));
     }, [status]);
 
     useEffect(() => {
-        if (!isConfirmationAgentUser) return;
+        if (!(isConfirmationAgentUser || isDeliveryPersonUser)) return;
 
         const searchParams = new URLSearchParams(location.search);
         if (searchParams.get('todo') === 'today') {
             setAssignmentScope('todo');
         }
-    }, [isConfirmationAgentUser, location.search]);
+    }, [isConfirmationAgentUser, isDeliveryPersonUser, location.search]);
     
     useEffect(() => {
         fetchOrders();
         fetchShopifyIntegration();
-    }, [filters, assignmentScope, location.search, isConfirmationAgentUser]);
+    }, [filters, assignmentScope, location.search, isConfirmationAgentUser, isDeliveryPersonUser]);
 
     const fetchOrders = async () => {
         try {
@@ -81,6 +94,11 @@ export default function OrderList({ status = '' }) {
             params.append('per_page', pagination.per_page);
             if (isConfirmationAgentUser) {
                 params.append('assignment_scope', assignmentScope);
+                const searchParams = new URLSearchParams(location.search);
+                if (searchParams.get('todo') === 'today' || assignmentScope === 'todo') {
+                    params.append('callback_due', 'today');
+                }
+            } else if (isDeliveryPersonUser) {
                 const searchParams = new URLSearchParams(location.search);
                 if (searchParams.get('todo') === 'today' || assignmentScope === 'todo') {
                     params.append('callback_due', 'today');
@@ -118,6 +136,10 @@ export default function OrderList({ status = '' }) {
     };
 
     const fetchShopifyIntegration = async () => {
+        if (isDeliveryPersonUser) {
+            return;
+        }
+
         try {
             const response = await api.get('/api-integrations');
             const shopifyInt = response.data.find(int => int.type === 'shopify' && int.is_active);
@@ -140,6 +162,7 @@ export default function OrderList({ status = '' }) {
             out_for_delivery: 'bg-violet-100 text-violet-800',
             delivered: 'bg-green-100 text-green-800',
             cancelled: 'bg-red-100 text-red-800',
+            no_response: 'bg-amber-100 text-amber-800',
             refused: 'bg-orange-100 text-orange-800',
             returned: 'bg-pink-100 text-pink-800',
             return_requested: 'bg-rose-100 text-rose-800'
@@ -175,38 +198,26 @@ export default function OrderList({ status = '' }) {
     };
 
     const formatStatusLabel = (status) => String(status || '').replace(/_/g, ' ');
+    const deliveryStatusOptions = ['delivered', 'refused', 'cancelled', 'no_response', 'returned'];
+    const motifRequiredStatuses = ['refused', 'cancelled', 'no_response', 'returned'];
+    const deliveryPrimaryActions = [
+        { key: 'delivered', label: 'Delivered', tone: 'bg-emerald-600 text-white hover:bg-emerald-700' },
+        { key: 'refused', label: 'Refused', tone: 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
+        { key: 'no_response', label: 'No Answer', tone: 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
+        { key: 'cancelled', label: 'Cancelled', tone: 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
+        { key: 'report', label: 'Report / Callback', tone: 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100' },
+    ];
 
     const isConfirmationAgentStatusLocked = (order) => {
         if (order?.delivery_tracking_code) {
             return true;
         }
 
-        if (!order?.delivery_person_id) {
-            return false;
+        if (order?.delivery_person_id) {
+            return true;
         }
 
-        const deliveryManagedStatuses = [
-            'picked_up',
-            'ready_for_shipping',
-            'shipped',
-            'out_for_delivery',
-            'delivered',
-            'cancelled',
-            'refused',
-            'returned',
-            'return_requested',
-        ];
-
-        return deliveryManagedStatuses.includes(order.status)
-            || Boolean(order.picked_up_at)
-            || Boolean(order.ready_for_shipping_at)
-            || Boolean(order.sent_to_delivery_at)
-            || Boolean(order.out_for_delivery_at)
-            || Boolean(order.shipped_at)
-            || Boolean(order.delivered_at)
-            || Boolean(order.cancelled_at)
-            || Boolean(order.refused_at)
-            || Boolean(order.returned_at);
+        return Boolean(order?.confirmed_at) || order?.status === 'confirmed';
     };
 
     const getConfirmationAgentStatusLockMessage = (order) => {
@@ -214,7 +225,68 @@ export default function OrderList({ status = '' }) {
             return 'Status is now controlled by the delivery company.';
         }
 
-        return 'Status is now controlled by delivery handling updates.';
+        if (order?.delivery_person_id) {
+            return 'Status is now controlled by the assigned delivery person.';
+        }
+
+        return 'Status is now locked after confirmation.';
+    };
+
+    const isDeliveryWorkflowLocked = (order) => Boolean(order?.delivery_workflow_locked);
+
+    const getDeliveryWorkflowLockMessage = () => {
+        return 'This order is locked because the related delivery invoice has been marked as paid.';
+    };
+
+    const getStatusOptionsForOrder = (order) => {
+        if (!isDeliveryPersonUser) {
+            return [
+                'pending',
+                'confirmed',
+                'picked_up',
+                'ready_for_shipping',
+                'shipped',
+                'out_for_delivery',
+                'delivered',
+                'cancelled',
+                'no_response',
+                'refused',
+                'returned',
+            ];
+        }
+
+        return Array.from(new Set([
+            order.status,
+            ...deliveryStatusOptions,
+        ]));
+    };
+
+    const openDeliveryWorkflowModal = (order, config = {}) => {
+        setDeliveryWorkflowModal({
+            isOpen: true,
+            order,
+            mode: config.mode || 'status',
+            nextStatus: config.nextStatus || order.status,
+            collectedAmount: config.collectedAmount ?? (order.collected_amount || order.total || ''),
+            note: config.note || order.delivery_status_note || '',
+            callbackDate: config.callbackDate || '',
+            errors: {},
+            saving: false,
+        });
+    };
+
+    const closeDeliveryWorkflowModal = () => {
+        setDeliveryWorkflowModal({
+            isOpen: false,
+            order: null,
+            nextStatus: '',
+            mode: 'status',
+            collectedAmount: '',
+            note: '',
+            callbackDate: '',
+            errors: {},
+            saving: false,
+        });
     };
 
     const getDeliveryAgentLabel = (order) => {
@@ -261,15 +333,12 @@ export default function OrderList({ status = '' }) {
     };
 
     const calculateOrderBenefit = (order) => {
-        const itemsProfit = (order.items || []).reduce((sum, item) => {
-            const itemPrice = parseFloat(item.price) || 0;
-            const sellerPrice = parseFloat(item.product?.vendor_price ?? item.product?.company_price ?? item.product?.cost_price ?? item.product?.price ?? 0) || 0;
-            const qty = parseInt(item.quantity, 10) || 0;
-
-            return sum + ((itemPrice - sellerPrice) * qty);
-        }, 0);
-
-        return itemsProfit - (parseFloat(order.discount) || 0);
+        return calculateOrderProfit({
+            items: order.items || [],
+            shippingPrice: parseFloat(order.shipping_cost) || 0,
+            fulfillmentPrice: getFulfillmentPrice(settings.order_fulfillment_cost),
+            discount: parseFloat(order.discount) || 0,
+        });
     };
 
     const calculateOrderAmount = (order) => {
@@ -290,10 +359,34 @@ export default function OrderList({ status = '' }) {
     const handleStatusChange = async (orderId, newStatus) => {
         const currentOrder = orders.find(o => o.id === orderId);
 
+        if (isDeliveryPersonUser) {
+            if (!currentOrder || newStatus === currentOrder.status) {
+                return;
+            }
+
+            openDeliveryWorkflowModal(currentOrder, { mode: 'status', nextStatus: newStatus });
+            return;
+        }
+
         try {
             if (newStatus === 'confirmed' && !currentOrder?.delivery_tracking_code) {
+                const assignedPersonId = currentOrder?.delivery_person_id || null;
                 const assignedCompanyId = currentOrder?.delivery_integration_id || null;
                 const assignedCity = currentOrder?.delivery_city || currentOrder?.city || '';
+
+                if (assignedPersonId) {
+                    setUpdatingStatus(orderId);
+                    const response = await api.patch(`/orders/${orderId}/status`, {
+                        status: newStatus,
+                        delivery_person_id: assignedPersonId,
+                    });
+
+                    setOrders(orders.map(order =>
+                        order.id === orderId ? { ...order, ...response.data } : order
+                    ));
+
+                    return;
+                }
 
                 if (assignedCompanyId && assignedCity) {
                     setUpdatingStatus(orderId);
@@ -318,15 +411,16 @@ export default function OrderList({ status = '' }) {
                     newStatus,
                     preferredCompanyId: assignedCompanyId,
                     preferredCity: assignedCity,
+                    preferredDeliveryPersonId: assignedPersonId,
                 });
                 setShowDeliveryModal(true);
                 return;
             }
 
             setUpdatingStatus(orderId);
-            await api.patch(`/orders/${orderId}/status`, { status: newStatus });
+            const response = await api.patch(`/orders/${orderId}/status`, { status: newStatus });
             setOrders(orders.map(order => 
-                order.id === orderId ? { ...order, status: newStatus } : order
+                order.id === orderId ? { ...order, ...response.data } : order
             ));
         } catch (error) {
             console.error('Error updating order status:', error);
@@ -336,17 +430,96 @@ export default function OrderList({ status = '' }) {
         }
     };
 
-    const handleDeliveryCompanyConfirm = async (deliveryIntegrationId, deliveryCity) => {
+    const handleDeliveryWorkflowSubmit = async (event) => {
+        event.preventDefault();
+
+        const { order, mode, nextStatus, callbackDate, note, collectedAmount } = deliveryWorkflowModal;
+
+        if (!order) return;
+
+        const errors = {};
+        if (mode === 'status') {
+            if (!nextStatus) {
+                errors.nextStatus = 'Select a status.';
+            }
+            if (motifRequiredStatuses.includes(nextStatus) && !String(note).trim()) {
+                errors.note = 'Motif is required for this status.';
+            }
+            if (nextStatus === 'delivered' && (collectedAmount === '' || Number(collectedAmount) <= 0)) {
+                errors.collectedAmount = 'Collected amount is required.';
+            }
+        }
+
+        if (mode === 'report') {
+            if (!callbackDate) {
+                errors.callbackDate = 'Callback date is required.';
+            }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setDeliveryWorkflowModal((prev) => ({ ...prev, errors }));
+            return;
+        }
+
+        try {
+            setDeliveryWorkflowModal((prev) => ({ ...prev, saving: true, errors: {} }));
+            const payload = {};
+
+            if (mode === 'status') {
+                payload.status = nextStatus;
+                payload.delivery_status_note = note || undefined;
+                if (nextStatus === 'delivered') {
+                    payload.collected_amount = Number(collectedAmount);
+                }
+            }
+
+            if (mode === 'report') {
+                payload.callback_date = callbackDate;
+                payload.delivery_status_note = note;
+            }
+
+            if (mode === 'report' && nextStatus && nextStatus !== order.status) {
+                payload.status = nextStatus;
+            }
+
+            const response = await api.patch(`/orders/${order.id}/delivery-workflow`, payload);
+            setOrders((prev) => prev.map((entry) => (
+                entry.id === order.id ? { ...entry, ...response.data } : entry
+            )));
+            closeDeliveryWorkflowModal();
+        } catch (error) {
+            console.error('Error saving delivery workflow:', error);
+
+            if (error.response?.data?.errors) {
+                const responseErrors = error.response.data.errors;
+                setDeliveryWorkflowModal((prev) => ({
+                    ...prev,
+                    saving: false,
+                    errors: {
+                        nextStatus: responseErrors.status?.[0],
+                        note: responseErrors.delivery_status_note?.[0],
+                        callbackDate: responseErrors.callback_date?.[0],
+                        collectedAmount: responseErrors.collected_amount?.[0],
+                    },
+                }));
+                return;
+            }
+
+            alert(error.response?.data?.message || 'Failed to update delivery workflow.');
+            setDeliveryWorkflowModal((prev) => ({ ...prev, saving: false }));
+        }
+    };
+
+    const handleDeliveryCompanyConfirm = async (assignmentPayload) => {
         if (!pendingStatusChange) return;
 
         const { orderId, newStatus } = pendingStatusChange;
         
         try {
             setUpdatingStatus(orderId);
-            const response = await api.patch(`/orders/${orderId}/status`, { 
+            const response = await api.patch(`/orders/${orderId}/status`, {
                 status: newStatus,
-                delivery_integration_id: deliveryIntegrationId,
-                delivery_city: deliveryCity
+                ...assignmentPayload,
             });
             
             setOrders(orders.map(order => 
@@ -408,9 +581,151 @@ export default function OrderList({ status = '' }) {
         if (isConfirmationAgentUser && assignmentScope === 'available') return 'Available Orders';
         if (isConfirmationAgentUser && assignmentScope === 'todo') return 'Today Follow-Ups';
         if (isConfirmationAgentUser) return 'My Orders';
+        if (isDeliveryPersonUser && assignmentScope === 'todo') return 'Today Callbacks';
+        if (isDeliveryPersonUser) return 'My Delivery Orders';
         if (!status) return 'Orders';
         return `${status.charAt(0).toUpperCase() + status.slice(1)} Orders`;
     };
+
+    if (isDeliveryPersonUser) {
+        return (
+            <div className="min-h-screen bg-[#f5f1e8] p-4 md:p-6">
+                <DeliveryWorkflowModal
+                    modal={deliveryWorkflowModal}
+                    onClose={closeDeliveryWorkflowModal}
+                    onSubmit={handleDeliveryWorkflowSubmit}
+                    formatStatusLabel={formatStatusLabel}
+                    motifRequiredStatuses={motifRequiredStatuses}
+                    setModal={setDeliveryWorkflowModal}
+                />
+
+                <div className="max-w-5xl mx-auto space-y-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Delivery workflow</p>
+                            <h1 className="text-3xl font-bold text-slate-900 mt-1">{getPageTitle()}</h1>
+                            <p className="text-sm text-slate-600 mt-1">Fast action cards with only the information needed in the field.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={() => {
+                                    setAssignmentScope('my');
+                                    navigate('/orders');
+                                }}
+                                className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
+                                    assignmentScope === 'my' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-300'
+                                }`}
+                            >
+                                Assigned Orders
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setAssignmentScope('todo');
+                                    navigate('/orders?todo=today');
+                                }}
+                                className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
+                                    assignmentScope === 'todo' || new URLSearchParams(location.search).get('todo') === 'today'
+                                        ? 'bg-slate-900 text-white'
+                                        : 'bg-white text-slate-700 border border-slate-300'
+                                }`}
+                            >
+                                Today Callbacks
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-[1.6fr_0.8fr_auto] gap-3">
+                            <input
+                                type="text"
+                                placeholder="Search by client, phone, or order number"
+                                value={filters.search}
+                                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value, page: 1 }))}
+                                className="px-4 py-3 rounded-2xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                            />
+                            <select
+                                value={filters.status}
+                                onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value, page: 1 }))}
+                                className="px-4 py-3 rounded-2xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                            >
+                                <option value="">All statuses</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="refused">Refused</option>
+                                <option value="no_response">No Answer</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                            <button
+                                onClick={() => setFilters((prev) => ({ ...prev, search: '', status: '', page: 1 }))}
+                                className="px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    {loading ? (
+                        <div className="bg-white rounded-[28px] p-12 text-center text-slate-500 border border-slate-200">
+                            <div className="inline-block animate-spin h-8 w-8 border-4 border-slate-200 border-t-slate-700 rounded-full mb-3"></div>
+                            <p className="text-base font-medium">Loading orders...</p>
+                        </div>
+                    ) : orders.length === 0 ? (
+                        <div className="bg-white rounded-[28px] p-12 text-center text-slate-500 border border-slate-200">
+                            <p className="text-base font-medium">No assigned orders match the current filters.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {orders.map((order) => (
+                                <DeliveryPersonOrderCard
+                                    key={order.id}
+                                    order={order}
+                                    formatCurrency={formatCurrency}
+                                    formatDate={formatDate}
+                                    formatStatusLabel={formatStatusLabel}
+                                    actionButtons={deliveryPrimaryActions}
+                                    onAction={(actionKey) => {
+                                        if (actionKey === 'report') {
+                                            openDeliveryWorkflowModal(order, { mode: 'report', nextStatus: order.status });
+                                            return;
+                                        }
+
+                                        openDeliveryWorkflowModal(order, { mode: 'status', nextStatus: actionKey });
+                                    }}
+                                    isLocked={isDeliveryWorkflowLocked(order)}
+                                    lockMessage={getDeliveryWorkflowLockMessage()}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {!loading && orders.length > 0 && (
+                        <div className="bg-white rounded-[28px] p-4 shadow-sm flex items-center justify-between border border-slate-200">
+                            <span className="text-sm text-slate-600 font-medium">Showing {pagination.from}-{pagination.to} of {pagination.total} orders</span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page - 1 }))}
+                                    disabled={pagination.current_page === 1}
+                                    className={`px-3 py-2 rounded-xl font-medium text-sm transition-all ${
+                                        pagination.current_page === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                    }`}
+                                >
+                                    ◀ Previous
+                                </button>
+                                <button
+                                    onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page + 1 }))}
+                                    disabled={pagination.current_page === pagination.last_page}
+                                    className={`px-3 py-2 rounded-xl font-medium text-sm transition-all ${
+                                        pagination.current_page === pagination.last_page ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                    }`}
+                                >
+                                    Next ▶
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4">
@@ -421,9 +736,9 @@ export default function OrderList({ status = '' }) {
                     setPendingStatusChange(null);
                 }}
                 onConfirm={handleDeliveryCompanyConfirm}
-                orderId={pendingStatusChange?.orderId}
                 preferredCompanyId={pendingStatusChange?.preferredCompanyId}
                 preferredCity={pendingStatusChange?.preferredCity}
+                preferredDeliveryPersonId={pendingStatusChange?.preferredDeliveryPersonId}
             />
 
             {/* Header */}
@@ -431,7 +746,7 @@ export default function OrderList({ status = '' }) {
                 <div>
                     <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
                 </div>
-                {!isConfirmationAgentUser && (
+                {!isConfirmationAgentUser && !isDeliveryPersonUser && (
                     <button
                         onClick={() => navigate('/orders/create')}
                         className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
@@ -441,7 +756,7 @@ export default function OrderList({ status = '' }) {
                 )}
             </div>
 
-            {isConfirmationAgentUser && (
+            {(isConfirmationAgentUser || isDeliveryPersonUser) && (
                 <div className="flex flex-wrap gap-2 mb-3">
                     <button
                         onClick={() => {
@@ -452,19 +767,21 @@ export default function OrderList({ status = '' }) {
                             assignmentScope === 'my' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
                         }`}
                     >
-                        My Orders
+                        {isDeliveryPersonUser ? 'Assigned Orders' : 'My Orders'}
                     </button>
-                    <button
-                        onClick={() => {
-                            setAssignmentScope('available');
-                            navigate('/orders');
-                        }}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            assignmentScope === 'available' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
-                        }`}
-                    >
-                        Available Queue
-                    </button>
+                    {isConfirmationAgentUser && (
+                        <button
+                            onClick={() => {
+                                setAssignmentScope('available');
+                                navigate('/orders');
+                            }}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                                assignmentScope === 'available' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                            }`}
+                        >
+                            Available Queue
+                        </button>
+                    )}
                     <button
                         onClick={() => {
                             setAssignmentScope('todo');
@@ -476,13 +793,13 @@ export default function OrderList({ status = '' }) {
                                 : 'bg-white text-slate-700 border border-slate-200'
                         }`}
                     >
-                        Today Follow-Ups
+                        {isDeliveryPersonUser ? 'Today Callbacks' : 'Today Follow-Ups'}
                     </button>
                 </div>
             )}
 
             {/* Shopify Banner */}
-            {!isConfirmationAgentUser && (isWebhookOnly || !isWebhookOnly) && (
+            {!isConfirmationAgentUser && !isDeliveryPersonUser && (isWebhookOnly || !isWebhookOnly) && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 text-xs">
                     <div className="flex gap-2">
                         <svg className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -567,6 +884,7 @@ export default function OrderList({ status = '' }) {
                         <option value="shipped">Shipped</option>
                         <option value="delivered">Delivered</option>
                         <option value="cancelled">Cancelled</option>
+                        <option value="no_response">No Response</option>
                         <option value="refused">Refused</option>
                         <option value="returned">Returned</option>
                     </select>
@@ -611,6 +929,8 @@ export default function OrderList({ status = '' }) {
                         <p className="text-sm mt-1">
                             {isConfirmationAgentUser
                                 ? 'Try another queue or wait for new assignments.'
+                                : isDeliveryPersonUser
+                                    ? 'No assigned orders match the selected filters.'
                                 : 'Try adjusting your filters or create a new order'}
                         </p>
                     </div>
@@ -623,9 +943,19 @@ export default function OrderList({ status = '' }) {
                         const orderBenefit = calculateOrderBenefit(order);
                         const upsellItems = (order.items || []).filter((item) => item.is_upsell);
                         const primaryItems = (order.items || []).filter((item) => !item.is_upsell);
-                        const canWorkOnOrder = !isConfirmationAgentUser || String(order.confirmation_agent_id) === String(user?.id);
+                        const isBlacklisted = Boolean(order.is_blacklisted);
+                        const canWorkOnOrder = isConfirmationAgentUser
+                            ? String(order.confirmation_agent_id) === String(user?.id)
+                            : isDeliveryPersonUser
+                                ? String(order.delivery_person_id) === String(user?.id)
+                                : true;
                         const confirmationStatusLocked = isConfirmationAgentUser && isConfirmationAgentStatusLocked(order);
-                        const statusLockMessage = confirmationStatusLocked ? getConfirmationAgentStatusLockMessage(order) : '';
+                        const deliveryWorkflowIsLocked = isDeliveryPersonUser && isDeliveryWorkflowLocked(order);
+                        const statusLockMessage = confirmationStatusLocked
+                            ? getConfirmationAgentStatusLockMessage(order)
+                            : deliveryWorkflowIsLocked
+                                ? getDeliveryWorkflowLockMessage(order)
+                                : '';
                         const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
                         
                         const statusBorderColor = {
@@ -637,20 +967,33 @@ export default function OrderList({ status = '' }) {
                             out_for_delivery: 'border-l-violet-400',
                             delivered: 'border-l-green-400',
                             cancelled: 'border-l-red-400',
+                            no_response: 'border-l-amber-400',
                             refused: 'border-l-orange-400',
                             returned: 'border-l-pink-400',
                             return_requested: 'border-l-rose-400'
                         };
 
                         return (
-                            <div key={order.id} className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-all border-l-4 overflow-hidden ${statusBorderColor[order.status] || 'border-l-gray-400'}`}>
+                            <div
+                                key={order.id}
+                                className={`rounded-lg shadow-sm hover:shadow-md transition-all border-l-4 overflow-hidden ${
+                                    isBlacklisted
+                                        ? 'bg-rose-50 border border-rose-200'
+                                        : 'bg-white'
+                                } ${statusBorderColor[order.status] || 'border-l-gray-400'}`}
+                            >
                                 {/* Header Row - Compact and clean */}
-                                <div className="flex items-center justify-between gap-3 px-4 py-1.5 border-b border-gray-100 bg-gray-50">
+                                <div className={`flex items-center justify-between gap-3 px-4 py-1.5 border-b border-gray-100 ${isBlacklisted ? 'bg-rose-100/70' : 'bg-gray-50'}`}>
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                         <span className="text-xs font-bold text-blue-700 flex-shrink-0">{order.order_number}</span>
                                         <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 ${getSourceColor(order.source)}`}>
                                             {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
                                         </span>
+                                        {isBlacklisted && (
+                                            <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 bg-rose-600 text-white">
+                                                {order.blacklist_badge || 'Banned / Blacklisted'}
+                                            </span>
+                                        )}
                                         <span className="text-[10px] text-gray-600 flex-shrink-0">{formatDate(order.created_at)}</span>
                                         {order.callback_date && (
                                             <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-800 flex-shrink-0">
@@ -658,13 +1001,13 @@ export default function OrderList({ status = '' }) {
                                             </span>
                                         )}
                                     </div>
-                                    {confirmationStatusLocked ? (
+                                    {confirmationStatusLocked || deliveryWorkflowIsLocked ? (
                                         <div className="flex flex-col items-end gap-1 flex-shrink-0" title={statusLockMessage}>
                                             <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getStatusBadgeColor(order.status)}`}>
                                                 {formatStatusLabel(order.status)}
                                             </span>
                                             <span className="text-[9px] font-medium text-slate-500">
-                                                Delivery controlled
+                                                {deliveryWorkflowIsLocked ? 'Invoice locked' : 'Delivery controlled'}
                                             </span>
                                         </div>
                                     ) : (
@@ -677,16 +1020,11 @@ export default function OrderList({ status = '' }) {
                                                 updatingStatus === order.id || !canWorkOnOrder ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 transition-opacity'
                                             }`}
                                         >
-                                            <option value="pending">Pending</option>
-                                            <option value="confirmed">Confirmed</option>
-                                            <option value="picked_up">Picked Up</option>
-                                            <option value="ready_for_shipping">Ready</option>
-                                            <option value="shipped">Shipped</option>
-                                            <option value="out_for_delivery">Out</option>
-                                            <option value="delivered">Delivered</option>
-                                            <option value="cancelled">Cancelled</option>
-                                            <option value="refused">Refused</option>
-                                            <option value="returned">Returned</option>
+                                            {getStatusOptionsForOrder(order).map((value) => (
+                                                <option key={value} value={value}>
+                                                    {formatStatusLabel(value)}
+                                                </option>
+                                            ))}
                                         </select>
                                     )}
                                 </div>
@@ -703,8 +1041,18 @@ export default function OrderList({ status = '' }) {
                                         {order.callback_date && (
                                             <p className="text-amber-700 text-[10px] leading-tight truncate">Follow-up: {formatDate(order.callback_date)}</p>
                                         )}
+                                        {isBlacklisted && order.blacklist_entry?.reason && (
+                                            <p className="text-rose-700 text-[10px] leading-tight">
+                                                Blacklist: {order.blacklist_entry.reason}
+                                            </p>
+                                        )}
                                         {order.shipping_address && (
                                             <p className="text-gray-500 text-[10px] leading-tight truncate">{order.shipping_address}</p>
+                                        )}
+                                        {order.delivery_status_note && (
+                                            <p className="text-rose-700 text-[10px] leading-tight">
+                                                Motif: {order.delivery_status_note}
+                                            </p>
                                         )}
                                     </div>
 
@@ -745,24 +1093,38 @@ export default function OrderList({ status = '' }) {
 
                                     {/* AMOUNT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Amount</p>
-                                        <p className="font-bold text-gray-900 text-sm leading-tight">{formatCurrency(orderAmount)}</p>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
+                                            {isDeliveryPersonUser ? 'Collected' : 'Amount'}
+                                        </p>
+                                        <p className="font-bold text-gray-900 text-sm leading-tight">
+                                            {formatCurrency(isDeliveryPersonUser ? (order.collected_amount || 0) : orderAmount)}
+                                        </p>
                                     </div>
 
                                     {/* BENEFIT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Benefit</p>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
+                                            {isDeliveryPersonUser ? 'Commission' : 'Profit'}
+                                        </p>
                                         <p className={`font-bold text-sm leading-tight ${
-                                            orderBenefit > 0 ? 'text-green-600' : orderBenefit < 0 ? 'text-red-600' : 'text-gray-600'
+                                            isDeliveryPersonUser
+                                                ? 'text-emerald-700'
+                                                : orderBenefit > 0 ? 'text-green-600' : orderBenefit < 0 ? 'text-red-600' : 'text-gray-600'
                                         }`}>
-                                            {formatCurrency(orderBenefit)}
+                                            {formatCurrency(isDeliveryPersonUser ? (order.delivery_person_commission || 0) : orderBenefit)}
                                         </p>
                                     </div>
 
                                     {/* TRACKING COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Tracking</p>
-                                        {order.delivery_tracking_code ? (
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
+                                            {isDeliveryPersonUser ? 'Due Admin' : 'Tracking'}
+                                        </p>
+                                        {isDeliveryPersonUser ? (
+                                            <p className="text-amber-700 font-semibold text-[11px] leading-snug">
+                                                {formatCurrency(order.amount_due_to_admin || 0)}
+                                            </p>
+                                        ) : order.delivery_tracking_code ? (
                                             <p className="text-blue-700 font-mono font-semibold text-[10px] truncate leading-snug" title={order.delivery_tracking_code}>
                                                 {order.delivery_tracking_code.substring(0, 12)}
                                             </p>
@@ -775,7 +1137,7 @@ export default function OrderList({ status = '' }) {
 
                                     <div className="min-w-0 space-y-0.5 flex flex-col items-start">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isConfirmationAgentUser ? 'Assignment' : 'Delivery'}
+                                            {isConfirmationAgentUser ? 'Assignment' : isDeliveryPersonUser ? 'Actions' : 'Delivery'}
                                         </p>
                                         {isConfirmationAgentUser ? (
                                             assignmentScope === 'available' && !order.confirmation_agent_id ? (
@@ -800,6 +1162,20 @@ export default function OrderList({ status = '' }) {
                                                     {order.confirmation_agent?.name || 'Assigned to you'}
                                                 </span>
                                             )
+                                        ) : isDeliveryPersonUser ? (
+                                            <>
+                                                <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+                                                    {order.delivery_person?.name || 'Assigned'}
+                                                </span>
+                                                {!deliveryWorkflowIsLocked && canWorkOnOrder && (
+                                                    <button
+                                                        onClick={() => openDeliveryWorkflowModal(order, { mode: 'report', nextStatus: order.status })}
+                                                        className="mt-2 inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-200 hover:bg-amber-100"
+                                                    >
+                                                        Report / Callback
+                                                    </button>
+                                                )}
+                                            </>
                                         ) : (
                                             <button
                                                 onClick={() => handleAgentClick(order)}
@@ -842,7 +1218,7 @@ export default function OrderList({ status = '' }) {
                                                 <Eye size={15} />
                                             </Link>
                                         )}
-                                        {canWorkOnOrder && (
+                                        {canWorkOnOrder && !isDeliveryPersonUser && (
                                             <Link
                                                 to={`/orders/${order.id}/edit`}
                                                 className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors flex-shrink-0"
@@ -851,7 +1227,7 @@ export default function OrderList({ status = '' }) {
                                                 <Edit size={15} />
                                             </Link>
                                         )}
-                                        {!isConfirmationAgentUser && (
+                                        {!isConfirmationAgentUser && !isDeliveryPersonUser && (
                                             <button
                                                 onClick={() => handleDeleteOrder(order.id, order.order_number)}
                                                 disabled={deletingOrderId === order.id}
@@ -905,6 +1281,15 @@ export default function OrderList({ status = '' }) {
                 )}
             </div>
 
+            <DeliveryWorkflowModal
+                modal={deliveryWorkflowModal}
+                onClose={closeDeliveryWorkflowModal}
+                onSubmit={handleDeliveryWorkflowSubmit}
+                formatStatusLabel={formatStatusLabel}
+                motifRequiredStatuses={motifRequiredStatuses}
+                setModal={setDeliveryWorkflowModal}
+            />
+
             {/* Agent Assignment Modal */}
             {showAgentModal && selectedOrderForAgent && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -919,6 +1304,200 @@ export default function OrderList({ status = '' }) {
                 </div>
             )}
         </div>
+    );
+}
+
+function DeliveryWorkflowModal({ modal, onClose, onSubmit, formatStatusLabel, motifRequiredStatuses, setModal }) {
+    if (!modal.isOpen || !modal.order) {
+        return null;
+    }
+
+    const actionRequiresMotif = modal.mode === 'status' && motifRequiredStatuses.includes(modal.nextStatus);
+
+    return (
+        <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+            <div className="w-full max-w-lg rounded-[28px] bg-white shadow-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            {modal.mode === 'report' ? 'Callback' : 'Delivery action'}
+                        </p>
+                        <h2 className="text-xl font-bold text-slate-900 mt-1">
+                            {modal.mode === 'report' ? 'Report / Callback' : formatStatusLabel(modal.nextStatus)}
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            {modal.order.client?.name || 'Client'} • {modal.order.order_number}
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <form onSubmit={onSubmit} className="p-6 space-y-4">
+                    {modal.mode === 'report' && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Callback date</label>
+                            <input
+                                type="date"
+                                value={modal.callbackDate}
+                                min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                                onChange={(event) => setModal((prev) => ({ ...prev, callbackDate: event.target.value }))}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-2xl"
+                            />
+                            {modal.errors.callbackDate && (
+                                <p className="text-xs text-red-600 mt-1">{modal.errors.callbackDate}</p>
+                            )}
+                        </div>
+                    )}
+
+                    {modal.mode === 'status' && modal.nextStatus === 'delivered' && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Collected amount</label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={modal.collectedAmount}
+                                onChange={(event) => setModal((prev) => ({ ...prev, collectedAmount: event.target.value }))}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-2xl"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Commission and due-to-admin values are calculated automatically.</p>
+                            {modal.errors.collectedAmount && (
+                                <p className="text-xs text-red-600 mt-1">{modal.errors.collectedAmount}</p>
+                            )}
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                            {modal.mode === 'report' ? 'Motif (optional)' : actionRequiresMotif ? 'Motif (required)' : 'Motif (optional)'}
+                        </label>
+                        <textarea
+                            rows="4"
+                            value={modal.note}
+                            onChange={(event) => setModal((prev) => ({ ...prev, note: event.target.value }))}
+                            className="w-full px-4 py-3 border border-slate-300 rounded-2xl"
+                            placeholder={
+                                modal.mode === 'report'
+                                    ? 'Add a note only if needed.'
+                                    : actionRequiresMotif
+                                        ? 'Why was this order marked this way?'
+                                        : 'Add a note if needed.'
+                            }
+                        />
+                        {modal.errors.note && (
+                            <p className="text-xs text-red-600 mt-1">{modal.errors.note}</p>
+                        )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2.5 border border-slate-300 rounded-2xl text-slate-700 hover:bg-slate-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={modal.saving}
+                            className="px-4 py-2.5 rounded-2xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50"
+                        >
+                            {modal.saving ? 'Saving...' : modal.mode === 'report' ? 'Save Callback' : 'Save Action'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+function DeliveryPersonOrderCard({
+    order,
+    formatCurrency,
+    formatDate,
+    formatStatusLabel,
+    actionButtons,
+    onAction,
+    isLocked,
+    lockMessage,
+}) {
+    const items = (order.items || []).filter((item) => !item.is_upsell);
+    const itemSummary = items.length === 0
+        ? 'No items'
+        : items.map((item) => `${item.product?.name || item.product_name || 'Item'} x${item.quantity}`).join(', ');
+
+    return (
+        <article className="bg-white rounded-[28px] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 bg-[#fbfaf6]">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900">{order.client?.name || 'Client'}</h2>
+                        <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-slate-600">
+                            <span>{order.client?.phone || order.phone || '-'}</span>
+                            <span className="text-slate-300">•</span>
+                            <span>{order.city || order.client?.city || '-'}</span>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                            {formatStatusLabel(order.status)}
+                        </span>
+                        {order.callback_date && (
+                            <p className="text-xs text-amber-700 mt-2">Callback {formatDate(order.callback_date)}</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Items</p>
+                    <p className="text-sm text-slate-800 mt-2 leading-6">{itemSummary}</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Collected</p>
+                        <p className="text-lg font-bold text-slate-900 mt-2">{formatCurrency(order.collected_amount || 0)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Commission</p>
+                        <p className="text-lg font-bold text-emerald-700 mt-2">{formatCurrency(order.delivery_person_commission || 0)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Due to admin</p>
+                        <p className="text-lg font-bold text-amber-700 mt-2">{formatCurrency(order.amount_due_to_admin || 0)}</p>
+                    </div>
+                </div>
+
+                {order.delivery_status_note && (
+                    <div className="rounded-2xl bg-rose-50 border border-rose-100 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-400">Motif</p>
+                        <p className="text-sm text-rose-800 mt-2">{order.delivery_status_note}</p>
+                    </div>
+                )}
+
+                {isLocked ? (
+                    <div className="rounded-2xl bg-slate-100 border border-slate-200 px-4 py-3 text-sm text-slate-600">
+                        {lockMessage}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+                        {actionButtons.map((action) => (
+                            <button
+                                key={action.key}
+                                onClick={() => onAction(action.key)}
+                                className={`px-4 py-3 rounded-2xl text-sm font-semibold transition-all ${action.tone}`}
+                            >
+                                {action.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </article>
     );
 }
 

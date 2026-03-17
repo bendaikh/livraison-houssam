@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { calculateAdminProductProfit, getAdminProductSellPrice } from '../../utils/profit';
 import { 
     TrendingUp, TrendingDown, Award, Target, Calendar,
     Filter, ArrowRight, DollarSign, ShoppingBag, Zap, BarChart3
@@ -150,22 +151,10 @@ export default function ProfitDashboard() {
         }
     };
 
-    const getCompanyCostPrice = (product) => {
-        const value = parseFloat(product.company_price ?? product.price ?? 0);
-        return Number.isFinite(value) ? value : 0;
-    };
-
-    const getSellerPrice = (product) => {
-        const value = parseFloat(product.vendor_price ?? 0);
-        return Number.isFinite(value) ? value : 0;
-    };
-
     const getSoldUnits = (product) => {
         const value = parseFloat(product.sold_units ?? 0);
         return Number.isFinite(value) ? value : 0;
     };
-
-    const getAdminUnitProfit = (product) => getSellerPrice(product) - getCompanyCostPrice(product);
 
     const profitProducts = useMemo(() => {
         if (isVendor) {
@@ -175,15 +164,16 @@ export default function ProfitDashboard() {
         let filtered = products
             .map((product) => {
                 const soldUnits = getSoldUnits(product);
-                const unitProfit = getAdminUnitProfit(product);
+                const unitProfit = calculateAdminProductProfit(product);
+                const sellerPrice = getAdminProductSellPrice(product);
 
                 return {
                     ...product,
                     soldUnits,
                     unitProfit,
                     totalProfit: soldUnits * unitProfit,
-                    profitMargin: unitProfit > 0 && getSellerPrice(product) > 0
-                        ? (unitProfit / getSellerPrice(product)) * 100
+                    profitMargin: unitProfit > 0 && sellerPrice > 0
+                        ? (unitProfit / sellerPrice) * 100
                         : 0,
                 };
             })
@@ -212,7 +202,7 @@ export default function ProfitDashboard() {
         const summary = profitProducts.reduce((acc, product) => {
             acc.totalSoldUnits += product.soldUnits;
             acc.totalProfit += product.totalProfit;
-            acc.totalRevenue += product.soldUnits * getSellerPrice(product);
+            acc.totalRevenue += product.soldUnits * getAdminProductSellPrice(product);
 
             if (!acc.bestProduct || product.totalProfit > acc.bestProduct.totalProfit) {
                 acc.bestProduct = product;
@@ -271,7 +261,7 @@ export default function ProfitDashboard() {
                     Profit Dashboard
                 </h1>
                 <p className="text-slate-600 mt-2">
-                    Profit = Seller Price - Company Price, Multiplied by Sold Units
+                    Profit = Selling Price - Cost Price, Multiplied by Sold Units
                 </p>
             </div>
 

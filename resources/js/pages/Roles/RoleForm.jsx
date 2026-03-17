@@ -3,6 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { Shield, Save, X, Plus, Trash2 } from 'lucide-react';
 
+const permissionLabels = {
+    manage_vendors: 'manage_sellers',
+    view_vendors: 'view_sellers',
+};
+
 export default function RoleForm() {
     const navigate = useNavigate();
     const { id } = useParams();
@@ -134,6 +139,8 @@ export default function RoleForm() {
         }
     };
 
+    const formatPermissionLabel = (permission) => permissionLabels[permission] || permission;
+
     if (loading && isEditing) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -241,7 +248,7 @@ export default function RoleForm() {
                                         key={permission}
                                         className="inline-flex items-center space-x-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                                     >
-                                        <span>{permission}</span>
+                                        <span>{formatPermissionLabel(permission)}</span>
                                         <button
                                             type="button"
                                             onClick={() => removePermission(permission)}
@@ -270,7 +277,7 @@ export default function RoleForm() {
                                         onClick={() => addPermission(permission)}
                                         className="text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm transition-colors"
                                     >
-                                        {permission}
+                                        {formatPermissionLabel(permission)}
                                     </button>
                                 ))}
                         </div>

@@ -5,7 +5,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown, FileText, X } from 'lucide-react';
 import ConfirmationAgentDashboard from './ConfirmationAgentDashboard';
-import { isConfirmationAgentRole } from '../../utils/roles';
+import DeliveryPersonDashboard from './DeliveryPersonDashboard';
+import { isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
 
 export default function Dashboard() {
     const { formatCurrency } = useSettings();
@@ -13,15 +14,20 @@ export default function Dashboard() {
     const [period, setPeriod] = useState('daily');
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     
     const isVendor = user?.role?.slug === 'vendor';
     const isConfirmationAgent = isConfirmationAgentRole(user?.role?.slug);
+    const isDeliveryPerson = isDeliveryPersonRole(user?.role?.slug);
 
     useEffect(() => {
         fetchDashboardData();
     }, [period]);
 
     const fetchDashboardData = async () => {
+        setLoading(true);
+        setError(null);
+
         try {
             const response = await api.get(`/dashboard?period=${period}`);
             console.log('Dashboard data received:', response.data);
@@ -29,6 +35,8 @@ export default function Dashboard() {
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
             console.error('Error response:', error.response?.data);
+            setStats(null);
+            setError(error.response?.data?.message || 'Failed to load dashboard data.');
         } finally {
             setLoading(false);
         }
@@ -45,8 +53,23 @@ export default function Dashboard() {
         );
     }
 
+    if (error) {
+        return (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700">
+                <h1 className="text-xl font-semibold text-rose-900">Dashboard unavailable</h1>
+                <p className="mt-2 text-sm">
+                    {error}
+                </p>
+            </div>
+        );
+    }
+
     if (isConfirmationAgent) {
         return <ConfirmationAgentDashboard stats={stats} period={period} setPeriod={setPeriod} />;
+    }
+
+    if (isDeliveryPerson) {
+        return <DeliveryPersonDashboard stats={stats} period={period} setPeriod={setPeriod} />;
     }
 
     const toRateNumber = (value) => {
@@ -56,6 +79,9 @@ export default function Dashboard() {
 
     const formatRate = (value) => `${toRateNumber(value).toFixed(2)}%`;
     const rateTooltipFormatter = (value) => `${toRateNumber(value).toFixed(2)}%`;
+    const formatShortDate = (value) => value
+        ? new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        : 'Not generated yet';
     const chartTooltipStyle = {
         backgroundColor: '#fff',
         border: 'none',
@@ -63,70 +89,134 @@ export default function Dashboard() {
         boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
         padding: '12px 16px',
     };
+    const sellerOverview = stats?.seller_overview || null;
+    const sellerBilling = stats?.seller_billing || null;
+    const latestSellerInvoice = sellerBilling?.latest_invoice || null;
+    const displayOrdersStats = isVendor && sellerOverview ? sellerOverview.orders : (stats?.orders || {});
+    const displayRevenue = isVendor && sellerOverview
+        ? sellerOverview.total_revenue || 0
+        : (stats?.revenue?.revenue || 0);
+    const displayProfit = isVendor && sellerOverview
+        ? sellerOverview.total_profit || 0
+        : (stats?.revenue?.profit || 0);
 
-    const statCards = [
-        {
-            title: 'Total Revenue',
-            value: formatCurrency(stats?.revenue?.revenue || 0),
-            suffix: '',
-            icon: DollarSign,
-            gradient: 'from-emerald-500 to-teal-600',
-            bgGradient: 'from-emerald-50 to-teal-50',
-            iconBg: 'bg-emerald-500',
-            change: '+12.5%',
-            changeType: 'positive'
-        },
-        {
-            title: 'Total Orders',
-            value: stats?.orders?.total || 0,
-            icon: ShoppingCart,
-            gradient: 'from-blue-500 to-indigo-600',
-            bgGradient: 'from-blue-50 to-indigo-50',
-            iconBg: 'bg-blue-500',
-            change: '+8.2%',
-            changeType: 'positive'
-        },
-        {
-            title: 'Pending Orders',
-            value: stats?.orders?.pending || 0,
-            icon: Clock,
-            gradient: 'from-amber-500 to-orange-600',
-            bgGradient: 'from-amber-50 to-orange-50',
-            iconBg: 'bg-amber-500',
-            change: '5 new',
-            changeType: 'neutral'
-        },
-        {
-            title: 'Confirmation Rate',
-            value: formatRate(stats?.orders?.confirmation_rate ?? 0),
-            icon: CheckCircle,
-            gradient: 'from-cyan-500 to-sky-600',
-            bgGradient: 'from-cyan-50 to-sky-50',
-            iconBg: 'bg-cyan-500',
-            change: 'Tracked',
-            changeType: 'neutral'
-        },
-        {
-            title: 'Delivery Rate',
-            value: formatRate(stats?.orders?.delivery_rate ?? 0),
-            icon: Package,
-            gradient: 'from-emerald-500 to-lime-600',
-            bgGradient: 'from-emerald-50 to-lime-50',
-            iconBg: 'bg-emerald-500',
-            change: 'Tracked',
-            changeType: 'neutral'
-        },
-        ...(!isVendor ? [{
-            title: 'Low Stock Items',
-            value: stats?.low_stock_products?.length || 0,
-            icon: AlertTriangle,
-            gradient: 'from-rose-500 to-pink-600',
-            bgGradient: 'from-rose-50 to-pink-50',
-            iconBg: 'bg-rose-500',
-            change: 'Needs attention',
-            changeType: 'negative'
-        }] : [])
-    ];
+    const statCards = isVendor
+        ? [
+            {
+                title: 'Total Revenue',
+                value: formatCurrency(displayRevenue),
+                suffix: '',
+                icon: DollarSign,
+                gradient: 'from-emerald-500 to-teal-600',
+                bgGradient: 'from-emerald-50 to-teal-50',
+                iconBg: 'bg-emerald-500',
+                change: `${displayOrdersStats?.delivered || 0} delivered`,
+                changeType: 'neutral'
+            },
+            {
+                title: 'Total Orders',
+                value: displayOrdersStats?.total || 0,
+                icon: ShoppingCart,
+                gradient: 'from-blue-500 to-indigo-600',
+                bgGradient: 'from-blue-50 to-indigo-50',
+                iconBg: 'bg-blue-500',
+                change: 'Seller scoped',
+                changeType: 'neutral'
+            },
+            {
+                title: 'Total Profit',
+                value: formatCurrency(displayProfit),
+                icon: TrendingUp,
+                gradient: 'from-violet-500 to-fuchsia-600',
+                bgGradient: 'from-violet-50 to-fuchsia-50',
+                iconBg: 'bg-violet-500',
+                change: 'Selling price minus company cost',
+                changeType: 'positive'
+            },
+            {
+                title: 'Pending Orders',
+                value: displayOrdersStats?.pending || 0,
+                icon: Clock,
+                gradient: 'from-amber-500 to-orange-600',
+                bgGradient: 'from-amber-50 to-orange-50',
+                iconBg: 'bg-amber-500',
+                change: 'Seller scoped',
+                changeType: 'neutral'
+            },
+            {
+                title: 'Delivered Orders',
+                value: displayOrdersStats?.delivered || 0,
+                icon: Package,
+                gradient: 'from-cyan-500 to-sky-600',
+                bgGradient: 'from-cyan-50 to-sky-50',
+                iconBg: 'bg-cyan-500',
+                change: 'Seller scoped',
+                changeType: 'neutral'
+            },
+        ]
+        : [
+            {
+                title: 'Total Revenue',
+                value: formatCurrency(displayRevenue),
+                suffix: '',
+                icon: DollarSign,
+                gradient: 'from-emerald-500 to-teal-600',
+                bgGradient: 'from-emerald-50 to-teal-50',
+                iconBg: 'bg-emerald-500',
+                change: '+12.5%',
+                changeType: 'positive'
+            },
+            {
+                title: 'Total Orders',
+                value: displayOrdersStats?.total || 0,
+                icon: ShoppingCart,
+                gradient: 'from-blue-500 to-indigo-600',
+                bgGradient: 'from-blue-50 to-indigo-50',
+                iconBg: 'bg-blue-500',
+                change: '+8.2%',
+                changeType: 'positive'
+            },
+            {
+                title: 'Pending Orders',
+                value: displayOrdersStats?.pending || 0,
+                icon: Clock,
+                gradient: 'from-amber-500 to-orange-600',
+                bgGradient: 'from-amber-50 to-orange-50',
+                iconBg: 'bg-amber-500',
+                change: '5 new',
+                changeType: 'neutral'
+            },
+            {
+                title: 'Confirmation Rate',
+                value: formatRate(stats?.orders?.confirmation_rate ?? 0),
+                icon: CheckCircle,
+                gradient: 'from-cyan-500 to-sky-600',
+                bgGradient: 'from-cyan-50 to-sky-50',
+                iconBg: 'bg-cyan-500',
+                change: 'Tracked',
+                changeType: 'neutral'
+            },
+            {
+                title: 'Delivery Rate',
+                value: formatRate(stats?.orders?.delivery_rate ?? 0),
+                icon: Package,
+                gradient: 'from-emerald-500 to-lime-600',
+                bgGradient: 'from-emerald-50 to-lime-50',
+                iconBg: 'bg-emerald-500',
+                change: 'Tracked',
+                changeType: 'neutral'
+            },
+            {
+                title: 'Low Stock Items',
+                value: stats?.low_stock_products?.length || 0,
+                icon: AlertTriangle,
+                gradient: 'from-rose-500 to-pink-600',
+                bgGradient: 'from-rose-50 to-pink-50',
+                iconBg: 'bg-rose-500',
+                change: 'Needs attention',
+                changeType: 'negative'
+            }
+        ];
 
     const getStatusColor = (status) => {
         const colors = {
@@ -203,6 +293,131 @@ export default function Dashboard() {
                 ))}
             </div>
 
+            {isVendor && sellerBilling && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-800">Commission Billing</h2>
+                            <p className="text-slate-500 mt-1">A clear view of what you will receive after platform commission.</p>
+                        </div>
+                        <div className="inline-flex items-center px-4 py-2 rounded-xl bg-orange-50 text-orange-700 border border-orange-200 font-semibold">
+                            Billing cadence: {sellerBilling.billing_frequency_label}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm font-semibold text-emerald-700">What You Will Get</p>
+                                <DollarSign className="text-emerald-600" size={20} />
+                            </div>
+                            <p className="text-3xl font-bold text-emerald-900 mt-3">{formatCurrency(sellerBilling.estimated_payout || 0)}</p>
+                            <p className="text-xs text-emerald-700 mt-2">{sellerBilling.unpaid_orders_count || 0} delivered unpaid order(s)</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm font-semibold text-blue-700">Delivered Sales</p>
+                                <ShoppingCart className="text-blue-600" size={20} />
+                            </div>
+                            <p className="text-3xl font-bold text-blue-900 mt-3">{formatCurrency(sellerBilling.gross_sales || 0)}</p>
+                            <p className="text-xs text-blue-700 mt-2">Gross delivered sales waiting for payout</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm font-semibold text-amber-700">Platform Commission</p>
+                                <TrendingDown className="text-amber-600" size={20} />
+                            </div>
+                            <p className="text-3xl font-bold text-amber-900 mt-3">{formatCurrency(sellerBilling.commission_amount || 0)}</p>
+                            <p className="text-xs text-amber-700 mt-2">Rate: {formatRate(sellerBilling.commission_rate || 0)}</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5">
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm font-semibold text-purple-700">Open Billing Reports</p>
+                                <FileText className="text-purple-600" size={20} />
+                            </div>
+                            <p className="text-3xl font-bold text-purple-900 mt-3">{sellerBilling.open_invoices || 0}</p>
+                            <p className="text-xs text-purple-700 mt-2">Generated reports not paid yet</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-slate-800">How It Is Calculated</h3>
+                                <Store className="text-slate-500" size={20} />
+                            </div>
+                            <div className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-slate-600">Delivered sales</span>
+                                    <span className="font-semibold text-slate-900">{formatCurrency(sellerBilling.gross_sales || 0)}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-slate-600">Platform commission</span>
+                                    <span className="font-semibold text-amber-700">-{formatCurrency(sellerBilling.commission_amount || 0)}</span>
+                                </div>
+                                <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                                    <span className="font-semibold text-slate-900">Estimated payout</span>
+                                    <span className="text-xl font-bold text-emerald-700">{formatCurrency(sellerBilling.estimated_payout || 0)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-slate-800">Latest Billing Report</h3>
+                                <CheckCircle className={latestSellerInvoice?.status === 'paid' ? 'text-emerald-500' : 'text-amber-500'} size={20} />
+                            </div>
+
+                            {latestSellerInvoice ? (
+                                <div className="space-y-3 text-sm">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-600">Period</span>
+                                        <span className="font-semibold text-slate-900">
+                                            {formatShortDate(latestSellerInvoice.period_start)} - {formatShortDate(latestSellerInvoice.period_end)}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-600">Orders</span>
+                                        <span className="font-semibold text-slate-900">{latestSellerInvoice.orders_count || 0}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-600">Payout</span>
+                                        <span className="font-semibold text-emerald-700">{formatCurrency(latestSellerInvoice.settlement_amount || 0)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-600">Status</span>
+                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                            latestSellerInvoice.status === 'paid'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                            {latestSellerInvoice.status === 'paid' ? 'Paid' : 'Unpaid'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-600">Generated</span>
+                                        <span className="font-semibold text-slate-900">{formatShortDate(latestSellerInvoice.generated_at)}</span>
+                                    </div>
+                                    {latestSellerInvoice.paid_at && (
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-600">Paid on</span>
+                                            <span className="font-semibold text-slate-900">{formatShortDate(latestSellerInvoice.paid_at)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 p-4 text-sm text-slate-600">
+                                    No billing report has been generated yet for this seller.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Charts Section */}
             {/* Status Cards - Order counts by status */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -221,7 +436,7 @@ export default function Dashboard() {
                     <div className="text-center">
                         <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
                         <p className="text-blue-600 text-sm font-semibold">New</p>
-                        <p className="text-2xl font-bold text-blue-900 mt-1">{stats?.orders?.pending || 0}</p>
+                            <p className="text-2xl font-bold text-blue-900 mt-1">{displayOrdersStats?.pending || 0}</p>
                     </div>
                 </div>
                 {/* Delivered Orders */}
@@ -229,7 +444,7 @@ export default function Dashboard() {
                     <div className="text-center">
                         <Package className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
                         <p className="text-emerald-600 text-sm font-semibold">Delivered</p>
-                        <p className="text-2xl font-bold text-emerald-900 mt-1">{stats?.orders?.delivered || 0}</p>
+                        <p className="text-2xl font-bold text-emerald-900 mt-1">{displayOrdersStats?.delivered || 0}</p>
                     </div>
                 </div>
                 {/* Confirmed Orders */}
@@ -237,7 +452,7 @@ export default function Dashboard() {
                     <div className="text-center">
                         <CheckCircle className="w-8 h-8 text-cyan-600 mx-auto mb-2" />
                         <p className="text-cyan-600 text-sm font-semibold">Confirmed</p>
-                        <p className="text-2xl font-bold text-cyan-900 mt-1">{stats?.orders?.confirmed || 0}</p>
+                        <p className="text-2xl font-bold text-cyan-900 mt-1">{displayOrdersStats?.confirmed || 0}</p>
                     </div>
                 </div>
                 {/* In Delivery */}
@@ -245,7 +460,7 @@ export default function Dashboard() {
                     <div className="text-center">
                         <Package className="w-8 h-8 text-indigo-600 mx-auto mb-2" />
                         <p className="text-indigo-600 text-sm font-semibold">In Delivery</p>
-                        <p className="text-2xl font-bold text-indigo-900 mt-1">{stats?.orders?.shipped || 0}</p>
+                        <p className="text-2xl font-bold text-indigo-900 mt-1">{displayOrdersStats?.shipped || 0}</p>
                     </div>
                 </div>
                 {/* Returned Orders */}
@@ -253,7 +468,7 @@ export default function Dashboard() {
                     <div className="text-center">
                         <ArrowDownRight className="w-8 h-8 text-orange-600 mx-auto mb-2" />
                         <p className="text-orange-600 text-sm font-semibold">Returned</p>
-                        <p className="text-2xl font-bold text-orange-900 mt-1">{stats?.orders?.returned || 0}</p>
+                        <p className="text-2xl font-bold text-orange-900 mt-1">{displayOrdersStats?.returned || 0}</p>
                     </div>
                 </div>
                 {/* Refused Orders */}
@@ -261,7 +476,7 @@ export default function Dashboard() {
                     <div className="text-center">
                         <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
                         <p className="text-red-600 text-sm font-semibold">Refused</p>
-                        <p className="text-2xl font-bold text-red-900 mt-1">{stats?.orders?.refused || 0}</p>
+                        <p className="text-2xl font-bold text-red-900 mt-1">{displayOrdersStats?.refused || 0}</p>
                     </div>
                 </div>
                 {/* Cancelled Orders */}
@@ -269,7 +484,7 @@ export default function Dashboard() {
                     <div className="text-center">
                         <X className="w-8 h-8 text-rose-600 mx-auto mb-2" />
                         <p className="text-rose-600 text-sm font-semibold">Cancelled</p>
-                        <p className="text-2xl font-bold text-rose-900 mt-1">{stats?.orders?.cancelled || 0}</p>
+                        <p className="text-2xl font-bold text-rose-900 mt-1">{displayOrdersStats?.cancelled || 0}</p>
                     </div>
                 </div>
                 {/* Waiting Confirmation */}

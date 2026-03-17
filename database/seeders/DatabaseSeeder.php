@@ -87,20 +87,22 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $deliveryRole = Role::create([
-            'name' => 'Delivery',
-            'slug' => 'delivery',
-            'description' => 'Delivery personnel',
+            'name' => 'Delivery Person',
+            'slug' => 'delivery_person',
+            'description' => 'Can only manage assigned orders, schedule callbacks, and track delivery billing.',
             'permissions' => [
                 'view_assigned_orders',
                 'update_delivery_status',
-                'view_clients',
+                'schedule_delivery_callbacks',
+                'view_dashboard',
+                'view_delivery_billing',
             ],
         ]);
 
         $vendorRole = Role::create([
-            'name' => 'Vendor',
+            'name' => 'Seller',
             'slug' => 'vendor',
-            'description' => 'Vendor/Supplier',
+            'description' => 'Seller with limited access',
             'permissions' => [
                 'view_own_products',
                 'view_own_orders',
