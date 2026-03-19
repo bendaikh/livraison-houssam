@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class OrderService
 {
+    private const IMPORTED_SHOPIFY_SURCHARGE = 1.0;
+
     public function __construct(
         private StockService $stockService,
         private ShippingPriceService $shippingPriceService,
@@ -340,6 +342,24 @@ class OrderService
             $callbackDate = isset($data['callback_date']) && $data['callback_date']
                 ? Carbon::parse($data['callback_date'])->startOfDay()
                 : null;
+            $returnToConfirmation = (bool) ($data['return_to_confirmation'] ?? false);
+            $returnStatus = $data['return_status'] ?? 'returned';
+
+            if ($returnToConfirmation) {
+                if ($order->delivery_tracking_code) {
+                    abort(422, 'Orders handled by a delivery company cannot be returned through the delivery person workflow.');
+                }
+
+                if ($order->status === 'delivered') {
+                    abort(422, 'Delivered orders cannot be sent back to confirmation.');
+                }
+
+                if (!$note) {
+                    abort(422, 'A reason is required when sending an order back to confirmation.');
+                }
+
+                return $this->returnOrderToConfirmation($order, $user, $note, $returnStatus);
+            }
 
             if ($callbackDate) {
                 if ($callbackDate->lte(Carbon::today())) {
@@ -429,6 +449,47 @@ class OrderService
                 'deliveryIntegration',
             ]);
         });
+    }
+
+    private function returnOrderToConfirmation(Order $order, User $user, string $note, string $returnStatus): Order
+    {
+        $order->update([
+            'delivery_person_id' => null,
+            'callback_date' => null,
+            'delivery_status_note' => $note,
+            'returned_to_confirmation_at' => now(),
+            'confirmed_at' => null,
+            'picked_up_at' => null,
+            'ready_for_shipping_at' => null,
+            'shipped_at' => null,
+            'out_for_delivery_at' => null,
+            'collected_amount' => null,
+            'delivery_person_commission' => null,
+            'amount_due_to_admin' => null,
+        ]);
+
+        $order = $this->updateOrderStatus(
+            $order->id,
+            $returnStatus,
+            'Order sent back to confirmation by delivery person as ' . $returnStatus . '. Reason: ' . $note
+        );
+
+        $this->addHistory(
+            $order->id,
+            $order->status,
+            'Delivery person returned this order to the confirmation workflow.'
+        );
+
+        return $order->fresh([
+            'client',
+            'vendor',
+            'items.product',
+            'history.user',
+            'confirmationAgent',
+            'deliveryAgent',
+            'deliveryPerson',
+            'deliveryIntegration',
+        ]);
     }
 
     private function sendOrderToDeliveryCompany(Order $order, int $deliveryIntegrationId, ?string $deliveryCity = null)
@@ -904,6 +965,7 @@ class OrderService
         if (array_key_exists('delivery_integration_id', $attributes) && !empty($attributes['delivery_integration_id'])) {
             $updatable['delivery_person_id'] = null;
             $updatable['delivery_agent_id'] = null;
+            $updatable['returned_to_confirmation_at'] = null;
         }
 
         if (array_key_exists('delivery_person_id', $attributes) && !empty($attributes['delivery_person_id'])) {
@@ -912,6 +974,7 @@ class OrderService
             $updatable['delivery_status'] = null;
             $updatable['sent_to_delivery_at'] = null;
             $updatable['delivery_city'] = null;
+            $updatable['returned_to_confirmation_at'] = null;
         }
 
         if (array_key_exists('delivery_integration_id', $attributes) && empty($attributes['delivery_integration_id'])) {
@@ -944,8 +1007,9 @@ class OrderService
         $shippingCost = (float) ($data['shipping_cost'] ?? $order?->shipping_cost ?? 0);
         $tax = (float) ($data['tax'] ?? $order?->tax ?? 0);
         $discount = (float) ($data['discount'] ?? $order?->discount ?? 0);
+        $shopifySurcharge = $this->resolveImportedShopifySurcharge($data, $order);
 
-        $total = $subtotal + $tax - $discount;
+        $total = $subtotal + $tax - $discount + $shopifySurcharge;
 
         if (!$shippingIncludedInPrice) {
             $total += $shippingCost;
@@ -956,5 +1020,21 @@ class OrderService
             'total' => $total,
             'shipping_included_in_price' => $shippingIncludedInPrice,
         ];
+    }
+
+    private function resolveImportedShopifySurcharge(array $data, ?Order $order = null): float
+    {
+        $source = $data['source'] ?? $order?->source;
+        $externalOrderId = $data['external_order_id'] ?? $order?->external_order_id;
+
+        if ($source !== 'shopify') {
+            return 0.0;
+        }
+
+        if (blank($externalOrderId)) {
+            return 0.0;
+        }
+
+        return self::IMPORTED_SHOPIFY_SURCHARGE;
     }
 }

@@ -229,11 +229,12 @@ export default function OrderList({ status = '' }) {
     const deliveryStatusOptions = ['delivered', 'refused', 'cancelled', 'no_response', 'returned'];
     const motifRequiredStatuses = ['refused', 'cancelled', 'no_response', 'returned'];
     const deliveryPrimaryActions = [
-        { key: 'delivered', label: 'Delivered', tone: 'bg-emerald-600 text-white hover:bg-emerald-700' },
-        { key: 'refused', label: 'Refused', tone: isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
-        { key: 'no_response', label: 'No Answer', tone: isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
-        { key: 'cancelled', label: 'Cancelled', tone: isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
-        { key: 'report', label: 'Report / Callback', tone: isDarkMode ? 'bg-amber-950/70 text-amber-200 border border-amber-900 hover:bg-amber-900/80' : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100' },
+        { key: 'delivered', label: '✓ Delivered', tone: 'bg-emerald-600 text-white hover:bg-emerald-700' },
+        { key: 'refused', label: '✗ Refused', tone: isDarkMode ? 'bg-red-900/70 text-red-200 border border-red-800 hover:bg-red-800/80' : 'bg-red-50 text-red-800 border border-red-200 hover:bg-red-100' },
+        { key: 'no_response', label: '📵 No Answer', tone: isDarkMode ? 'bg-orange-900/70 text-orange-200 border border-orange-800 hover:bg-orange-800/80' : 'bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100' },
+        { key: 'cancelled', label: '⊗ Cancelled', tone: isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
+        { key: 'return_to_confirmation', label: '↶ Deny', tone: isDarkMode ? 'bg-cyan-950/70 text-cyan-200 border border-cyan-900 hover:bg-cyan-900/80' : 'bg-cyan-50 text-cyan-800 border border-cyan-200 hover:bg-cyan-100' },
+        { key: 'report', label: '📋 Callback', tone: isDarkMode ? 'bg-amber-950/70 text-amber-200 border border-amber-900 hover:bg-amber-900/80' : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100' },
     ];
 
     const isConfirmationAgentStatusLocked = (order) => {
@@ -241,7 +242,7 @@ export default function OrderList({ status = '' }) {
             return true;
         }
 
-        if (order?.delivery_person_id) {
+        if (order?.delivery_person_id && (Boolean(order?.confirmed_at) || order?.status === 'confirmed')) {
             return true;
         }
 
@@ -249,10 +250,14 @@ export default function OrderList({ status = '' }) {
     };
 
     const isSellerStatusLocked = (order) => {
-        return isVendorUser && isConfirmationAgentStatusLocked(order);
+        return isVendorUser && (Boolean(order?.returned_to_confirmation_at) || isConfirmationAgentStatusLocked(order));
     };
 
     const getSellerStatusLockMessage = (order) => {
+        if (order?.returned_to_confirmation_at) {
+            return 'Status is now handled by the confirmation workflow.';
+        }
+
         if (order?.delivery_tracking_code) {
             return 'Status is now controlled by the delivery company.';
         }
@@ -539,6 +544,10 @@ export default function OrderList({ status = '' }) {
             }
         }
 
+        if (mode === 'return' && !String(note).trim()) {
+            errors.note = 'Reason is required.';
+        }
+
         if (Object.keys(errors).length > 0) {
             setDeliveryWorkflowModal((prev) => ({ ...prev, errors }));
             return;
@@ -565,10 +574,18 @@ export default function OrderList({ status = '' }) {
                 payload.status = nextStatus;
             }
 
+            if (mode === 'return') {
+                payload.return_to_confirmation = true;
+                payload.delivery_status_note = note;
+                payload.return_status = nextStatus || 'returned';
+            }
+
             const response = await api.patch(`/orders/${order.id}/delivery-workflow`, payload);
-            setOrders((prev) => prev.map((entry) => (
-                entry.id === order.id ? { ...entry, ...response.data } : entry
-            )));
+            setOrders((prev) => mode === 'return'
+                ? prev.filter((entry) => entry.id !== order.id)
+                : prev.map((entry) => (
+                    entry.id === order.id ? { ...entry, ...response.data } : entry
+                )));
             closeDeliveryWorkflowModal();
         } catch (error) {
             console.error('Error saving delivery workflow:', error);
@@ -774,6 +791,11 @@ export default function OrderList({ status = '' }) {
                                     actionButtons={deliveryPrimaryActions}
                                     isDarkMode={isDarkMode}
                                     onAction={(actionKey) => {
+                                        if (actionKey === 'return_to_confirmation') {
+                                            openDeliveryWorkflowModal(order, { mode: 'return', nextStatus: 'returned' });
+                                            return;
+                                        }
+
                                         if (actionKey === 'report') {
                                             openDeliveryWorkflowModal(order, { mode: 'report', nextStatus: order.status });
                                             return;
@@ -841,7 +863,7 @@ export default function OrderList({ status = '' }) {
                 <div>
                     <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
                 </div>
-                {!isConfirmationAgentUser && !isDeliveryPersonUser && (
+                {!isConfirmationAgentUser && !isDeliveryPersonUser && !isVendorUser && (
                     <button
                         onClick={() => navigate('/orders/create')}
                         className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
@@ -1198,6 +1220,11 @@ export default function OrderList({ status = '' }) {
                                                 }`}>
                                                     {isResponsibleConfirmationAgent ? 'Responsible' : 'Assigned'}
                                                 </span>
+                                                {order.returned_to_confirmation_at && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-cyan-50 text-cyan-700">
+                                                        Back from delivery
+                                                    </span>
+                                                )}
                                             </>
                                         ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
@@ -1309,6 +1336,14 @@ export default function OrderList({ status = '' }) {
                                                         className="mt-2 inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-200 hover:bg-amber-100"
                                                     >
                                                         Report / Callback
+                                                    </button>
+                                                )}
+                                                {!deliveryWorkflowIsLocked && canWorkOnOrder && (
+                                                    <button
+                                                        onClick={() => openDeliveryWorkflowModal(order, { mode: 'return', nextStatus: 'returned' })}
+                                                        className="mt-2 inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-cyan-50 text-cyan-700 text-xs font-semibold border border-cyan-200 hover:bg-cyan-100"
+                                                    >
+                                                        Send Back to Confirmation
                                                     </button>
                                                 )}
                                             </>
@@ -1449,6 +1484,7 @@ function DeliveryWorkflowModal({ modal, onClose, onSubmit, formatStatusLabel, mo
     }
 
     const actionRequiresMotif = modal.mode === 'status' && motifRequiredStatuses.includes(modal.nextStatus);
+    const isReturnMode = modal.mode === 'return';
 
     return (
         <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
@@ -1456,10 +1492,14 @@ function DeliveryWorkflowModal({ modal, onClose, onSubmit, formatStatusLabel, mo
                 <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            {modal.mode === 'report' ? 'Callback' : 'Delivery action'}
+                            {modal.mode === 'report' ? 'Callback' : isReturnMode ? 'Return to Confirmation' : 'Delivery action'}
                         </p>
                         <h2 className="text-xl font-bold text-slate-900 mt-1">
-                            {modal.mode === 'report' ? 'Report / Callback' : formatStatusLabel(modal.nextStatus)}
+                            {modal.mode === 'report'
+                                ? 'Report / Callback'
+                                : isReturnMode
+                                    ? 'Send Back to Confirmation'
+                                    : formatStatusLabel(modal.nextStatus)}
                         </h2>
                         <p className="text-sm text-slate-500 mt-1">
                             {modal.order.client?.name || 'Client'} • {modal.order.order_number}
@@ -1471,6 +1511,23 @@ function DeliveryWorkflowModal({ modal, onClose, onSubmit, formatStatusLabel, mo
                 </div>
 
                 <form onSubmit={onSubmit} className="p-6 space-y-4">
+                    {isReturnMode && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Return status</label>
+                            <select
+                                value={modal.nextStatus || 'returned'}
+                                onChange={(event) => setModal((prev) => ({ ...prev, nextStatus: event.target.value }))}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-2xl"
+                            >
+                                <option value="returned">Returned</option>
+                                <option value="refused">Refused</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="no_response">No Response</option>
+                            </select>
+                            <p className="text-xs text-slate-500 mt-1">This status will be shown to the confirmation team when the order goes back.</p>
+                        </div>
+                    )}
+
                     {modal.mode === 'report' && (
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Callback date</label>
@@ -1505,9 +1562,17 @@ function DeliveryWorkflowModal({ modal, onClose, onSubmit, formatStatusLabel, mo
                         </div>
                     )}
 
+                    {isReturnMode && (
+                        <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+                            This removes the current delivery person assignment and sends the order back to the confirmation workflow.
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                            {modal.mode === 'report' ? 'Motif (optional)' : actionRequiresMotif ? 'Motif (required)' : 'Motif (optional)'}
+                            {isReturnMode
+                                ? 'Reason (required)'
+                                : modal.mode === 'report' ? 'Motif (optional)' : actionRequiresMotif ? 'Motif (required)' : 'Motif (optional)'}
                         </label>
                         <textarea
                             rows="4"
@@ -1515,7 +1580,9 @@ function DeliveryWorkflowModal({ modal, onClose, onSubmit, formatStatusLabel, mo
                             onChange={(event) => setModal((prev) => ({ ...prev, note: event.target.value }))}
                             className="w-full px-4 py-3 border border-slate-300 rounded-2xl"
                             placeholder={
-                                modal.mode === 'report'
+                                isReturnMode
+                                    ? 'Explain why this order must go back to confirmation.'
+                                    : modal.mode === 'report'
                                     ? 'Add a note only if needed.'
                                     : actionRequiresMotif
                                         ? 'Why was this order marked this way?'
@@ -1540,7 +1607,11 @@ function DeliveryWorkflowModal({ modal, onClose, onSubmit, formatStatusLabel, mo
                             disabled={modal.saving}
                             className="px-4 py-2.5 rounded-2xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50"
                         >
-                            {modal.saving ? 'Saving...' : modal.mode === 'report' ? 'Save Callback' : 'Save Action'}
+                            {modal.saving
+                                ? 'Saving...'
+                                : isReturnMode
+                                    ? 'Send Back'
+                                    : modal.mode === 'report' ? 'Save Callback' : 'Save Action'}
                         </button>
                     </div>
                 </form>
@@ -1594,39 +1665,40 @@ function DeliveryPersonOrderCard({
                     <p className={`mt-2 text-sm leading-6 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{itemSummary}</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
-                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Collected</p>
-                        <p className={`mt-2 text-lg font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{formatCurrency(order.collected_amount || 0)}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className={`rounded-lg border px-3 py-2 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Collected</p>
+                        <p className={`mt-1.5 text-base font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{formatCurrency(order.collected_amount || 0)}</p>
                     </div>
-                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
-                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Commission</p>
-                        <p className="mt-2 text-lg font-bold text-emerald-500">{formatCurrency(order.delivery_person_commission || 0)}</p>
+                    <div className={`rounded-lg border px-3 py-2 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Commission</p>
+                        <p className="mt-1.5 text-base font-bold text-emerald-500">{formatCurrency(order.delivery_person_commission || 0)}</p>
                     </div>
-                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
-                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Due to admin</p>
-                        <p className="mt-2 text-lg font-bold text-amber-500">{formatCurrency(order.amount_due_to_admin || 0)}</p>
+                    <div className={`rounded-lg border px-3 py-2 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Due to admin</p>
+                        <p className="mt-1.5 text-base font-bold text-amber-500">{formatCurrency(order.amount_due_to_admin || 0)}</p>
                     </div>
                 </div>
 
                 {order.delivery_status_note && (
-                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-rose-900 bg-rose-950/40' : 'border-rose-100 bg-rose-50'}`}>
-                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-rose-300' : 'text-rose-400'}`}>Motif</p>
-                        <p className={`mt-2 text-sm ${isDarkMode ? 'text-rose-100' : 'text-rose-800'}`}>{order.delivery_status_note}</p>
+                    <div className={`rounded-lg border px-3 py-2 ${isDarkMode ? 'border-rose-900 bg-rose-950/40' : 'border-rose-100 bg-rose-50'}`}>
+                        <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${isDarkMode ? 'text-rose-300' : 'text-rose-400'}`}>Motif</p>
+                        <p className={`mt-1.5 text-xs ${isDarkMode ? 'text-rose-100' : 'text-rose-800'}`}>{order.delivery_status_note}</p>
                     </div>
                 )}
 
                 {isLocked ? (
-                    <div className={`rounded-2xl border px-4 py-3 text-sm ${isDarkMode ? 'border-slate-800 bg-slate-950/70 text-slate-400' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+                    <div className={`rounded-lg border px-3 py-2 text-xs ${isDarkMode ? 'border-slate-800 bg-slate-950/70 text-slate-400' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
                         {lockMessage}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         {actionButtons.map((action) => (
                             <button
                                 key={action.key}
                                 onClick={() => onAction(action.key)}
-                                className={`px-4 py-3 rounded-2xl text-sm font-semibold transition-all ${action.tone}`}
+                                className={`px-4 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${action.tone}`}
+                                title={action.label}
                             >
                                 {action.label}
                             </button>

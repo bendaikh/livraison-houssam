@@ -32,6 +32,7 @@ export default function OrderForm() {
     const [deliveryCompanies, setDeliveryCompanies] = useState([]);
     const [currentOrderTrackingCode, setCurrentOrderTrackingCode] = useState('');
     const [currentOrderConfirmedAt, setCurrentOrderConfirmedAt] = useState(null);
+    const [currentOrderReturnedToConfirmationAt, setCurrentOrderReturnedToConfirmationAt] = useState(null);
     const [deliveryCompanyCities, setDeliveryCompanyCities] = useState([]);
     const [deliveryCitiesLoading, setDeliveryCitiesLoading] = useState(false);
     const [deliveryCitiesError, setDeliveryCitiesError] = useState('');
@@ -257,6 +258,7 @@ export default function OrderForm() {
             const effectiveShippingCost = order.effective_shipping_cost ?? order.resolved_shipping_cost ?? order.shipping_cost ?? '';
             setCurrentOrderTrackingCode(order.delivery_tracking_code || '');
             setCurrentOrderConfirmedAt(order.confirmed_at || null);
+            setCurrentOrderReturnedToConfirmationAt(order.returned_to_confirmation_at || null);
 
             console.debug('[OrderForm] initial order data loaded', {
                 orderId: order.id,
@@ -406,7 +408,7 @@ export default function OrderForm() {
             return true;
         }
 
-        if (formData.delivery_person_id) {
+        if (formData.delivery_person_id && (Boolean(currentOrderConfirmedAt) || formData.status === 'confirmed')) {
             return true;
         }
 
@@ -414,7 +416,7 @@ export default function OrderForm() {
     };
     const isSellerStatusLocked = isVendorUser
         && isEditing
-        && isConfirmationStyleStatusLocked();
+        && (Boolean(currentOrderReturnedToConfirmationAt) || isConfirmationStyleStatusLocked());
 
         // Keep delivery city in sync with shipping city whenever company is selected.
         useEffect(() => {
@@ -776,7 +778,9 @@ export default function OrderForm() {
                                 <p className="text-xs text-gray-500 mt-1">
                                     {currentOrderTrackingCode
                                         ? 'Status is locked for sellers after the order is handed to a delivery company.'
-                                        : formData.delivery_person_id
+                                        : currentOrderReturnedToConfirmationAt
+                                            ? 'Status is locked for sellers while the order is back in the confirmation workflow.'
+                                        : formData.delivery_person_id && (Boolean(currentOrderConfirmedAt) || formData.status === 'confirmed')
                                             ? 'Status is locked for sellers once a delivery person is assigned.'
                                             : 'Status is locked for sellers once the order has been confirmed.'}
                                 </p>

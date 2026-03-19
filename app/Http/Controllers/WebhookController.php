@@ -8,6 +8,7 @@ use App\Models\Client;
 use App\Models\Product;
 use App\Services\BMDeliveryService;
 use App\Services\DeliveryStatusMapper;
+use App\Services\OrderService;
 use App\Services\ShopifyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,8 @@ use Illuminate\Support\Facades\Log;
 class WebhookController extends Controller
 {
     public function __construct(
-        private DeliveryStatusMapper $deliveryStatusMapper
+        private DeliveryStatusMapper $deliveryStatusMapper,
+        private OrderService $orderService,
     ) {
     }
 
@@ -71,39 +73,38 @@ class WebhookController extends Controller
             // Create or find the client
             $client = $this->getOrCreateClient($parsedData['customer']);
 
-            // Create the order
-            $order = Order::create([
-                'order_number' => $this->generateOrderNumber(),
-                'external_order_id' => $parsedData['external_order_id'],
-                'client_id' => $client->id,
-                'subtotal' => $parsedData['subtotal'],
-                'shipping_cost' => $parsedData['total_shipping'],
-                'tax' => $parsedData['total_tax'],
-                'discount' => $parsedData['total_discounts'],
-                'total' => $parsedData['total'],
-                'status' => 'pending',
-                'source' => 'shopify',
-                'shipping_address' => $parsedData['customer']['address'] ?? null,
-                'notes' => $parsedData['note'],
-            ]);
-
-            // Create order items
+            $items = [];
             foreach ($parsedData['line_items'] as $item) {
-                // Try to find matching product by external ID or SKU
                 $product = null;
                 if (!empty($item['sku'])) {
                     $product = Product::where('sku', $item['sku'])->first();
                 }
-                
-                $order->items()->create([
+
+                $items[] = [
                     'product_id' => $product?->id,
                     'product_name' => $item['name'],
                     'sku' => $item['sku'],
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
-                    'subtotal' => $item['price'] * $item['quantity'],
-                ]);
+                ];
             }
+
+            // Create the order through OrderService so imported Shopify pricing rules stay consistent.
+            $order = $this->orderService->createOrder([
+                'client_id' => $client->id,
+                'client_phone' => $parsedData['customer']['phone'] ?? $client->phone,
+                'external_order_id' => $parsedData['external_order_id'],
+                'shopify_name' => $parsedData['shopify_name'] ?? null,
+                'items' => $items,
+                'shipping_cost' => $parsedData['total_shipping'],
+                'tax' => $parsedData['total_tax'],
+                'discount' => $parsedData['total_discounts'],
+                'status' => 'pending',
+                'source' => 'shopify',
+                'shipping_address' => $parsedData['customer']['address'] ?? null,
+                'city' => $parsedData['customer']['city'] ?? null,
+                'notes' => $parsedData['note'],
+            ]);
 
             Log::info('Order created from Shopify webhook', [
                 'order_id' => $order->id,
@@ -181,18 +182,6 @@ class WebhookController extends Controller
             'address' => $customerData['address'],
             'city' => $customerData['city'],
         ]);
-    }
-
-    /**
-     * Generate unique order number
-     */
-    private function generateOrderNumber(): string
-    {
-        $prefix = 'ORD';
-        $date = now()->format('Ymd');
-        $random = str_pad(random_int(1, 9999), 4, '0', STR_PAD_LEFT);
-        
-        return "{$prefix}-{$date}-{$random}";
     }
 
     /**

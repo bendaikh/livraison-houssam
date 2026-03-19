@@ -41,7 +41,10 @@ class OrderController extends Controller
 
             if ($assignmentScope === 'available') {
                 $query->whereNull('confirmation_agent_id')
-                    ->whereNotIn('status', ['delivered', 'returned', 'no_response']);
+                    ->where(function ($subQuery) {
+                        $subQuery->whereNotIn('status', ['delivered', 'returned', 'no_response'])
+                            ->orWhereNotNull('returned_to_confirmation_at');
+                    });
             } else {
                 $query->where('confirmation_agent_id', $user->id);
             }
@@ -776,15 +779,25 @@ class OrderController extends Controller
             'delivery_status_note' => 'nullable|string',
             'callback_date' => 'nullable|date|after:today',
             'collected_amount' => 'nullable|numeric|min:0',
+            'return_to_confirmation' => 'nullable|boolean',
+            'return_status' => 'nullable|in:refused,cancelled,no_response,returned',
         ]);
 
-        if (empty($validated['status']) && empty($validated['callback_date'])) {
+        $returnToConfirmation = (bool) ($validated['return_to_confirmation'] ?? false);
+
+        if (empty($validated['status']) && empty($validated['callback_date']) && !$returnToConfirmation) {
             throw ValidationException::withMessages([
                 'status' => ['Provide a status or a callback date.'],
             ]);
         }
 
-        if (!empty($validated['status']) && in_array($validated['status'], ['refused', 'cancelled', 'no_response', 'returned'], true)) {
+        if ($returnToConfirmation && empty(trim((string) ($validated['delivery_status_note'] ?? '')))) {
+            throw ValidationException::withMessages([
+                'delivery_status_note' => ['A reason is required when sending an order back to confirmation.'],
+            ]);
+        }
+
+        if (!$returnToConfirmation && !empty($validated['status']) && in_array($validated['status'], ['refused', 'cancelled', 'no_response', 'returned'], true)) {
             if (empty(trim((string) ($validated['delivery_status_note'] ?? '')))) {
                 throw ValidationException::withMessages([
                     'delivery_status_note' => ['A reason is required for this status.'],
@@ -1025,7 +1038,7 @@ class OrderController extends Controller
             return false;
         }
 
-        if ($order->delivery_person_id) {
+        if ($order->delivery_person_id && (!empty($order->confirmed_at) || $order->status === 'confirmed')) {
             return true;
         }
 
@@ -1034,6 +1047,10 @@ class OrderController extends Controller
 
     private function isSellerStatusLocked(Order $order, ?string $requestedStatus = null): bool
     {
+        if (!empty($order->returned_to_confirmation_at)) {
+            return true;
+        }
+
         return $this->isConfirmationAgentStatusLocked($order, $requestedStatus);
     }
 
@@ -1052,6 +1069,10 @@ class OrderController extends Controller
 
     private function getSellerStatusLockMessage(Order $order): string
     {
+        if (!empty($order->returned_to_confirmation_at)) {
+            return 'Status is read-only for sellers while the order is back in the confirmation workflow.';
+        }
+
         if (!empty($order->delivery_tracking_code)) {
             return 'Status is read-only for sellers after the order is handed to a delivery company.';
         }

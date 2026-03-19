@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { calculateUpsellProfit, getProductBasePrice } from '../../utils/profit';
+import SearchableSelect from '../../components/SearchableSelect';
 
 const STATUS_OPTIONS = [
     'pending',
@@ -51,9 +52,6 @@ export default function ConfirmationWorkflowForm() {
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [upsellItems, setUpsellItems] = useState([]);
     const [deliveryMethod, setDeliveryMethod] = useState('person');
-    const [deliveryPersonSearch, setDeliveryPersonSearch] = useState('');
-    const [deliveryCompanySearch, setDeliveryCompanySearch] = useState('');
-    const [deliveryCitySearch, setDeliveryCitySearch] = useState('');
 
     useEffect(() => {
         fetchInitialData();
@@ -115,7 +113,9 @@ export default function ConfirmationWorkflowForm() {
         try {
             setDeliveryCitiesLoading(true);
             const response = await api.get(`/orders/delivery-companies/${companyId}/cities`);
-            setDeliveryCities(Array.isArray(response.data) ? response.data : []);
+            const citiesData = Array.isArray(response.data) ? response.data : [];
+            console.log('Fetched delivery cities:', { count: citiesData.length, sample: citiesData.slice(0, 3) });
+            setDeliveryCities(citiesData);
         } catch (error) {
             console.error('Error fetching delivery cities:', error);
             setDeliveryCities([]);
@@ -166,7 +166,7 @@ export default function ConfirmationWorkflowForm() {
             return true;
         }
 
-        if (order.delivery_person_id) {
+        if (order.delivery_person_id && (Boolean(order.confirmed_at) || order.status === 'confirmed')) {
             return true;
         }
 
@@ -178,52 +178,23 @@ export default function ConfirmationWorkflowForm() {
             return false;
         }
 
-        return Boolean(order.delivery_tracking_code) || Boolean(order.confirmed_at) || Boolean(order.delivery_person_id);
+        return Boolean(order.delivery_tracking_code)
+            || Boolean(order.confirmed_at)
+            || order.status === 'confirmed'
+            || (Boolean(order.delivery_person_id) && (Boolean(order.confirmed_at) || order.status === 'confirmed'));
     }, [order]);
 
     const statusReadOnlyMessage = order?.delivery_tracking_code
         ? 'Status is now controlled by the delivery company because a tracking code exists.'
-        : order?.delivery_person_id
+        : order?.delivery_person_id && (Boolean(order?.confirmed_at) || order?.status === 'confirmed')
             ? 'Status is now controlled by the assigned delivery person.'
             : 'Status is locked after the order has been confirmed.';
 
     const assignmentReadOnlyMessage = order?.delivery_tracking_code
         ? 'Delivery assignment is locked because a tracking code already exists.'
-        : order?.delivery_person_id
+        : order?.delivery_person_id && (Boolean(order?.confirmed_at) || order?.status === 'confirmed')
             ? 'Delivery assignment is locked because a delivery person is already assigned.'
             : 'Delivery assignment is locked because the order has already been confirmed.';
-
-    const filteredDeliveryPersons = useMemo(() => {
-        const search = deliveryPersonSearch.trim().toLowerCase();
-        if (!search) {
-            return deliveryPersons;
-        }
-
-        return deliveryPersons.filter((person) => person.name.toLowerCase().includes(search));
-    }, [deliveryPersons, deliveryPersonSearch]);
-
-    const filteredDeliveryCompanies = useMemo(() => {
-        const search = deliveryCompanySearch.trim().toLowerCase();
-        if (!search) {
-            return deliveryCompanies;
-        }
-
-        return deliveryCompanies.filter((company) => {
-            const haystack = `${company.name} ${company.provider || ''}`.toLowerCase();
-            return haystack.includes(search);
-        });
-    }, [deliveryCompanies, deliveryCompanySearch]);
-
-    const filteredDeliveryCities = useMemo(() => {
-        const search = deliveryCitySearch.trim().toLowerCase();
-        const cities = deliveryCities.map((city) => (typeof city === 'object' ? (city.name || city.ville || city.city || '') : city));
-
-        if (!search) {
-            return cities;
-        }
-
-        return cities.filter((cityName) => cityName.toLowerCase().includes(search));
-    }, [deliveryCities, deliveryCitySearch]);
 
     const addUpsellRow = () => {
         setUpsellItems((prev) => [...prev, { product_id: '', quantity: 1, price: 0 }]);
@@ -329,6 +300,11 @@ export default function ConfirmationWorkflowForm() {
                         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Confirmation Form</p>
                         <h1 className="mt-2 text-2xl md:text-3xl font-bold">Editable Confirmation Workflow</h1>
                         <p className="mt-1 text-sm text-slate-300">{order.order_number} • {order.client?.name || 'Client'}</p>
+                        {order.returned_to_confirmation_at && (
+                            <span className="mt-3 inline-flex rounded-full bg-cyan-500/20 px-3 py-1 text-xs font-semibold text-cyan-100 border border-cyan-400/30">
+                                Back from delivery
+                            </span>
+                        )}
                         {order.is_blacklisted && (
                             <span className="mt-3 inline-flex rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white">
                                 {order.blacklist_badge || 'Banned / Blacklisted'}
@@ -446,91 +422,58 @@ export default function ConfirmationWorkflowForm() {
                                 <p className="mt-4 text-xs text-amber-700">{assignmentReadOnlyMessage}</p>
                             )}
 
-                            <div className="mt-5 space-y-3">
-                                <div>
-                                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Search delivery person</label>
-                                    <input
-                                        type="text"
-                                        value={deliveryPersonSearch}
-                                        onChange={(event) => setDeliveryPersonSearch(event.target.value)}
-                                        className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                                        placeholder="Search by name..."
+                            {!isAssignmentLocked && deliveryMethod === 'person' && (
+                                <div className="mt-5">
+                                    <SearchableSelect
+                                        label="Select Delivery Person"
+                                        placeholder="Search delivery person by name..."
+                                        options={deliveryPersons}
+                                        value={formData.delivery_person_id}
+                                        onChange={(value) => setFormData((prev) => ({ ...prev, delivery_person_id: value }))}
+                                        getOptionLabel={(person) => person.name}
+                                        getOptionValue={(person) => person.id}
+                                        error={errors.delivery_person_id ? errors.delivery_person_id[0] : null}
                                     />
                                 </div>
-                                <div>
-                                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Delivery Person <span className="text-slate-400 text-xs font-normal">*</span></label>
-                                    <select
-                                        value={formData.delivery_person_id}
-                                        onChange={(event) => setFormData((prev) => ({ ...prev, delivery_person_id: event.target.value }))}
-                                        className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all bg-white"
-                                    >
-                                        <option value="">Select delivery person</option>
-                                        {filteredDeliveryPersons.map((person) => (
-                                            <option key={person.id} value={person.id}>{person.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
+                            )}
 
                             {!isAssignmentLocked && deliveryMethod === 'company' && (
                                 <div className="mt-5 space-y-4">
-                                    <div>
-                                        <label className="mb-1.5 block text-sm font-medium text-slate-700">Search delivery company</label>
-                                        <input
-                                            type="text"
-                                            value={deliveryCompanySearch}
-                                            onChange={(event) => setDeliveryCompanySearch(event.target.value)}
-                                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                            placeholder="Search by name or provider..."
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="mb-1.5 block text-sm font-medium text-slate-700">Delivery Company <span className="text-slate-400 text-xs font-normal">*</span></label>
-                                        <select
-                                            value={formData.delivery_integration_id}
-                                            onChange={(event) => setFormData((prev) => ({
-                                                ...prev,
-                                                delivery_integration_id: event.target.value,
-                                                delivery_city: '',
-                                            }))}
-                                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
-                                        >
-                                            <option value="">Select delivery company</option>
-                                            {filteredDeliveryCompanies.map((company) => (
-                                                <option key={company.id} value={company.id}>
-                                                    {company.name} ({company.provider})
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <SearchableSelect
+                                        label="Select Delivery Company"
+                                        placeholder="Search delivery company by name or provider..."
+                                        options={deliveryCompanies}
+                                        value={formData.delivery_integration_id}
+                                        onChange={(value) => setFormData((prev) => ({
+                                            ...prev,
+                                            delivery_integration_id: value,
+                                            delivery_city: '',
+                                        }))}
+                                        getOptionLabel={(company) => `${company.name} (${company.provider})`}
+                                        getOptionValue={(company) => company.id}
+                                        error={errors.delivery_integration_id ? errors.delivery_integration_id[0] : null}
+                                    />
 
                                     {formData.delivery_integration_id && (
                                         <div className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                                            <div>
-                                                <label className="mb-1.5 block text-sm font-medium text-slate-700">Search delivery city</label>
-                                                <input
-                                                    type="text"
-                                                    value={deliveryCitySearch}
-                                                    onChange={(event) => setDeliveryCitySearch(event.target.value)}
-                                                    className="w-full rounded-2xl border border-blue-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                                    placeholder="Search city..."
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="mb-1.5 block text-sm font-medium text-slate-700">Delivery City <span className="text-slate-400 text-xs font-normal">*</span></label>
-                                                <select
-                                                    value={formData.delivery_city}
-                                                    onChange={(event) => setFormData((prev) => ({ ...prev, delivery_city: event.target.value }))}
-                                                    className="w-full rounded-2xl border border-blue-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
-                                                >
-                                                    <option value="">Select delivery city</option>
-                                                    {filteredDeliveryCities.map((cityName) => (
-                                                        <option key={cityName} value={cityName}>{cityName}</option>
-                                                    ))}
-                                                </select>
-                                                {deliveryCitiesLoading && <p className="mt-2 text-xs text-blue-600 font-medium">⏳ Loading cities...</p>}
-                                                {errors.delivery_city && <p className="mt-1 text-xs text-rose-600">{errors.delivery_city[0]}</p>}
-                                            </div>
+                                            <SearchableSelect
+                                                label="Select Delivery City"
+                                                placeholder="Search city..."
+                                                options={deliveryCities.map((city) => {
+                                                    const cityName = typeof city === 'object' ? (city.name || city.ville || city.city || '') : city;
+                                                    return {
+                                                        name: cityName,
+                                                        value: cityName,
+                                                    };
+                                                }).filter((city) => city.name)}
+                                                value={formData.delivery_city}
+                                                onChange={(value) => setFormData((prev) => ({ ...prev, delivery_city: value }))}
+                                                getOptionLabel={(city) => city.name}
+                                                getOptionValue={(city) => city.value}
+                                                error={errors.delivery_city ? errors.delivery_city[0] : null}
+                                                disabled={deliveryCitiesLoading}
+                                            />
+                                            {deliveryCitiesLoading && <p className="text-xs text-blue-600 font-medium">⏳ Loading cities...</p>}
                                         </div>
                                     )}
                                 </div>

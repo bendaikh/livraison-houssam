@@ -57,6 +57,23 @@ class ConfirmationWorkflowTest extends TestCase
         $changeResponse->assertForbidden();
     }
 
+    public function test_confirmation_agent_can_still_change_status_when_delivery_person_is_assigned_but_order_is_pending(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $deliveryPerson = $this->createDeliveryPerson();
+        $order = $this->createOrderForConfirmationAgent($agent);
+        $order->update(['delivery_person_id' => $deliveryPerson->id]);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/status", [
+            'status' => 'cancelled',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('cancelled', $order->fresh()->status);
+    }
+
     public function test_status_update_response_includes_delivery_person_relation_after_confirmation(): void
     {
         $agent = $this->createConfirmationAgent();
@@ -142,6 +159,49 @@ class ConfirmationWorkflowTest extends TestCase
 
         $response->assertForbidden();
         $this->assertSame('confirmed', $order->fresh()->status);
+    }
+
+    public function test_seller_cannot_change_status_while_delivery_person_is_assigned_or_after_return_to_confirmation(): void
+    {
+        $seller = $this->createVendorUser('seller');
+        $agent = $this->createConfirmationAgent();
+        $deliveryPerson = $this->createDeliveryPerson();
+        $order = $this->createConfirmedOrderForVendor($seller->vendor, $agent);
+        $order->update([
+            'delivery_person_id' => $deliveryPerson->id,
+        ]);
+
+        Sanctum::actingAs($seller);
+
+        $assignedResponse = $this->patchJson("/api/orders/{$order->id}/status", [
+            'status' => 'cancelled',
+        ]);
+
+        $assignedResponse->assertForbidden();
+
+        $pendingOrder = $this->createOrderForVendor($seller->vendor, $agent);
+        $pendingOrder->update([
+            'delivery_person_id' => $deliveryPerson->id,
+        ]);
+
+        $pendingResponse = $this->patchJson("/api/orders/{$pendingOrder->id}/status", [
+            'status' => 'cancelled',
+        ]);
+
+        $pendingResponse->assertOk();
+
+        $order->update([
+            'delivery_person_id' => null,
+            'status' => 'returned',
+            'confirmed_at' => null,
+            'returned_to_confirmation_at' => now(),
+        ]);
+
+        $returnedResponse = $this->patchJson("/api/orders/{$order->id}/status", [
+            'status' => 'pending',
+        ]);
+
+        $returnedResponse->assertForbidden();
     }
 
     public function test_confirmation_workflow_can_update_shipping_address_and_notes(): void

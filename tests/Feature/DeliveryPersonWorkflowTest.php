@@ -217,6 +217,52 @@ class DeliveryPersonWorkflowTest extends TestCase
             ->assertJsonPath('data.0.delivery_status_note', 'Client asked to be called back tomorrow morning.');
     }
 
+    public function test_delivery_person_can_send_order_back_to_confirmation(): void
+    {
+        [, $deliveryPerson, $secondDeliveryPerson] = $this->createDeliveryPeople();
+        $agent = $this->createConfirmationAgent();
+        $client = $this->createClient();
+
+        $order = Order::create([
+            'client_id' => $client->id,
+            'confirmation_agent_id' => $agent->id,
+            'delivery_person_id' => $deliveryPerson->id,
+            'status' => 'confirmed',
+            'confirmed_at' => now(),
+            'source' => 'manual',
+            'subtotal' => 110,
+            'total' => 110,
+        ]);
+
+        Sanctum::actingAs($deliveryPerson);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/delivery-workflow", [
+            'return_to_confirmation' => true,
+            'return_status' => 'returned',
+            'delivery_status_note' => 'Client asked to change the delivery slot.',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('status', 'returned');
+        $response->assertJsonPath('delivery_person_id', null);
+        $response->assertJsonPath('confirmation_agent_id', $agent->id);
+        $response->assertJsonPath('delivery_status_note', 'Client asked to change the delivery slot.');
+        $this->assertNotNull($order->fresh()->returned_to_confirmation_at);
+        $this->assertNull($order->fresh()->confirmed_at);
+
+        Sanctum::actingAs($agent);
+
+        $confirmResponse = $this->patchJson("/api/orders/{$order->id}/confirmation-workflow", [
+            'status' => 'confirmed',
+            'delivery_person_id' => $secondDeliveryPerson->id,
+            'upsell_items' => [],
+        ]);
+
+        $confirmResponse->assertOk();
+        $confirmResponse->assertJsonPath('status', 'confirmed');
+        $confirmResponse->assertJsonPath('delivery_person_id', $secondDeliveryPerson->id);
+    }
+
     public function test_delivery_invoice_response_includes_delivered_orders(): void
     {
         [, $deliveryPerson] = $this->createDeliveryPeople();
@@ -423,6 +469,22 @@ class DeliveryPersonWorkflowTest extends TestCase
 
         return User::factory()->create([
             'role_id' => $adminRole->id,
+            'is_active' => true,
+        ]);
+    }
+
+    private function createConfirmationAgent(): User
+    {
+        $role = Role::firstOrCreate(
+            ['slug' => 'confirmation_agent'],
+            [
+                'name' => 'Confirmation Agent',
+                'permissions' => ['view_orders', 'update_order_status', 'manage_upsells'],
+            ]
+        );
+
+        return User::factory()->create([
+            'role_id' => $role->id,
             'is_active' => true,
         ]);
     }
