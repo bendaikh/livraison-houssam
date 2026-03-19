@@ -13,8 +13,6 @@ class BillingController extends Controller
 
     public function index(Request $request)
     {
-        $this->authorizeAdmin($request);
-
         $validated = $request->validate([
             'month' => 'nullable|date',
             'role' => 'nullable|in:seller,confirmation,delivery',
@@ -22,7 +20,9 @@ class BillingController extends Controller
         ]);
 
         return response()->json(
-            $this->billingService->getAdminDashboard($validated)
+            $this->billingService->getAdminDashboard(
+                $this->scopeFiltersForViewer($request, $validated)
+            )
         );
     }
 
@@ -59,5 +59,40 @@ class BillingController extends Controller
         if (!$request->user()?->isAdmin()) {
             abort(403, 'Only administrators can perform this action.');
         }
+    }
+
+    private function scopeFiltersForViewer(Request $request, array $filters): array
+    {
+        $user = $request->user();
+
+        if ($user?->isAdmin()) {
+            return $filters;
+        }
+
+        if ($user?->isDeliveryPerson()) {
+            return [
+                'month' => $filters['month'] ?? null,
+                'role' => BillingService::ROLE_DELIVERY,
+                'entity_id' => $user->id,
+            ];
+        }
+
+        if ($user?->isConfirmationAgent()) {
+            return [
+                'month' => $filters['month'] ?? null,
+                'role' => BillingService::ROLE_CONFIRMATION,
+                'entity_id' => $user->id,
+            ];
+        }
+
+        if ($user?->isVendor()) {
+            return [
+                'month' => $filters['month'] ?? null,
+                'role' => BillingService::ROLE_SELLER,
+                'entity_id' => $user->vendor?->id ?? -1,
+            ];
+        }
+
+        abort(403, 'You do not have access to billing.');
     }
 }

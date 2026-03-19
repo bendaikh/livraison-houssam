@@ -6,7 +6,9 @@ use App\Models\BlacklistEntry;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Services\DeliveryStatusMapper;
 use App\Services\OrderService;
+use App\Services\ShippingPriceService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -16,7 +18,9 @@ use Illuminate\Validation\ValidationException;
 class OrderController extends Controller
 {
     public function __construct(
-        private OrderService $orderService
+        private OrderService $orderService,
+        private ShippingPriceService $shippingPriceService,
+        private DeliveryStatusMapper $deliveryStatusMapper,
     ) {}
 
     public function index(Request $request)
@@ -90,7 +94,25 @@ class OrderController extends Controller
         }
 
         $perPage = $request->get('per_page', 15);
-        $orders = $query->latest()->paginate($perPage);
+
+        if (
+            $user
+            && $user->isDeliveryPerson()
+            && Schema::hasTable('delivery_person_billings')
+            && Schema::hasTable('delivery_person_billing_order')
+        ) {
+            $query->withCount([
+                'deliveryPersonBillings as paid_delivery_billings_count' => function ($billingQuery) {
+                    $billingQuery->whereNotNull('delivery_person_billings.paid_at');
+                },
+            ]);
+
+            $query->orderBy('paid_delivery_billings_count')->latest();
+        } else {
+            $query->latest();
+        }
+
+        $orders = $query->paginate($perPage);
         $orders->getCollection()->transform(function (Order $order) {
             $order->setAttribute('delivery_workflow_locked', $this->isDeliveryWorkflowLocked($order));
             return $order;
@@ -121,6 +143,7 @@ class OrderController extends Controller
             'confirmation_agent_id' => 'nullable|exists:users,id',
             'callback_date' => 'nullable|date',
             'delivery_city' => 'nullable|string|max:255',
+            'status' => 'nullable|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
@@ -128,6 +151,7 @@ class OrderController extends Controller
             'items.*.price' => 'required|numeric|min:0',
             'items.*.is_upsell' => 'nullable|boolean',
             'shipping_cost' => 'nullable|numeric|min:0',
+            'shipping_cost_source' => 'nullable|in:auto,manual',
             'shipping_included_in_price' => 'nullable|boolean',
             'tax' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
@@ -173,6 +197,7 @@ class OrderController extends Controller
             );
         }
 
+        $this->attachShippingPricingMetadata($order, 'store');
         $this->attachBlacklistMetadata($request, $order);
 
         return response()->json($order, 201);
@@ -194,6 +219,7 @@ class OrderController extends Controller
             'items.product',
             'history.user'
         ]);
+        $this->attachShippingPricingMetadata($order, 'show');
         $this->attachBlacklistMetadata(request(), $order);
 
         return response()->json($order);
@@ -222,7 +248,7 @@ class OrderController extends Controller
             'confirmation_agent_id' => 'nullable|exists:users,id',
             'callback_date' => 'nullable|date',
             'delivery_city' => 'nullable|string|max:255',
-            'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
+            'status' => 'nullable|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
@@ -230,6 +256,7 @@ class OrderController extends Controller
             'items.*.price' => 'required|numeric|min:0',
             'items.*.is_upsell' => 'nullable|boolean',
             'shipping_cost' => 'nullable|numeric|min:0',
+            'shipping_cost_source' => 'nullable|in:auto,manual',
             'shipping_included_in_price' => 'nullable|boolean',
             'tax' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
@@ -262,6 +289,8 @@ class OrderController extends Controller
         // Check if status is being changed
         $oldStatus = $order->status;
         $newStatus = $validated['status'] ?? $oldStatus;
+
+        $this->ensureSellerCanManuallyUpdateStatus($request, $order, $newStatus);
         
         // Prevent changing confirmation agent once set
         if (
@@ -306,6 +335,7 @@ class OrderController extends Controller
             );
         }
 
+        $this->attachShippingPricingMetadata($order, 'update');
         $this->attachBlacklistMetadata($request, $order);
 
         return response()->json($order);
@@ -316,7 +346,7 @@ class OrderController extends Controller
         $this->authorizeOrderAccess($request, $order);
 
         $validated = $request->validate([
-            'status' => 'required|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
+            'status' => 'required|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'note' => 'nullable|string',
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_person_id' => 'nullable|exists:users,id',
@@ -328,6 +358,7 @@ class OrderController extends Controller
         }
 
         $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $validated['status']);
+        $this->ensureSellerCanManuallyUpdateStatus($request, $order, $validated['status']);
 
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
 
@@ -489,7 +520,7 @@ class OrderController extends Controller
 
             // Update order status based on delivery status if it changed
             if ($result['status_changed']) {
-                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
+                $orderStatus = $this->deliveryStatusMapper->mapToOrderStatus($result['new_delivery_status'], $integration->provider);
                 
                 \Log::info('Attempting to map delivery status to order status', [
                     'delivery_status' => $result['new_delivery_status'],
@@ -514,7 +545,7 @@ class OrderController extends Controller
                 }
             } else {
                 // Even if delivery status didn't change, check if order status needs updating
-                $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
+                $orderStatus = $this->deliveryStatusMapper->mapToOrderStatus($result['new_delivery_status'], $integration->provider);
                 
                 \Log::info('Delivery status unchanged, checking if order status needs update', [
                     'delivery_status' => $result['new_delivery_status'],
@@ -557,99 +588,6 @@ class OrderController extends Controller
     }
 
     /**
-     * Map delivery company status to internal order status
-     * (Moved here to be accessible from syncDeliveryStatus)
-     */
-    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus, ?string $provider = null): ?string
-    {
-        if (!$deliveryStatus) {
-            return null;
-        }
-
-        $normalizedStatus = strtolower(trim($deliveryStatus));
-        $normalizedProvider = strtolower(trim((string) $provider));
-
-        $statusMap = [
-            'pending' => 'pending',
-            'confirmed' => 'confirmed',
-            'picked_up' => 'picked_up',
-            'in_transit' => 'shipped',
-            'out_for_delivery' => 'out_for_delivery',
-            'delivered' => 'delivered',
-            'cancelled' => 'cancelled',
-            'returned' => 'returned',
-            'no_response' => 'no_response',
-            'failed' => 'cancelled',
-            'refused' => 'refused',
-            
-            // BMDelivery French statuses (from actual API response)
-            'en attente de ramassage' => 'confirmed',
-            'en attente de rammage' => 'confirmed',
-            'ramassé' => 'picked_up',
-            'ramasse' => 'picked_up',
-            'prêt pour expédition' => 'ready_for_shipping',
-            'pret pour expedition' => 'ready_for_shipping',
-            'expédié' => 'shipped',
-            'expedie' => 'shipped',
-            'en cours de livraison' => 'out_for_delivery',
-            'en livraison' => 'out_for_delivery',
-            'livré' => 'delivered',
-            'livre' => 'delivered',
-            'refusé' => 'refused',
-            'refuse' => 'refused',
-            'retourné' => 'returned',
-            'retourne' => 'returned',
-            'annulé' => 'cancelled',
-            'annule' => 'cancelled',
-            'demande de retour' => 'return_requested',
-            'demande_de_retour' => 'return_requested',
-            'injoignable' => 'no_response',
-            'injoignable client' => 'no_response',
-            'hors zone' => 'cancelled',
-            'adresse incomplète' => 'cancelled',
-            'adresse incomplete' => 'cancelled',
-            'reporté' => 'confirmed',
-            'reporte' => 'confirmed',
-            'en cours de préparation' => 'ready_for_shipping',
-            'en cours de preparation' => 'ready_for_shipping',
-            
-            // BMDelivery statuses (normalized)
-            'ramassage' => 'picked_up',
-            'en attente' => 'confirmed',
-            'en_attente' => 'confirmed',
-            'en cours' => 'shipped',
-            'en_cours' => 'shipped',
-            'en route' => 'out_for_delivery',
-            'en_route' => 'out_for_delivery',
-            'execute' => 'delivered',
-            'exécuté' => 'delivered',
-            'retour' => 'returned',
-            'interesse' => 'confirmed',
-            'intéressé' => 'confirmed',
-            
-            'preparation' => 'confirmed',
-            'expedie' => 'shipped',
-            'livraison' => 'out_for_delivery',
-        ];
-
-        if ($normalizedProvider === 'tawsilex') {
-            $tawsilexStatusMap = [
-                'sent' => 'shipped',
-                'livree' => 'delivered',
-                'livrée' => 'delivered',
-                'livre' => 'delivered',
-                'livré' => 'delivered',
-            ];
-
-            if (isset($tawsilexStatusMap[$normalizedStatus])) {
-                return $tawsilexStatusMap[$normalizedStatus];
-            }
-        }
-
-        return $statusMap[$normalizedStatus] ?? null;
-    }
-
-    /**
      * Get available cities for a specific delivery integration
      */
     public function getDeliveryCities(Request $request, $integrationId)
@@ -659,6 +597,12 @@ class OrderController extends Controller
         if (!$integration->is_active) {
             return response()->json(['error' => 'Integration is not active'], 400);
         }
+
+        \Log::info('Loading delivery cities for integration', [
+            'integration_id' => $integration->id,
+            'provider' => $integration->provider,
+            'name' => $integration->name,
+        ]);
 
         try {
             $cities = [];
@@ -675,11 +619,16 @@ class OrderController extends Controller
                 }
                 
                 $bmService->setApiToken($apiToken);
-                $cities = $bmService->listCities();
-                
-            } elseif ($integration->provider === 'tawsilex') {
+
+                return $this->deliveryCitiesResponse(
+                    $this->normalizeDeliveryCities($bmService->listCities()),
+                    'provider'
+                );
+            }
+
+            if ($integration->provider === 'tawsilex') {
                 // Primary source: curated list provided by admin (from cITIES.xlsx).
-                $cities = config('tawsilex_cities', []);
+                $cities = $this->normalizeDeliveryCities(config('tawsilex_cities', []));
 
                 // Fallback: BMDelivery cities if curated list is empty/unavailable.
                 if (empty($cities)) {
@@ -697,7 +646,7 @@ class OrderController extends Controller
                         if ($bmApiToken) {
                             $bmService = new \App\Services\BMDeliveryService();
                             $bmService->setApiToken($bmApiToken);
-                            $cities = $bmService->listCities();
+                            $cities = $this->normalizeDeliveryCities($bmService->listCities());
                         }
                     }
                 }
@@ -706,13 +655,30 @@ class OrderController extends Controller
                 if (empty($cities)) {
                     $cities = $this->getTawsilexDefaultCities();
                 }
+
+                return $this->deliveryCitiesResponse($cities, empty($cities) ? 'default' : 'config');
             }
-            
-            return response()->json($cities);
-            
-        } catch (\Exception $e) {
+
+            return $this->deliveryCitiesResponse($cities, 'provider');
+        } catch (\Throwable $e) {
+            $fallbackCities = $this->getFallbackDeliveryCities();
+
+            if (!empty($fallbackCities)) {
+                $warning = 'Live BMDelivery city lookup is unavailable from this server right now. Showing the saved city list instead.';
+
+                \Log::warning('Falling back to saved delivery cities', [
+                    'integration_id' => $integrationId,
+                    'provider' => $integration->provider,
+                    'error' => $e->getMessage(),
+                    'fallback_count' => count($fallbackCities),
+                ]);
+
+                return $this->deliveryCitiesResponse($fallbackCities, 'fallback', $warning);
+            }
+
             \Log::error('Failed to fetch delivery cities', [
                 'integration_id' => $integrationId,
+                'provider' => $integration->provider,
                 'error' => $e->getMessage(),
             ]);
             
@@ -743,7 +709,7 @@ class OrderController extends Controller
         $this->authorizeOrderAccess($request, $order);
 
         $validated = $request->validate([
-            'status' => 'nullable|in:pending,confirmed,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
+            'status' => 'nullable|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'callback_date' => 'nullable|date',
             'shipping_address' => 'nullable|string',
             'notes' => 'nullable|string',
@@ -868,6 +834,62 @@ class OrderController extends Controller
         ];
     }
 
+    private function normalizeDeliveryCities(array $cities): array
+    {
+        return collect($cities)
+            ->map(function ($city) {
+                if (is_string($city)) {
+                    $name = trim($city);
+                    return $name !== '' ? ['name' => $name] : null;
+                }
+
+                if (!is_array($city)) {
+                    return null;
+                }
+
+                $name = trim((string) ($city['name'] ?? $city['ville'] ?? $city['city'] ?? $city['label'] ?? $city['nom'] ?? ''));
+
+                return $name !== '' ? ['name' => $name] : null;
+            })
+            ->filter()
+            ->unique('name')
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+    }
+
+    private function getFallbackDeliveryCities(): array
+    {
+        $savedCities = \App\Models\City::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->pluck('name')
+            ->filter()
+            ->map(fn (string $name) => ['name' => $name])
+            ->values()
+            ->all();
+
+        if (!empty($savedCities)) {
+            return $savedCities;
+        }
+
+        $configCities = $this->normalizeDeliveryCities(config('tawsilex_cities', []));
+
+        return !empty($configCities) ? $configCities : $this->getTawsilexDefaultCities();
+    }
+
+    private function deliveryCitiesResponse(array $cities, string $source, ?string $warning = null)
+    {
+        $response = response()->json($cities);
+        $response->headers->set('X-Delivery-Cities-Source', $source);
+
+        if ($warning) {
+            $response->headers->set('X-Delivery-Cities-Warning', $warning);
+        }
+
+        return $response;
+    }
+
     private function getAuthenticatedVendor(Request $request): ?Vendor
     {
         $user = $request->user();
@@ -972,6 +994,23 @@ class OrderController extends Controller
         }
     }
 
+    private function ensureSellerCanManuallyUpdateStatus(Request $request, Order $order, ?string $requestedStatus = null): void
+    {
+        $user = $request->user();
+
+        if (!$user?->isVendor()) {
+            return;
+        }
+
+        if ($requestedStatus === null || $requestedStatus === $order->status) {
+            return;
+        }
+
+        if ($this->isSellerStatusLocked($order, $requestedStatus)) {
+            abort(403, $this->getSellerStatusLockMessage($order));
+        }
+    }
+
     private function isConfirmationAgentStatusLocked(Order $order, ?string $requestedStatus = null): bool
     {
         if (!empty($order->delivery_tracking_code)) {
@@ -993,6 +1032,11 @@ class OrderController extends Controller
         return !empty($order->confirmed_at) || $order->status === 'confirmed';
     }
 
+    private function isSellerStatusLocked(Order $order, ?string $requestedStatus = null): bool
+    {
+        return $this->isConfirmationAgentStatusLocked($order, $requestedStatus);
+    }
+
     private function getConfirmationAgentStatusLockMessage(Order $order): string
     {
         if (!empty($order->delivery_tracking_code)) {
@@ -1004,6 +1048,19 @@ class OrderController extends Controller
         }
 
         return 'Status is read-only for confirmation agents once the order has been confirmed.';
+    }
+
+    private function getSellerStatusLockMessage(Order $order): string
+    {
+        if (!empty($order->delivery_tracking_code)) {
+            return 'Status is read-only for sellers after the order is handed to a delivery company.';
+        }
+
+        if ($order->delivery_person_id) {
+            return 'Status is read-only for sellers once a delivery person is assigned.';
+        }
+
+        return 'Status is read-only for sellers once the order has been confirmed.';
     }
 
     private function ensureDeliveryWorkflowUnlocked(Order $order): void
@@ -1084,6 +1141,37 @@ class OrderController extends Controller
         }
 
         return $payload;
+    }
+
+    private function attachShippingPricingMetadata(Order $order, string $context): void
+    {
+        $resolved = $this->shippingPriceService->resolveCityRate($order->city);
+        $effectiveShippingCost = $order->shipping_cost !== null
+            ? (float) $order->shipping_cost
+            : $resolved['cost'];
+
+        $order->setAttribute('resolved_shipping_cost', $resolved['cost']);
+        $order->setAttribute('effective_shipping_cost', $effectiveShippingCost);
+        $order->setAttribute('shipping_cost_resolution', [
+            'saved_shipping_cost' => $order->shipping_cost !== null ? (float) $order->shipping_cost : null,
+            'effective_shipping_cost' => $effectiveShippingCost,
+            'city' => $order->city,
+            'source' => $resolved['source'],
+            'matched_city' => $resolved['matched_city'],
+            'used_fallback' => $resolved['used_fallback'],
+        ]);
+
+        \Log::info('Order shipping pricing prepared for frontend.', [
+            'context' => $context,
+            'order_id' => $order->id,
+            'city' => $order->city,
+            'saved_shipping_cost' => $order->shipping_cost,
+            'resolved_shipping_cost' => $resolved['cost'],
+            'effective_shipping_cost' => $effectiveShippingCost,
+            'city_rate_source' => $resolved['source'],
+            'matched_city' => $resolved['matched_city'],
+            'used_fallback' => $resolved['used_fallback'],
+        ]);
     }
 
     private function attachBlacklistMetadata(Request $request, Order|Collection $orders): void

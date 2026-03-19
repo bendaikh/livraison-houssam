@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\Models\Order;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class BMDeliveryService
 {
@@ -14,6 +17,7 @@ class BMDeliveryService
     public function __construct(?string $apiToken = null)
     {
         $this->apiToken = $apiToken ?? '';
+        $this->baseUrl = rtrim((string) config('services.bmdelivery.base_url', $this->baseUrl), '/');
     }
 
     /**
@@ -36,55 +40,26 @@ class BMDeliveryService
     {
         $this->validateApiToken();
 
-        $payload = [
-            'fullname' => $data['fullname'],
-            'phone' => $data['phone'],
-            'city' => $data['city'],
-            'address' => $data['address'] ?? '',
-            'price' => $data['price'],
-            'product' => $data['product'],
-            'qty' => $data['qty'],
-            'note' => $data['note'] ?? '',
-            'change' => $data['change'] ?? 0,
-            'coli_exchange' => $data['coli_exchange'] ?? null,
-            'openpackage' => $data['openpackage'] ?? 0,
-            'from_stock' => $data['from_stock'] ?? 0,
-            'internal_id' => $data['internal_id'] ?? null,
-        ];
-
-        // Remove null values
-        $payload = array_filter($payload, fn($value) => $value !== null);
+        $payload = $this->buildShipmentPayload($data);
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])
+            $response = $this->request()
                 ->asForm()
-                ->withOptions(['allow_redirects' => false])
                 ->post("{$this->baseUrl}/client/post/colis/add-colis/", $payload);
 
             if (in_array($response->status(), [301, 302, 307, 308], true)) {
                 $location = $response->header('Location');
 
                 if (!empty($location)) {
-                    $response = Http::withHeaders([
-                        'Accept' => 'application/json',
-                        'Api-Token' => $this->apiToken,
-                    ])
+                    $response = $this->request()
                         ->asForm()
-                        ->withOptions(['allow_redirects' => false])
                         ->post($location, $payload);
                 }
             }
 
             if (!$response->successful() && str_contains($response->body(), 'GET method is not supported')) {
-                $response = Http::withHeaders([
-                    'Accept' => 'application/json',
-                    'Api-Token' => $this->apiToken,
-                ])
+                $response = $this->request()
                     ->asForm()
-                    ->withOptions(['allow_redirects' => false])
                     ->post("{$this->baseUrl}/client/post/colis/add-colis", $payload);
             }
 
@@ -106,10 +81,10 @@ class BMDeliveryService
             }
 
             return $responseData;
-        } catch (\Exception $e) {
-            Log::error('BMDelivery createShipment error', [
-                'error' => $e->getMessage(),
+        } catch (Throwable $e) {
+            $this->logRequestFailure('BMDelivery createShipment error', $e, [
                 'payload' => $payload,
+                'endpoint' => "{$this->baseUrl}/client/post/colis/add-colis/",
             ]);
             throw $e;
         }
@@ -290,15 +265,18 @@ class BMDeliveryService
             'final_city' => $city,
         ]);
 
+        $fallbackFullname = 'Client ' . ($order->order_number ?? $order->id);
+        $rawFullname = $order->client->name ?? null;
+
         $data = [
-            'fullname' => $order->client->name ?? 'Customer',
-            'phone' => $order->client->phone ?? '',
+            'fullname' => $this->sanitizeFullname($rawFullname, $fallbackFullname),
+            'phone' => $this->normalizeMoroccanPhone($order->client->phone ?? $order->phone ?? ''),
             'city' => $city,
-            'address' => $order->shipping_address ?? $order->client->address ?? '',
+            'address' => $this->normalizeAddress($order->shipping_address ?? $order->client->address ?? ''),
             'price' => (float) $order->total,
-            'product' => implode(',', $products),
+            'product' => $this->normalizeText(implode(',', $products)),
             'qty' => implode(',', $quantities),
-            'note' => $order->notes ?? '',
+            'note' => $this->normalizeText($order->notes ?? ''),
             'change' => 0,
             'openpackage' => 1,
             'from_stock' => 0,
@@ -324,19 +302,16 @@ class BMDeliveryService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/colis/list-colis-ramassage/");
+            $response = $this->request()->get("{$this->baseUrl}/client/colis/list-colis-ramassage/");
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to fetch shipments for pickup: ' . $response->body());
             }
 
             return $response->json();
-        } catch (\Exception $e) {
-            Log::error('BMDelivery listShipmentsForPickup error', [
-                'error' => $e->getMessage(),
+        } catch (Throwable $e) {
+            $this->logRequestFailure('BMDelivery listShipmentsForPickup error', $e, [
+                'endpoint' => "{$this->baseUrl}/client/colis/list-colis-ramassage/",
             ]);
             throw $e;
         }
@@ -353,19 +328,16 @@ class BMDeliveryService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/colis/list-coli");
+            $response = $this->request()->get("{$this->baseUrl}/colis/list-coli");
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to fetch shipments: ' . $response->body());
             }
 
             return $response->json();
-        } catch (\Exception $e) {
-            Log::error('BMDelivery listShipments error', [
-                'error' => $e->getMessage(),
+        } catch (Throwable $e) {
+            $this->logRequestFailure('BMDelivery listShipments error', $e, [
+                'endpoint' => "{$this->baseUrl}/colis/list-coli",
             ]);
             throw $e;
         }
@@ -383,20 +355,17 @@ class BMDeliveryService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/colis/track/{$code}");
+            $response = $this->request()->get("{$this->baseUrl}/client/colis/track/{$code}");
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to track shipment: ' . $response->body());
             }
 
             return $response->json();
-        } catch (\Exception $e) {
-            Log::error('BMDelivery trackShipment error', [
-                'error' => $e->getMessage(),
+        } catch (Throwable $e) {
+            $this->logRequestFailure('BMDelivery trackShipment error', $e, [
                 'code' => $code,
+                'endpoint' => "{$this->baseUrl}/client/colis/track/{$code}",
             ]);
             throw $e;
         }
@@ -413,19 +382,16 @@ class BMDeliveryService
         $this->validateApiToken();
 
         try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/villes");
+            $response = $this->request()->get("{$this->baseUrl}/client/villes");
 
             if (!$response->successful()) {
                 throw new \Exception('Failed to fetch cities: ' . $response->body());
             }
 
             return $response->json();
-        } catch (\Exception $e) {
-            Log::error('BMDelivery listCities error', [
-                'error' => $e->getMessage(),
+        } catch (Throwable $e) {
+            $this->logRequestFailure('BMDelivery listCities error', $e, [
+                'endpoint' => "{$this->baseUrl}/client/villes",
             ]);
             throw $e;
         }
@@ -472,32 +438,155 @@ class BMDeliveryService
     {
         $this->validateApiToken();
 
-        try {
-            $response = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Api-Token' => $this->apiToken,
-            ])->get("{$this->baseUrl}/client/colis/details/{$trackingCode}");
+        $endpoints = [
+            // Try different endpoint variations
+            "{$this->baseUrl}/client/coli/track/{$trackingCode}",
+            "{$this->baseUrl}/client/colis/track/{$trackingCode}",
+            "{$this->baseUrl}/client/colis/details/{$trackingCode}",
+            "{$this->baseUrl}/client/post/colis/track/{$trackingCode}",
+            "{$this->baseUrl}/client/post/coli/track/{$trackingCode}",
+        ];
 
-            if (!$response->successful()) {
-                // Try alternative endpoint
-                $response = Http::withHeaders([
-                    'Accept' => 'application/json',
-                    'Api-Token' => $this->apiToken,
-                ])->get("{$this->baseUrl}/client/colis/track/{$trackingCode}");
+        $lastException = null;
+        $lastResponse = null;
 
-                if (!$response->successful()) {
-                    throw new \Exception('Failed to fetch shipment details: ' . $response->body());
+        // Try GET requests first
+        foreach ($endpoints as $endpoint) {
+            try {
+                $response = $this->request()->get($endpoint);
+                
+                if ($response->successful()) {
+                    return $response->json();
                 }
+                
+                $lastResponse = $response;
+            } catch (Throwable $e) {
+                $lastException = $e;
+                continue;
             }
-
-            return $response->json();
-        } catch (\Exception $e) {
-            Log::error('BMDelivery getShipmentDetails error', [
-                'error' => $e->getMessage(),
-                'tracking_code' => $trackingCode,
-            ]);
-            throw $e;
         }
+
+        // Try POST requests with tracking code as parameter
+        $postEndpoints = [
+            "{$this->baseUrl}/client/coli/track",
+            "{$this->baseUrl}/client/colis/track",
+            "{$this->baseUrl}/client/colis/details",
+            "{$this->baseUrl}/client/post/colis/track",
+            "{$this->baseUrl}/client/post/coli/track",
+        ];
+
+        foreach ($postEndpoints as $endpoint) {
+            try {
+                $response = $this->request()
+                    ->asForm()
+                    ->post($endpoint, ['code' => $trackingCode]);
+                
+                if ($response->successful()) {
+                    return $response->json();
+                }
+                
+                $lastResponse = $response;
+            } catch (Throwable $e) {
+                $lastException = $e;
+                continue;
+            }
+        }
+
+        // If we get here, all endpoints failed
+        if ($lastException) {
+            throw $lastException;
+        }
+
+        if ($lastResponse) {
+            throw new \Exception('Failed to fetch shipment details: ' . $lastResponse->body());
+        }
+
+        throw new \Exception('Could not connect to BMDelivery API to fetch shipment details');
+    }
+
+    private function request(): PendingRequest
+    {
+        return Http::withHeaders([
+            'Accept' => 'application/json',
+            'Api-Token' => $this->apiToken,
+        ])
+            ->timeout((int) config('services.bmdelivery.timeout', 20))
+            ->connectTimeout((int) config('services.bmdelivery.connect_timeout', 10))
+            ->retry(
+                (int) config('services.bmdelivery.retry_times', 2),
+                (int) config('services.bmdelivery.retry_sleep_ms', 400)
+            )
+            ->withOptions($this->buildRequestOptions());
+    }
+
+    private function buildRequestOptions(): array
+    {
+        $options = [
+            'allow_redirects' => false,
+        ];
+
+        if (config('services.bmdelivery.force_http1', true)) {
+            $options['version'] = 1.1;
+        }
+
+        $curlOptions = [];
+
+        if (
+            config('services.bmdelivery.force_http1', true)
+            && defined('CURLOPT_HTTP_VERSION')
+            && defined('CURL_HTTP_VERSION_1_1')
+        ) {
+            $curlOptions[CURLOPT_HTTP_VERSION] = CURL_HTTP_VERSION_1_1;
+        }
+
+        if (
+            config('services.bmdelivery.force_tls12', true)
+            && defined('CURLOPT_SSLVERSION')
+            && defined('CURL_SSLVERSION_TLSv1_2')
+        ) {
+            $curlOptions[CURLOPT_SSLVERSION] = CURL_SSLVERSION_TLSv1_2;
+        }
+
+        if (!empty($curlOptions)) {
+            $options['curl'] = $curlOptions;
+        }
+
+        return $options;
+    }
+
+    private function logRequestFailure(string $message, Throwable $e, array $context = []): void
+    {
+        $loggerMethod = $this->isTransportException($e) ? 'warning' : 'error';
+
+        Log::{$loggerMethod}($message, array_merge($context, [
+            'error' => $e->getMessage(),
+            'exception_class' => get_class($e),
+            'transport_diagnostics' => $this->transportDiagnostics(),
+        ]));
+    }
+
+    private function isTransportException(Throwable $e): bool
+    {
+        return $e instanceof ConnectionException
+            || str_contains($e->getMessage(), 'cURL error')
+            || str_contains(strtolower($e->getMessage()), 'tls')
+            || str_contains(strtolower($e->getMessage()), 'ssl');
+    }
+
+    private function transportDiagnostics(): array
+    {
+        $curlVersion = function_exists('curl_version') ? curl_version() : null;
+
+        return [
+            'app_env' => config('app.env'),
+            'php_version' => PHP_VERSION,
+            'curl_version' => $curlVersion['version'] ?? null,
+            'curl_ssl_version' => $curlVersion['ssl_version'] ?? null,
+            'openssl_version' => defined('OPENSSL_VERSION_TEXT') ? OPENSSL_VERSION_TEXT : null,
+            'base_url' => $this->baseUrl,
+            'force_http1' => (bool) config('services.bmdelivery.force_http1', true),
+            'force_tls12' => (bool) config('services.bmdelivery.force_tls12', true),
+        ];
     }
 
     /**
@@ -515,44 +604,23 @@ class BMDeliveryService
         }
 
         // Check for invalid tracking codes (BMDelivery error responses)
-        if (strtolower($order->delivery_tracking_code) === 'ko') {
+        $trackingCode = strtolower($order->delivery_tracking_code);
+        if ($trackingCode === 'ko' || $trackingCode === 'ok') {
             throw new \Exception('Invalid tracking code: Order was not successfully sent to BMDelivery');
         }
 
         try {
             $shipmentDetails = $this->getShipmentDetails($order->delivery_tracking_code);
-            
-            $newStatus = null;
-            
-            // BMDelivery returns status history in data array, get the most recent status
-            if (isset($shipmentDetails['data']) && is_array($shipmentDetails['data']) && !empty($shipmentDetails['data'])) {
-                // The first item in the array is the most recent status
-                $latestEvent = $shipmentDetails['data'][0];
-                $newStatus = $latestEvent['status'] ?? null;
-                
-                Log::info('Extracted status from BMDelivery data array', [
+
+            if (isset($shipmentDetails['data']) && is_array($shipmentDetails['data']) && empty($shipmentDetails['data'])) {
+                Log::warning('BMDelivery returned empty data array - tracking code not found', [
                     'tracking_code' => $order->delivery_tracking_code,
-                    'latest_event' => $latestEvent,
-                    'status' => $newStatus,
-                    'status_lowercase' => $newStatus ? strtolower($newStatus) : null,
+                    'response' => $shipmentDetails,
                 ]);
-            } else {
-                // Check if data array is empty (no tracking info available)
-                if (isset($shipmentDetails['data']) && empty($shipmentDetails['data'])) {
-                    Log::warning('BMDelivery returned empty data array - tracking code not found', [
-                        'tracking_code' => $order->delivery_tracking_code,
-                        'response' => $shipmentDetails,
-                    ]);
-                    throw new \Exception('Tracking code not found in BMDelivery system. The order may not have been successfully sent to BMDelivery.');
-                }
-                
-                // Fallback: try other possible keys
-                $newStatus = $shipmentDetails['status'] 
-                    ?? $shipmentDetails['etat'] 
-                    ?? $shipmentDetails['data']['status'] 
-                    ?? $shipmentDetails['data']['etat']
-                    ?? null;
+                throw new \Exception('Tracking code not found in BMDelivery system. The order may not have been successfully sent to BMDelivery.');
             }
+
+            $newStatus = $this->extractLatestStatus($shipmentDetails);
 
             if (!$newStatus) {
                 Log::warning('Could not extract status from BMDelivery response', [
@@ -597,5 +665,142 @@ class BMDeliveryService
             ]);
             throw $e;
         }
+    }
+
+    public function extractTrackingCode(array $payload): ?string
+    {
+        $directCode = $payload['code']
+            ?? $payload['tracking_code']
+            ?? $payload['code_shippment']
+            ?? $payload['code_shipment']
+            ?? null;
+
+        if ($directCode) {
+            return $directCode;
+        }
+
+        $nested = $payload['data'] ?? null;
+
+        if (is_array($nested) && $this->isAssoc($nested)) {
+            return $this->extractTrackingCode($nested);
+        }
+
+        return null;
+    }
+
+    public function extractLatestStatus(array $payload): ?string
+    {
+        if (isset($payload['data']) && is_array($payload['data'])) {
+            $data = $payload['data'];
+
+            if ($this->isAssoc($data)) {
+                return $this->extractLatestStatus($data);
+            }
+
+            if (!empty($data)) {
+                $events = $data;
+
+                usort($events, function ($a, $b) {
+                    return ($b['Date_Evenement'] ?? 0) <=> ($a['Date_Evenement'] ?? 0);
+                });
+
+                $latestEvent = $events[0];
+                $status = $latestEvent['status']
+                    ?? $latestEvent['Etat']
+                    ?? $latestEvent['etat']
+                    ?? null;
+
+                Log::info('Extracted status from BMDelivery data array', [
+                    'latest_event' => $latestEvent,
+                    'status' => $status,
+                    'status_lowercase' => $status ? mb_strtolower($status) : null,
+                ]);
+
+                return $status;
+            }
+        }
+
+        return $payload['status']
+            ?? $payload['Etat']
+            ?? $payload['etat']
+            ?? null;
+    }
+
+    private function buildShipmentPayload(array $data): array
+    {
+        return array_filter([
+            'fullname' => $this->sanitizeFullname($data['fullname'] ?? '', 'Customer'),
+            'phone' => $this->normalizeMoroccanPhone($data['phone'] ?? ''),
+            'city' => $this->normalizeText($data['city'] ?? ''),
+            'address' => $this->normalizeAddress($data['address'] ?? ''),
+            'price' => $data['price'],
+            'product' => $this->normalizeText($data['product'] ?? ''),
+            'qty' => $data['qty'],
+            'note' => $this->normalizeText($data['note'] ?? ''),
+            'change' => $data['change'] ?? 0,
+            'coli_exchange' => $data['coli_exchange'] ?? null,
+            'openpackage' => $data['openpackage'] ?? 0,
+            'from_stock' => $data['from_stock'] ?? 0,
+            'internal_id' => $data['internal_id'] ?? null,
+        ], fn ($value) => $value !== null);
+    }
+
+    private function normalizeMoroccanPhone(?string $phone): string
+    {
+        if (empty($phone)) {
+            return '';
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone);
+
+        if (empty($digits)) {
+            return '';
+        }
+
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+
+        if (str_starts_with($digits, '212')) {
+            $digits = '0' . substr($digits, 3);
+        }
+
+        if (!str_starts_with($digits, '0')) {
+            $digits = '0' . $digits;
+        }
+
+        return $digits;
+    }
+
+    private function sanitizeFullname(?string $fullname, string $fallback): string
+    {
+        $normalized = $this->normalizeText($fullname ?? '');
+
+        if (mb_strlen($normalized) < 3) {
+            return $this->normalizeText($fallback);
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeAddress(?string $address): string
+    {
+        $normalized = $this->normalizeText($address ?? '');
+
+        return $normalized !== '' ? $normalized : '-';
+    }
+
+    private function normalizeText(string $value): string
+    {
+        return trim(preg_replace('/\s+/', ' ', $value) ?? '');
+    }
+
+    private function isAssoc(array $value): bool
+    {
+        if ($value === []) {
+            return false;
+        }
+
+        return array_keys($value) !== range(0, count($value) - 1);
     }
 }

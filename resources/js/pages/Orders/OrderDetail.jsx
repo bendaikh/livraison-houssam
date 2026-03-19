@@ -85,6 +85,7 @@ export default function OrderDetail() {
         const colors = {
             pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
             confirmed: 'bg-blue-100 text-blue-800 border-blue-200',
+            reported: 'bg-sky-100 text-sky-800 border-sky-200',
             picked_up: 'bg-indigo-100 text-indigo-800 border-indigo-200',
             ready_for_shipping: 'bg-cyan-100 text-cyan-800 border-cyan-200',
             shipped: 'bg-purple-100 text-purple-800 border-purple-200',
@@ -103,6 +104,7 @@ export default function OrderDetail() {
         const icons = {
             pending: Clock,
             confirmed: CheckCircle,
+            reported: RefreshCw,
             picked_up: Package,
             ready_for_shipping: Package,
             shipped: Truck,
@@ -137,6 +139,16 @@ export default function OrderDetail() {
         }
 
         return status.replace(/_/g, ' ');
+    };
+
+    const formatOrderStatus = (status) => {
+        const labels = {
+            no_response: 'No Response',
+            return_requested: 'Return Requested',
+            reported: 'Reporte',
+        };
+
+        return labels[status] || String(status || '').replace(/_/g, ' ');
     };
 
     const handlePrint = () => {
@@ -271,7 +283,7 @@ export default function OrderDetail() {
                 <div class="status-row">
                     <div>
                         <span>Status: </span>
-                        <span class="status">${order.status}</span>
+                        <span class="status">${formatOrderStatus(order.status)}</span>
                     </div>
                     <div>
                         <span>Source: </span>
@@ -517,7 +529,7 @@ export default function OrderDetail() {
                     {getStatusIcon(order.status)}
                     <div>
                         <p className="text-sm font-medium">Order Status</p>
-                        <p className="text-2xl font-bold capitalize">{order.status}</p>
+                        <p className="text-2xl font-bold capitalize">{formatOrderStatus(order.status)}</p>
                     </div>
                 </div>
                 <div className="text-right">

@@ -14,12 +14,16 @@ use Illuminate\Support\Facades\DB;
 class OrderService
 {
     public function __construct(
-        private StockService $stockService
+        private StockService $stockService,
+        private ShippingPriceService $shippingPriceService,
     ) {}
 
     public function createOrder(array $data)
     {
         return DB::transaction(function () use ($data) {
+            $shippingResolution = $this->shippingPriceService->resolveForOrderData($data);
+            $data['shipping_cost'] = $shippingResolution['shipping_cost'];
+
             ['subtotal' => $subtotal, 'total' => $total, 'shipping_included_in_price' => $shippingIncludedInPrice] =
                 $this->calculateOrderTotals($data['items'], $data);
 
@@ -79,6 +83,15 @@ class OrderService
             // Update client stats
             $this->updateClientStats($order->client_id);
 
+            \Log::info('Order created with resolved shipping cost.', [
+                'order_id' => $order->id,
+                'city' => $order->city,
+                'shipping_cost' => $order->shipping_cost,
+                'shipping_cost_decision' => $shippingResolution['decision'],
+                'shipping_cost_source' => $shippingResolution['shipping_cost_source'],
+                'city_rate_source' => $shippingResolution['source'],
+            ]);
+
             return $order->load(['items.product', 'client', 'vendor']);
         });
     }
@@ -87,6 +100,9 @@ class OrderService
     {
         return DB::transaction(function () use ($orderId, $data) {
             $order = Order::findOrFail($orderId);
+            $shippingResolution = $this->shippingPriceService->resolveForOrderData($data, $order);
+            $data['shipping_cost'] = $shippingResolution['shipping_cost'];
+
             ['subtotal' => $subtotal, 'total' => $total, 'shipping_included_in_price' => $shippingIncludedInPrice] =
                 $this->calculateOrderTotals($data['items'], $data, $order);
 
@@ -148,6 +164,15 @@ class OrderService
             // Create history entry
             $this->addHistory($order->id, $order->status, 'Order updated');
 
+            \Log::info('Order updated with resolved shipping cost.', [
+                'order_id' => $order->id,
+                'city' => $order->city,
+                'shipping_cost' => $order->shipping_cost,
+                'shipping_cost_decision' => $shippingResolution['decision'],
+                'shipping_cost_source' => $shippingResolution['shipping_cost_source'],
+                'city_rate_source' => $shippingResolution['source'],
+            ]);
+
             return $order->load(['items.product', 'client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent']);
         });
     }
@@ -157,12 +182,16 @@ class OrderService
         return DB::transaction(function () use ($orderId, $status, $note, $deliveryIntegrationId, $deliveryCity) {
             $order = Order::findOrFail($orderId);
             $oldStatus = $order->status;
+            $deliveryIntegration = $deliveryIntegrationId
+                ? \App\Models\ApiIntegration::find($deliveryIntegrationId)
+                : null;
 
             $order->update(['status' => $status]);
 
             // Update timestamp fields
             match($status) {
                 'confirmed' => $order->update(['confirmed_at' => now()]),
+                'reported' => null,
                 'picked_up' => $order->update(['picked_up_at' => now()]),
                 'ready_for_shipping' => $order->update(['ready_for_shipping_at' => now()]),
                 'shipped' => $order->update(['shipped_at' => now()]),
@@ -193,7 +222,7 @@ class OrderService
                     ]);
                     
                     // Store the error but don't throw - let the order be confirmed anyway
-                    $deliveryError = $e->getMessage();
+                    $deliveryError = $this->formatDeliveryDispatchError($e, $deliveryIntegration?->name);
                     
                     // Add history note about the failure
                     $this->addHistory($orderId, $status, "Order confirmed but failed to send to delivery company: " . $deliveryError);
@@ -268,6 +297,32 @@ class OrderService
             
             return $freshOrder;
         });
+    }
+
+    private function formatDeliveryDispatchError(\Throwable $e, ?string $integrationName = null): string
+    {
+        $providerName = $integrationName ?: 'the delivery provider';
+        $message = trim($e->getMessage());
+        $normalized = strtolower($message);
+
+        if (
+            str_contains($normalized, 'curl error 35')
+            || str_contains($normalized, 'tls connect error')
+            || str_contains($normalized, 'handshake')
+            || str_contains($normalized, 'ssl routines')
+        ) {
+            return "Secure connection to {$providerName} failed from this server (TLS/SSL handshake error). The order was saved, but dispatch did not complete. Provider detail: {$message}";
+        }
+
+        if (
+            str_contains($normalized, 'curl error')
+            || str_contains($normalized, 'could not resolve host')
+            || str_contains($normalized, 'operation timed out')
+        ) {
+            return "Connection to {$providerName} failed from this server. The order was saved, but dispatch did not complete. Provider detail: {$message}";
+        }
+
+        return $message;
     }
 
     public function updateDeliveryWorkflow(int $orderId, User $user, array $data)
@@ -490,8 +545,11 @@ class OrderService
         return $response['code_shippment']
             ?? $response['code_shipment']
             ?? $response['tracking_code']
+            ?? $response['code']
             ?? $response['data']['code']
             ?? $response['data']['code_shippment']
+            ?? $response['data']['code_shipment']
+            ?? $response['data']['tracking_code']
             ?? null;
     }
 
@@ -536,40 +594,91 @@ class OrderService
         $messages = [
             'pending' => 'New order received',
             'confirmed' => 'Order confirmed',
+            'reported' => 'Order reported',
             'shipped' => 'Order shipped',
             'delivered' => 'Order delivered',
             'cancelled' => 'Order cancelled',
             'no_response' => 'No response recorded',
         ];
 
-        // Notify admin and delivery agent
-        $users = \App\Models\User::where('is_active', true)
+        $admins = User::where('is_active', true)
             ->whereHas('role', function ($query) {
-                $query->whereIn('slug', ['admin', 'superadmin', 'confirmation_agent', 'agent_confirmation']);
+                $query->whereIn('slug', ['admin', 'superadmin']);
             })
             ->get();
 
-        if ($order->delivery_agent_id) {
+        $users = collect($admins);
+
+        if ($order->confirmationAgent && $this->shouldNotifyConfirmationAgent($status)) {
+            $users->push($order->confirmationAgent);
+        }
+
+        if ($order->deliveryAgent && $this->shouldNotifyDeliveryWorkflow($status)) {
             $users->push($order->deliveryAgent);
         }
 
-        if ($order->delivery_person_id) {
+        if ($order->deliveryPerson && $this->shouldNotifyDeliveryWorkflow($status)) {
             $users->push($order->deliveryPerson);
         }
 
-        foreach ($users->unique('id') as $user) {
+        foreach ($users->filter()->unique('id') as $user) {
+            $notificationContent = $this->buildOrderNotificationContent($user, $order, $status, $messages);
+
+            if (!$notificationContent) {
+                continue;
+            }
+
             Notification::create([
                 'user_id' => $user->id,
                 'type' => 'order_status_change',
-                'title' => $messages[$status] ?? 'Order updated',
-                'message' => "Order #{$order->order_number} status changed to {$status}",
+                'title' => $notificationContent['title'],
+                'message' => $notificationContent['message'],
                 'data' => [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'status' => $status,
+                    'recipient_role' => $user->role?->slug,
                 ],
             ]);
         }
+    }
+
+    private function shouldNotifyConfirmationAgent(string $status): bool
+    {
+        return in_array($status, ['pending', 'confirmed', 'reported', 'cancelled', 'no_response'], true);
+    }
+
+    private function shouldNotifyDeliveryWorkflow(string $status): bool
+    {
+        return in_array($status, ['picked_up', 'ready_for_shipping', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'refused', 'returned', 'no_response', 'return_requested'], true);
+    }
+
+    private function buildOrderNotificationContent(User $user, Order $order, string $status, array $messages): ?array
+    {
+        $humanStatus = str_replace('_', ' ', $status);
+
+        if ($user->isAdmin()) {
+            return [
+                'title' => $messages[$status] ?? 'Order updated',
+                'message' => "Order #{$order->order_number} status changed to {$humanStatus}",
+            ];
+        }
+
+        if ($user->isConfirmationAgent() && $this->shouldNotifyConfirmationAgent($status)) {
+            return [
+                'title' => 'Confirmation workflow update',
+                'message' => "Assigned order #{$order->order_number} moved to {$humanStatus}.",
+            ];
+        }
+
+        if (($user->isDeliveryPerson() || $user->isManager()) && $this->shouldNotifyDeliveryWorkflow($status)) {
+            return [
+                'title' => 'Delivery workflow update',
+                'message' => "Assigned order #{$order->order_number} moved to {$humanStatus}.",
+            ];
+        }
+
+        return null;
     }
 
     public function assignDeliveryAgent(int $orderId, array $attributes)

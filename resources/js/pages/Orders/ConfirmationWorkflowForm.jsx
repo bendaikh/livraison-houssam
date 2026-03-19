@@ -7,6 +7,7 @@ import { calculateUpsellProfit, getProductBasePrice } from '../../utils/profit';
 const STATUS_OPTIONS = [
     'pending',
     'confirmed',
+    'reported',
     'picked_up',
     'ready_for_shipping',
     'shipped',
@@ -26,6 +27,12 @@ const EMPTY_FORM = {
     delivery_person_id: '',
     delivery_integration_id: '',
     delivery_city: '',
+};
+
+const STATUS_LABELS = {
+    no_response: 'no response',
+    return_requested: 'return requested',
+    reported: 'reporte',
 };
 
 export default function ConfirmationWorkflowForm() {
@@ -544,7 +551,7 @@ export default function ConfirmationWorkflowForm() {
                                     {isStatusReadOnly ? (
                                         <div className="space-y-2">
                                             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold capitalize text-slate-800">
-                                                🔒 {String(formData.status || '').replace(/_/g, ' ')}
+                                                🔒 {STATUS_LABELS[formData.status] || String(formData.status || '').replace(/_/g, ' ')}
                                             </div>
                                             <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{statusReadOnlyMessage}</p>
                                         </div>
@@ -556,7 +563,7 @@ export default function ConfirmationWorkflowForm() {
                                         >
                                             {STATUS_OPTIONS.map((status) => (
                                                 <option key={status} value={status}>
-                                                    {status.replace(/_/g, ' ')}
+                                                    {STATUS_LABELS[status] || status.replace(/_/g, ' ')}
                                                 </option>
                                             ))}
                                         </select>

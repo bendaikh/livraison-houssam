@@ -5,8 +5,9 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X } from 'lucide-react';
 import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
-import { isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
+import { isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
+import { formatDeliveryDispatchFailureMessage } from '../../utils/delivery';
 
 export default function OrderList({ status = '' }) {
     const { formatCurrency, settings } = useSettings();
@@ -60,12 +61,30 @@ export default function OrderList({ status = '' }) {
         page: 1
     });
     const roleSlug = user?.role?.slug;
+    const isVendorUser = isVendorRole(roleSlug);
     const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
     const isDeliveryPersonUser = isDeliveryPersonRole(roleSlug);
+    const [isDarkMode, setIsDarkMode] = useState(() => (
+        typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+    ));
     
     useEffect(() => {
         setFilters(prev => ({ ...prev, status: status, page: 1 }));
     }, [status]);
+
+    useEffect(() => {
+        if (typeof document === 'undefined') {
+            return undefined;
+        }
+
+        const root = document.documentElement;
+        const observer = new MutationObserver(() => {
+            setIsDarkMode(root.classList.contains('dark'));
+        });
+
+        observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         if (!(isConfirmationAgentUser || isDeliveryPersonUser)) return;
@@ -156,6 +175,7 @@ export default function OrderList({ status = '' }) {
         const colors = {
             pending: 'bg-yellow-100 text-yellow-800',
             confirmed: 'bg-blue-100 text-blue-800',
+            reported: 'bg-sky-100 text-sky-800',
             picked_up: 'bg-indigo-100 text-indigo-800',
             ready_for_shipping: 'bg-cyan-100 text-cyan-800',
             shipped: 'bg-purple-100 text-purple-800',
@@ -197,15 +217,23 @@ export default function OrderList({ status = '' }) {
         return status.replace(/_/g, ' ');
     };
 
-    const formatStatusLabel = (status) => String(status || '').replace(/_/g, ' ');
+    const formatStatusLabel = (status) => {
+        const labels = {
+            no_response: 'no response',
+            return_requested: 'return requested',
+            reported: 'reporte',
+        };
+
+        return labels[status] || String(status || '').replace(/_/g, ' ');
+    };
     const deliveryStatusOptions = ['delivered', 'refused', 'cancelled', 'no_response', 'returned'];
     const motifRequiredStatuses = ['refused', 'cancelled', 'no_response', 'returned'];
     const deliveryPrimaryActions = [
         { key: 'delivered', label: 'Delivered', tone: 'bg-emerald-600 text-white hover:bg-emerald-700' },
-        { key: 'refused', label: 'Refused', tone: 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
-        { key: 'no_response', label: 'No Answer', tone: 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
-        { key: 'cancelled', label: 'Cancelled', tone: 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
-        { key: 'report', label: 'Report / Callback', tone: 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100' },
+        { key: 'refused', label: 'Refused', tone: isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
+        { key: 'no_response', label: 'No Answer', tone: isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
+        { key: 'cancelled', label: 'Cancelled', tone: isDarkMode ? 'bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50' },
+        { key: 'report', label: 'Report / Callback', tone: isDarkMode ? 'bg-amber-950/70 text-amber-200 border border-amber-900 hover:bg-amber-900/80' : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100' },
     ];
 
     const isConfirmationAgentStatusLocked = (order) => {
@@ -218,6 +246,22 @@ export default function OrderList({ status = '' }) {
         }
 
         return Boolean(order?.confirmed_at) || order?.status === 'confirmed';
+    };
+
+    const isSellerStatusLocked = (order) => {
+        return isVendorUser && isConfirmationAgentStatusLocked(order);
+    };
+
+    const getSellerStatusLockMessage = (order) => {
+        if (order?.delivery_tracking_code) {
+            return 'Status is now controlled by the delivery company.';
+        }
+
+        if (order?.delivery_person_id) {
+            return 'Status is now controlled by the assigned delivery person.';
+        }
+
+        return 'Status is now locked after confirmation.';
     };
 
     const getConfirmationAgentStatusLockMessage = (order) => {
@@ -243,6 +287,7 @@ export default function OrderList({ status = '' }) {
             return [
                 'pending',
                 'confirmed',
+                'reported',
                 'picked_up',
                 'ready_for_shipping',
                 'shipped',
@@ -317,6 +362,44 @@ export default function OrderList({ status = '' }) {
         if (integration.name && !/api/i.test(integration.name)) return integration.name;
         if (integration.name) return integration.name.replace(/api/ig, '').trim();
         if (integration.provider) return integration.provider.replace(/_/g, ' ');
+        return '';
+    };
+
+    const getDeliveryCompanyTone = (order, { interactive = false } = {}) => {
+        const integration = order.delivery_integration;
+        const providerKey = (
+            integration?.provider
+            || integration?.credentials?.provider
+            || integration?.name
+            || ''
+        ).toLowerCase();
+
+        if (['tawsilex', 'tawsilex_api', 'tasiliex', 'smanager'].includes(providerKey)) {
+            return interactive
+                ? 'bg-[#FFF4E8] text-[#ED9339] border border-[#F7C791] hover:bg-[#FDE8D2]'
+                : 'bg-[#FFF4E8] text-[#ED9339] border border-[#F7C791]';
+        }
+
+        if (['bmdelivery', 'bm_delivery', 'bm_delivery_ma', 'vadomax'].includes(providerKey)) {
+            return interactive
+                ? 'bg-[#EEF4FF] text-[#3667C8] border border-[#BFD1F5] hover:bg-[#DDE9FF]'
+                : 'bg-[#EEF4FF] text-[#3667C8] border border-[#BFD1F5]';
+        }
+
+        return interactive
+            ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100'
+            : 'bg-slate-100 text-slate-700 border border-slate-200';
+    };
+
+    const getConfirmationAgentLabel = (order) => {
+        if (order.confirmation_agent?.name) {
+            return order.confirmation_agent.name;
+        }
+
+        if (order.confirmation_agent_id && String(order.confirmation_agent_id) === String(user?.id)) {
+            return user?.name || 'You';
+        }
+
         return '';
     };
 
@@ -401,7 +484,7 @@ export default function OrderList({ status = '' }) {
                     ));
 
                     if (response.data.delivery_error) {
-                        alert(`Order confirmed but failed to send to delivery company:\n\n${response.data.delivery_error}\n\nPlease check the client's city and try again.`);
+                        alert(formatDeliveryDispatchFailureMessage(response.data.delivery_error));
                     }
                     return;
                 }
@@ -530,7 +613,7 @@ export default function OrderList({ status = '' }) {
             setPendingStatusChange(null);
             
             if (response.data.delivery_error) {
-                alert(`Order confirmed but failed to send to delivery company:\n\n${response.data.delivery_error}\n\nPlease check the client's city and try again.`);
+                alert(formatDeliveryDispatchFailureMessage(response.data.delivery_error));
             }
         } catch (error) {
             console.error('Error updating order status:', error);
@@ -589,7 +672,7 @@ export default function OrderList({ status = '' }) {
 
     if (isDeliveryPersonUser) {
         return (
-            <div className="min-h-screen bg-[#f5f1e8] p-4 md:p-6">
+            <div className={`min-h-screen p-4 md:p-6 ${isDarkMode ? 'bg-slate-950' : 'bg-[#f5f1e8]'}`}>
                 <DeliveryWorkflowModal
                     modal={deliveryWorkflowModal}
                     onClose={closeDeliveryWorkflowModal}
@@ -602,9 +685,9 @@ export default function OrderList({ status = '' }) {
                 <div className="max-w-5xl mx-auto space-y-5">
                     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Delivery workflow</p>
-                            <h1 className="text-3xl font-bold text-slate-900 mt-1">{getPageTitle()}</h1>
-                            <p className="text-sm text-slate-600 mt-1">Fast action cards with only the information needed in the field.</p>
+                            <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${isDarkMode ? 'text-sky-300/70' : 'text-slate-500'}`}>Delivery workflow</p>
+                            <h1 className={`mt-1 text-3xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{getPageTitle()}</h1>
+                            <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Fast action cards with only the information needed in the field.</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <button
@@ -613,7 +696,11 @@ export default function OrderList({ status = '' }) {
                                     navigate('/orders');
                                 }}
                                 className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
-                                    assignmentScope === 'my' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-300'
+                                    assignmentScope === 'my'
+                                        ? 'bg-slate-900 text-white'
+                                        : isDarkMode
+                                            ? 'bg-slate-900 text-slate-200 border border-slate-800 hover:bg-slate-800'
+                                            : 'bg-white text-slate-700 border border-slate-300'
                                 }`}
                             >
                                 Assigned Orders
@@ -626,7 +713,9 @@ export default function OrderList({ status = '' }) {
                                 className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
                                     assignmentScope === 'todo' || new URLSearchParams(location.search).get('todo') === 'today'
                                         ? 'bg-slate-900 text-white'
-                                        : 'bg-white text-slate-700 border border-slate-300'
+                                        : isDarkMode
+                                            ? 'bg-slate-900 text-slate-200 border border-slate-800 hover:bg-slate-800'
+                                            : 'bg-white text-slate-700 border border-slate-300'
                                 }`}
                             >
                                 Today Callbacks
@@ -634,29 +723,30 @@ export default function OrderList({ status = '' }) {
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-4">
+                    <div className={`rounded-[28px] p-4 ${isDarkMode ? 'border border-slate-800 bg-slate-900 shadow-lg shadow-black/20' : 'border border-slate-200 bg-white shadow-sm'}`}>
                         <div className="grid grid-cols-1 md:grid-cols-[1.6fr_0.8fr_auto] gap-3">
                             <input
                                 type="text"
                                 placeholder="Search by client, phone, or order number"
                                 value={filters.search}
                                 onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value, page: 1 }))}
-                                className="px-4 py-3 rounded-2xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                                className={`px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100 placeholder:text-slate-500 focus:ring-slate-700' : 'border-slate-300 focus:ring-slate-300'}`}
                             />
                             <select
                                 value={filters.status}
                                 onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value, page: 1 }))}
-                                className="px-4 py-3 rounded-2xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                                className={`px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100 focus:ring-slate-700' : 'border-slate-300 focus:ring-slate-300'}`}
                             >
                                 <option value="">All statuses</option>
                                 <option value="delivered">Delivered</option>
+                                <option value="reported">Reporte</option>
                                 <option value="refused">Refused</option>
                                 <option value="no_response">No Answer</option>
                                 <option value="cancelled">Cancelled</option>
                             </select>
                             <button
                                 onClick={() => setFilters((prev) => ({ ...prev, search: '', status: '', page: 1 }))}
-                                className="px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200"
+                                className={`px-4 py-3 rounded-2xl text-sm font-semibold ${isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                             >
                                 Clear
                             </button>
@@ -664,12 +754,12 @@ export default function OrderList({ status = '' }) {
                     </div>
 
                     {loading ? (
-                        <div className="bg-white rounded-[28px] p-12 text-center text-slate-500 border border-slate-200">
+                        <div className={`rounded-[28px] border p-12 text-center ${isDarkMode ? 'border-slate-800 bg-slate-900 text-slate-400' : 'border-slate-200 bg-white text-slate-500'}`}>
                             <div className="inline-block animate-spin h-8 w-8 border-4 border-slate-200 border-t-slate-700 rounded-full mb-3"></div>
                             <p className="text-base font-medium">Loading orders...</p>
                         </div>
                     ) : orders.length === 0 ? (
-                        <div className="bg-white rounded-[28px] p-12 text-center text-slate-500 border border-slate-200">
+                        <div className={`rounded-[28px] border p-12 text-center ${isDarkMode ? 'border-slate-800 bg-slate-900 text-slate-400' : 'border-slate-200 bg-white text-slate-500'}`}>
                             <p className="text-base font-medium">No assigned orders match the current filters.</p>
                         </div>
                     ) : (
@@ -682,6 +772,7 @@ export default function OrderList({ status = '' }) {
                                     formatDate={formatDate}
                                     formatStatusLabel={formatStatusLabel}
                                     actionButtons={deliveryPrimaryActions}
+                                    isDarkMode={isDarkMode}
                                     onAction={(actionKey) => {
                                         if (actionKey === 'report') {
                                             openDeliveryWorkflowModal(order, { mode: 'report', nextStatus: order.status });
@@ -698,14 +789,16 @@ export default function OrderList({ status = '' }) {
                     )}
 
                     {!loading && orders.length > 0 && (
-                        <div className="bg-white rounded-[28px] p-4 shadow-sm flex items-center justify-between border border-slate-200">
-                            <span className="text-sm text-slate-600 font-medium">Showing {pagination.from}-{pagination.to} of {pagination.total} orders</span>
+                        <div className={`flex items-center justify-between rounded-[28px] border p-4 ${isDarkMode ? 'border-slate-800 bg-slate-900 shadow-lg shadow-black/20' : 'border-slate-200 bg-white shadow-sm'}`}>
+                            <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Showing {pagination.from}-{pagination.to} of {pagination.total} orders</span>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page - 1 }))}
                                     disabled={pagination.current_page === 1}
                                     className={`px-3 py-2 rounded-xl font-medium text-sm transition-all ${
-                                        pagination.current_page === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                        pagination.current_page === 1
+                                            ? (isDarkMode ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed')
+                                            : (isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300')
                                     }`}
                                 >
                                     ◀ Previous
@@ -714,7 +807,9 @@ export default function OrderList({ status = '' }) {
                                     onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page + 1 }))}
                                     disabled={pagination.current_page === pagination.last_page}
                                     className={`px-3 py-2 rounded-xl font-medium text-sm transition-all ${
-                                        pagination.current_page === pagination.last_page ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                        pagination.current_page === pagination.last_page
+                                            ? (isDarkMode ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed')
+                                            : (isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300')
                                     }`}
                                 >
                                     Next ▶
@@ -881,6 +976,7 @@ export default function OrderList({ status = '' }) {
                         <option value="">Status</option>
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
+                        <option value="reported">Reporte</option>
                         <option value="shipped">Shipped</option>
                         <option value="delivered">Delivered</option>
                         <option value="cancelled">Cancelled</option>
@@ -938,6 +1034,7 @@ export default function OrderList({ status = '' }) {
                     orders.map(order => {
                         const deliveryAgentLabel = getDeliveryAgentLabel(order);
                         const companyLabel = getDeliveryCompanyLabel(order);
+                        const confirmationAgentLabel = getConfirmationAgentLabel(order);
                         const sellerLabel = getSellerLabel(order);
                         const orderAmount = calculateOrderAmount(order);
                         const orderBenefit = calculateOrderBenefit(order);
@@ -949,18 +1046,34 @@ export default function OrderList({ status = '' }) {
                             : isDeliveryPersonUser
                                 ? String(order.delivery_person_id) === String(user?.id)
                                 : true;
+                        const isResponsibleConfirmationAgent = Boolean(order.confirmation_agent_id)
+                            && String(order.confirmation_agent_id) === String(user?.id);
                         const confirmationStatusLocked = isConfirmationAgentUser && isConfirmationAgentStatusLocked(order);
+                        const sellerStatusLocked = isSellerStatusLocked(order);
                         const deliveryWorkflowIsLocked = isDeliveryPersonUser && isDeliveryWorkflowLocked(order);
                         const statusLockMessage = confirmationStatusLocked
                             ? getConfirmationAgentStatusLockMessage(order)
+                            : sellerStatusLocked
+                                ? getSellerStatusLockMessage(order)
                             : deliveryWorkflowIsLocked
                                 ? getDeliveryWorkflowLockMessage(order)
                                 : '';
                         const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
+                        const interactiveDeliveryTone = companyLabel
+                            ? getDeliveryCompanyTone(order, { interactive: true })
+                            : deliveryAgentLabel
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100';
+                        const staticDeliveryTone = companyLabel
+                            ? getDeliveryCompanyTone(order)
+                            : deliveryAgentLabel
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200';
                         
                         const statusBorderColor = {
                             pending: 'border-l-yellow-400',
                             confirmed: 'border-l-blue-400',
+                            reported: 'border-l-sky-400',
                             picked_up: 'border-l-indigo-400',
                             ready_for_shipping: 'border-l-cyan-400',
                             shipped: 'border-l-purple-400',
@@ -1001,7 +1114,7 @@ export default function OrderList({ status = '' }) {
                                             </span>
                                         )}
                                     </div>
-                                    {confirmationStatusLocked || deliveryWorkflowIsLocked ? (
+                                    {confirmationStatusLocked || sellerStatusLocked || deliveryWorkflowIsLocked ? (
                                         <div className="flex flex-col items-end gap-1 flex-shrink-0" title={statusLockMessage}>
                                             <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getStatusBadgeColor(order.status)}`}>
                                                 {formatStatusLabel(order.status)}
@@ -1030,7 +1143,7 @@ export default function OrderList({ status = '' }) {
                                 </div>
 
                                 {/* Content - Horizontal table layout */}
-                                <div className="grid gap-3 px-4 py-2 text-xs leading-snug items-start" style={{gridTemplateColumns: '1.8fr 1.2fr 1fr 1fr 1fr 1.2fr 1.5fr auto'}}>
+                                <div className="grid gap-x-2 gap-y-3 px-4 py-2 text-xs leading-snug items-start" style={{gridTemplateColumns: '1.45fr 0.95fr 1.05fr 1.05fr 0.9fr 0.9fr 1fr 1.25fr auto'}}>
                                     
                                     {/* CLIENT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
@@ -1066,6 +1179,29 @@ export default function OrderList({ status = '' }) {
                                         ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
                                                 Direct
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* CONFIRMATION COLUMN */}
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Confirmation</p>
+                                        {confirmationAgentLabel ? (
+                                            <>
+                                                <p className="font-bold text-gray-900 text-sm leading-tight truncate">
+                                                    {confirmationAgentLabel}
+                                                </p>
+                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                                                    isResponsibleConfirmationAgent
+                                                        ? 'bg-emerald-50 text-emerald-700'
+                                                        : 'bg-slate-100 text-slate-600'
+                                                }`}>
+                                                    {isResponsibleConfirmationAgent ? 'Responsible' : 'Assigned'}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
+                                                Unassigned
                                             </span>
                                         )}
                                     </div>
@@ -1150,7 +1286,7 @@ export default function OrderList({ status = '' }) {
                                             ) : canWorkOnOrder ? (
                                                 <button
                                                     onClick={() => handleAgentClick(order)}
-                                                    className="inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-semibold border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all"
+                                                    className={`inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full text-xs font-semibold transition-all ${interactiveDeliveryTone}`}
                                                     title={assignmentPrimaryLabel}
                                                 >
                                                     <span className="truncate max-w-[140px]">
@@ -1158,8 +1294,8 @@ export default function OrderList({ status = '' }) {
                                                     </span>
                                                 </button>
                                             ) : (
-                                                <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-                                                    {order.confirmation_agent?.name || 'Assigned to you'}
+                                                <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold ${staticDeliveryTone}`}>
+                                                    {assignmentPrimaryLabel}
                                                 </span>
                                             )
                                         ) : isDeliveryPersonUser ? (
@@ -1179,7 +1315,7 @@ export default function OrderList({ status = '' }) {
                                         ) : (
                                             <button
                                                 onClick={() => handleAgentClick(order)}
-                                                className="inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-semibold border border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 transition-all"
+                                                className={`inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full text-xs font-semibold transition-all ${interactiveDeliveryTone}`}
                                                 title={assignmentPrimaryLabel}
                                             >
                                                 <span className="truncate max-w-[140px]">
@@ -1419,6 +1555,7 @@ function DeliveryPersonOrderCard({
     formatDate,
     formatStatusLabel,
     actionButtons,
+    isDarkMode,
     onAction,
     isLocked,
     lockMessage,
@@ -1429,23 +1566,23 @@ function DeliveryPersonOrderCard({
         : items.map((item) => `${item.product?.name || item.product_name || 'Item'} x${item.quantity}`).join(', ');
 
     return (
-        <article className="bg-white rounded-[28px] border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 bg-[#fbfaf6]">
+        <article className={`overflow-hidden rounded-[28px] border ${isDarkMode ? 'border-slate-800 bg-slate-900 shadow-lg shadow-black/20' : 'border-slate-200 bg-white shadow-sm'}`}>
+            <div className={`px-5 py-4 border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-[#fbfaf6]'}`}>
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900">{order.client?.name || 'Client'}</h2>
-                        <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-slate-600">
+                        <h2 className={`text-xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{order.client?.name || 'Client'}</h2>
+                        <div className={`mt-2 flex flex-wrap items-center gap-2 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             <span>{order.client?.phone || order.phone || '-'}</span>
-                            <span className="text-slate-300">•</span>
+                            <span className={isDarkMode ? 'text-slate-600' : 'text-slate-300'}>•</span>
                             <span>{order.city || order.client?.city || '-'}</span>
                         </div>
                     </div>
                     <div className="text-right">
-                        <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${isDarkMode ? 'bg-slate-800 text-slate-200 border border-slate-700' : 'bg-slate-100 text-slate-700'}`}>
                             {formatStatusLabel(order.status)}
                         </span>
                         {order.callback_date && (
-                            <p className="text-xs text-amber-700 mt-2">Callback {formatDate(order.callback_date)}</p>
+                            <p className={`mt-2 text-xs ${isDarkMode ? 'text-amber-300' : 'text-amber-700'}`}>Callback {formatDate(order.callback_date)}</p>
                         )}
                     </div>
                 </div>
@@ -1453,34 +1590,34 @@ function DeliveryPersonOrderCard({
 
             <div className="px-5 py-4 space-y-4">
                 <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Items</p>
-                    <p className="text-sm text-slate-800 mt-2 leading-6">{itemSummary}</p>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Items</p>
+                    <p className={`mt-2 text-sm leading-6 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{itemSummary}</p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Collected</p>
-                        <p className="text-lg font-bold text-slate-900 mt-2">{formatCurrency(order.collected_amount || 0)}</p>
+                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Collected</p>
+                        <p className={`mt-2 text-lg font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{formatCurrency(order.collected_amount || 0)}</p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Commission</p>
-                        <p className="text-lg font-bold text-emerald-700 mt-2">{formatCurrency(order.delivery_person_commission || 0)}</p>
+                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Commission</p>
+                        <p className="mt-2 text-lg font-bold text-emerald-500">{formatCurrency(order.delivery_person_commission || 0)}</p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Due to admin</p>
-                        <p className="text-lg font-bold text-amber-700 mt-2">{formatCurrency(order.amount_due_to_admin || 0)}</p>
+                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'}`}>
+                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Due to admin</p>
+                        <p className="mt-2 text-lg font-bold text-amber-500">{formatCurrency(order.amount_due_to_admin || 0)}</p>
                     </div>
                 </div>
 
                 {order.delivery_status_note && (
-                    <div className="rounded-2xl bg-rose-50 border border-rose-100 px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-400">Motif</p>
-                        <p className="text-sm text-rose-800 mt-2">{order.delivery_status_note}</p>
+                    <div className={`rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-rose-900 bg-rose-950/40' : 'border-rose-100 bg-rose-50'}`}>
+                        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'text-rose-300' : 'text-rose-400'}`}>Motif</p>
+                        <p className={`mt-2 text-sm ${isDarkMode ? 'text-rose-100' : 'text-rose-800'}`}>{order.delivery_status_note}</p>
                     </div>
                 )}
 
                 {isLocked ? (
-                    <div className="rounded-2xl bg-slate-100 border border-slate-200 px-4 py-3 text-sm text-slate-600">
+                    <div className={`rounded-2xl border px-4 py-3 text-sm ${isDarkMode ? 'border-slate-800 bg-slate-950/70 text-slate-400' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
                         {lockMessage}
                     </div>
                 ) : (

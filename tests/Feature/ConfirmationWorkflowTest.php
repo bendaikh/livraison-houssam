@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BlacklistEntry;
 use App\Models\Client;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Vendor;
@@ -72,6 +73,75 @@ class ConfirmationWorkflowTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('delivery_person.id', $deliveryPerson->id);
         $response->assertJsonPath('delivery_person.name', $deliveryPerson->name);
+    }
+
+    public function test_seller_cannot_change_status_after_confirmation_agent_confirms_order_via_status_endpoint(): void
+    {
+        $seller = $this->createVendorUser('seller');
+        $agent = $this->createConfirmationAgent();
+        $order = $this->createConfirmedOrderForVendor($seller->vendor, $agent);
+
+        Sanctum::actingAs($seller);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/status", [
+            'status' => 'cancelled',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertSame('confirmed', $order->fresh()->status);
+    }
+
+    public function test_seller_cannot_change_status_after_confirmation_agent_confirms_order_via_edit_endpoint(): void
+    {
+        $seller = $this->createVendorUser('seller');
+        $agent = $this->createConfirmationAgent();
+        $order = $this->createConfirmedOrderForVendor($seller->vendor, $agent);
+        $product = $this->createProductForVendor($seller->vendor);
+
+        Sanctum::actingAs($seller);
+
+        $response = $this->putJson("/api/orders/{$order->id}", [
+            'client_id' => $order->client_id,
+            'client_name' => $order->client->name,
+            'client_phone' => $order->client->phone,
+            'vendor_id' => $seller->vendor->id,
+            'delivery_agent_id' => null,
+            'delivery_integration_id' => null,
+            'delivery_person_id' => null,
+            'confirmation_agent_id' => $order->confirmation_agent_id,
+            'delivery_city' => 'Rabat',
+            'status' => 'cancelled',
+            'source' => 'manual',
+            'items' => [[
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'price' => 140,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'discount' => 0,
+            'shipping_address' => 'Rabat',
+            'city' => 'Rabat',
+            'notes' => 'Seller attempted to change status after delivery handoff.',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertSame('confirmed', $order->fresh()->status);
+    }
+
+    public function test_seller_cannot_change_status_for_confirmed_tracked_order_even_without_confirmation_agent(): void
+    {
+        $seller = $this->createVendorUser('seller');
+        $order = $this->createTrackedConfirmedOrderForVendor($seller->vendor);
+
+        Sanctum::actingAs($seller);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/status", [
+            'status' => 'cancelled',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertSame('confirmed', $order->fresh()->status);
     }
 
     public function test_confirmation_workflow_can_update_shipping_address_and_notes(): void
@@ -155,12 +225,12 @@ class ConfirmationWorkflowTest extends TestCase
         ]);
     }
 
-    private function createVendorUser(): User
+    private function createVendorUser(string $slug = 'vendor'): User
     {
         $role = Role::firstOrCreate(
-            ['slug' => 'vendor'],
+            ['slug' => $slug],
             [
-                'name' => 'Vendor',
+                'name' => $slug === 'seller' ? 'Seller Portal' : 'Seller',
                 'permissions' => ['view_own_orders'],
             ]
         );
@@ -220,5 +290,67 @@ class ConfirmationWorkflowTest extends TestCase
             'total' => 140,
             'phone' => $client->phone,
         ])->load('client');
+    }
+
+    private function createConfirmedOrderForVendor(Vendor $vendor, User $agent): Order
+    {
+        $client = Client::create([
+            'name' => 'Tracked Client',
+            'phone' => '0644444444',
+            'address' => 'Rabat',
+            'is_active' => true,
+        ]);
+
+        return Order::create([
+            'client_id' => $client->id,
+            'vendor_id' => $vendor->id,
+            'confirmation_agent_id' => $agent->id,
+            'status' => 'confirmed',
+            'confirmed_at' => now(),
+            'source' => 'manual',
+            'subtotal' => 140,
+            'total' => 140,
+            'shipping_address' => 'Rabat',
+            'city' => 'Rabat',
+            'phone' => $client->phone,
+        ])->load('client');
+    }
+
+    private function createTrackedConfirmedOrderForVendor(Vendor $vendor): Order
+    {
+        $client = Client::create([
+            'name' => 'Tracked Client',
+            'phone' => '0644444444',
+            'address' => 'Rabat',
+            'is_active' => true,
+        ]);
+
+        return Order::create([
+            'client_id' => $client->id,
+            'vendor_id' => $vendor->id,
+            'status' => 'confirmed',
+            'delivery_tracking_code' => 'TRK-SELLER-001',
+            'confirmed_at' => now(),
+            'source' => 'manual',
+            'subtotal' => 140,
+            'total' => 140,
+            'shipping_address' => 'Rabat',
+            'city' => 'Rabat',
+            'phone' => $client->phone,
+        ])->load('client');
+    }
+
+    private function createProductForVendor(Vendor $vendor): Product
+    {
+        return Product::create([
+            'name' => 'Seller Product',
+            'sku' => 'SELLER-PRODUCT-001',
+            'vendor_id' => $vendor->id,
+            'price' => 140,
+            'cost_price' => 70,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
     }
 }

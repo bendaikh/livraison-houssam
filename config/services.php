@@ -39,4 +39,14 @@ return [
         'api_key' => env('GOOGLE_SHEETS_API_KEY'),
     ],
 
+    'bmdelivery' => [
+        'base_url' => env('BMDELIVERY_BASE_URL', 'https://bmdelivery.ma/api'),
+        'timeout' => env('BMDELIVERY_TIMEOUT', 20),
+        'connect_timeout' => env('BMDELIVERY_CONNECT_TIMEOUT', 10),
+        'retry_times' => env('BMDELIVERY_RETRY_TIMES', 2),
+        'retry_sleep_ms' => env('BMDELIVERY_RETRY_SLEEP_MS', 400),
+        'force_http1' => env('BMDELIVERY_FORCE_HTTP1', true),
+        'force_tls12' => env('BMDELIVERY_FORCE_TLS12', true),
+    ],
+
 ];

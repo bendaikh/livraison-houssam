@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
-import { isAdminRole } from './utils/roles';
+import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from './utils/roles';
 
 // Layout
 import MainLayout from './layouts/MainLayout';
@@ -66,9 +66,10 @@ import RoleForm from './pages/Roles/RoleForm';
 
 // Settings
 import Settings from './pages/Settings/Settings';
-import AdminBillingDashboard from './pages/Billing/AdminBillingDashboard';
-import ConfirmationAgentBilling from './pages/Billing/ConfirmationAgentBilling';
-import DeliveryPersonBilling from './pages/Billing/DeliveryPersonBilling';
+import BillingIndexPage from './pages/Billing/BillingIndexPage';
+import SellerBillingPage from './pages/Billing/SellerBillingPage';
+import DeliveryBillingPage from './pages/Billing/DeliveryBillingPage';
+import ConfirmationBillingPage from './pages/Billing/ConfirmationBillingPage';
 
 function ProtectedRoute({ children }) {
     const { user, loading } = useAuth();
@@ -170,9 +171,12 @@ function App() {
                         
                         {/* Settings */}
                         <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
-                        <Route path="billing" element={<AdminBillingDashboard />} />
-                        <Route path="confirmation-billing" element={<ConfirmationAgentBilling />} />
-                        <Route path="delivery-billing" element={<DeliveryPersonBilling />} />
+                        <Route path="billing" element={<BillingIndexPage />} />
+                        <Route path="billing/sellers" element={<SellerBillingPage />} />
+                        <Route path="billing/delivery" element={<DeliveryBillingPage />} />
+                        <Route path="billing/confirmation" element={<ConfirmationBillingPage />} />
+                        <Route path="confirmation-billing" element={<Navigate to="/billing/confirmation" replace />} />
+                        <Route path="delivery-billing" element={<Navigate to="/billing/delivery" replace />} />
                     </Route>
                 </Routes>
             </SettingsProvider>

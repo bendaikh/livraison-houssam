@@ -10,7 +10,7 @@ export function isAdminRole(roleSlug) {
 }
 
 export function isVendorRole(roleSlug) {
-    return roleSlug === 'vendor';
+    return ['vendor', 'seller'].includes(roleSlug);
 }
 
 export function isDeliveryPersonRole(roleSlug) {

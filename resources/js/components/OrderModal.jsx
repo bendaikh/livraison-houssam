@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { formatPriceInput, normalizePrice } from '../utils/currency';
 import { calculateProfit, getFulfillmentPrice, getProductBasePrice } from '../utils/profit';
+import { resolveShippingCost } from '../utils/shipping';
 
 /**
  * Reusable modal for creating an order from a product.
@@ -44,40 +45,14 @@ export default function OrderModal({
     });
     const [submitting, setSubmitting] = useState(false);
 
-    const normalizeCity = (value) =>
-        (value || '')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .trim();
-
-    const isCasaCity = (value) => {
-        const normalized = normalizeCity(value);
-        return normalized === 'casablanca'
-            || normalized === 'casa'
-            || normalized.includes('casablanca')
-            || normalized.startsWith('casa');
-    };
-
-    const findCity = (name) => {
-        const normalized = normalizeCity(name);
-        return cities.find((city) => normalizeCity(city.name) === normalized);
-    };
-
-    const getCityDeliveryCost = (cityName) => {
-        if (!cityName) return 0; // shipping is added only after city selection
-
-        const match = findCity(cityName);
-        if (match && match.delivery_cost !== null && match.delivery_cost !== undefined) {
-            return parseFloat(match.delivery_cost);
-        }
-
-        return isCasaCity(cityName) ? 25 : 35;
-    };
-
     const sellPrice = parseFloat(orderForm.sell_price || 0);
     const sellerPrice = buyPrice;
-    const shippingPrice = getCityDeliveryCost(orderForm.city);
+    const shippingResolution = resolveShippingCost({
+        cityName: orderForm.city,
+        cities,
+        emptyCost: 0,
+    });
+    const shippingPrice = shippingResolution.cost;
     const shippingIncludedInPrice = isAdminUser;
     const fulfillmentPrice = getFulfillmentPrice(settings.order_fulfillment_cost);
     const customerTotal = sellPrice * quantity;
@@ -127,6 +102,7 @@ export default function OrderModal({
                 city: orderForm.city,
                 notes: orderForm.notes,
                 shipping_cost: shippingPrice,
+                shipping_cost_source: 'auto',
                 shipping_included_in_price: shippingIncludedInPrice,
                 items: [{
                     product_id: product.id,
@@ -136,6 +112,13 @@ export default function OrderModal({
                 }],
                 source
             };
+
+            console.debug('[OrderModal] price sent back on save', {
+                city: orderData.city,
+                shippingCost: orderData.shipping_cost,
+                shippingCostSource: orderData.shipping_cost_source,
+                shippingResolutionSource: shippingResolution.source,
+            });
 
             await api.post('/orders', orderData);
             alert('Order created successfully!');
@@ -328,7 +311,7 @@ export default function OrderModal({
                                                         <div className="flex items-center justify-between">
                                                             <span>{city.name}</span>
                                                             <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                                                                {getCityDeliveryCost(city.name)} DH
+                                                                {resolveShippingCost({ cityName: city.name, cities, emptyCost: 0 }).cost} DH
                                                             </span>
                                                         </div>
                                                     </button>

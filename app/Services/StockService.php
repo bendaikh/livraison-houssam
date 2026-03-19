@@ -201,27 +201,24 @@ class StockService
 
     private function createLowStockNotification(Product $product)
     {
-        // Create notification for admin users
-        $adminRole = \App\Models\Role::where('slug', 'admin')->first();
-        
-        if ($adminRole) {
-            $admins = \App\Models\User::where('role_id', $adminRole->id)
-                ->where('is_active', true)
-                ->get();
+        $admins = \App\Models\User::where('is_active', true)
+            ->whereHas('role', function ($query) {
+                $query->whereIn('slug', ['admin', 'superadmin']);
+            })
+            ->get();
 
-            foreach ($admins as $admin) {
-                Notification::create([
-                    'user_id' => $admin->id,
-                    'type' => 'low_stock',
-                    'title' => 'Low Stock Alert',
-                    'message' => "Product '{$product->name}' is running low on stock. Current: {$product->stock_quantity}, Minimum: {$product->min_stock_quantity}",
-                    'data' => [
-                        'product_id' => $product->id,
-                        'current_stock' => $product->stock_quantity,
-                        'min_stock' => $product->min_stock_quantity,
-                    ],
-                ]);
-            }
+        foreach ($admins as $admin) {
+            Notification::create([
+                'user_id' => $admin->id,
+                'type' => 'low_stock',
+                'title' => 'Low Stock Alert',
+                'message' => "Product '{$product->name}' is running low on stock. Current: {$product->stock_quantity}, Minimum: {$product->min_stock_quantity}",
+                'data' => [
+                    'product_id' => $product->id,
+                    'current_stock' => $product->stock_quantity,
+                    'min_stock' => $product->min_stock_quantity,
+                ],
+            ]);
         }
     }
 

@@ -3,15 +3,17 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
+import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
+import { formatDeliveryDispatchFailureMessage, parseDeliveryCitiesResponse } from '../../utils/delivery';
+import { resolveShippingCost, sameCityName } from '../../utils/shipping';
 import ConfirmationWorkflowForm from './ConfirmationWorkflowForm';
 
 export default function OrderForm() {
     const { formatCurrency, settings } = useSettings();
     const { user } = useAuth();
     const roleSlug = user?.role?.slug;
-    const isVendorUser = roleSlug === 'vendor';
+    const isVendorUser = isVendorRole(roleSlug);
     const isAdminUser = isAdminRole(roleSlug);
     const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
     const isDeliveryPersonUser = isDeliveryPersonRole(roleSlug);
@@ -28,12 +30,17 @@ export default function OrderForm() {
     const [deliveryPersons, setDeliveryPersons] = useState([]);
     const [confirmationAgents, setConfirmationAgents] = useState([]);
     const [deliveryCompanies, setDeliveryCompanies] = useState([]);
+    const [currentOrderTrackingCode, setCurrentOrderTrackingCode] = useState('');
+    const [currentOrderConfirmedAt, setCurrentOrderConfirmedAt] = useState(null);
     const [deliveryCompanyCities, setDeliveryCompanyCities] = useState([]);
     const [deliveryCitiesLoading, setDeliveryCitiesLoading] = useState(false);
     const [deliveryCitiesError, setDeliveryCitiesError] = useState('');
+    const [deliveryCitiesWarning, setDeliveryCitiesWarning] = useState('');
     const [deliveryCitySearch, setDeliveryCitySearch] = useState('');
     const [cities, setCities] = useState([]);
+    const [citiesLoaded, setCitiesLoaded] = useState(false);
     const [showCityDropdown, setShowCityDropdown] = useState(false);
+    const [initialPricingContext, setInitialPricingContext] = useState(null);
     
     const [formData, setFormData] = useState({
         client_name: '',
@@ -63,6 +70,21 @@ export default function OrderForm() {
 
     const [errors, setErrors] = useState({});
     const [queryPrefillApplied, setQueryPrefillApplied] = useState(false);
+    const statusOptions = [
+        { value: 'pending', label: 'Pending' },
+        { value: 'confirmed', label: 'Confirmed' },
+        { value: 'reported', label: 'Reporte' },
+        { value: 'picked_up', label: 'Picked Up' },
+        { value: 'ready_for_shipping', label: 'Ready for Shipping' },
+        { value: 'shipped', label: 'Shipped' },
+        { value: 'out_for_delivery', label: 'Out for Delivery' },
+        { value: 'delivered', label: 'Delivered' },
+        { value: 'cancelled', label: 'Cancelled' },
+        { value: 'refused', label: 'Refused' },
+        { value: 'returned', label: 'Returned' },
+        { value: 'no_response', label: 'No Response' },
+        { value: 'return_requested', label: 'Return Requested' },
+    ];
 
     if (isDeliveryPersonUser) {
         return (
@@ -72,28 +94,6 @@ export default function OrderForm() {
             </div>
         );
     }
-
-    const normalizeCity = (value) =>
-        (value || '')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .trim();
-
-    const isCasaCity = (value) => normalizeCity(value).includes('casa');
-
-    const getCityDeliveryCost = (cityName) => {
-        if (!cityName) return 35;
-
-        const normalized = normalizeCity(cityName);
-        const match = cities.find((city) => normalizeCity(city.name) === normalized);
-
-        if (match && match.delivery_cost !== null && match.delivery_cost !== undefined) {
-            return parseFloat(match.delivery_cost);
-        }
-
-        return isCasaCity(cityName) ? 25 : 35;
-    };
 
     useEffect(() => {
         fetchProducts();
@@ -107,6 +107,7 @@ export default function OrderForm() {
         if (isEditing) {
             fetchOrder();
         } else {
+            setInitialPricingContext(null);
             setFormData((prev) => ({
                 ...prev,
                 vendor_id: user?.vendor?.id || prev.vendor_id,
@@ -146,18 +147,6 @@ export default function OrderForm() {
 
         setQueryPrefillApplied(true);
     }, [isEditing, queryPrefillApplied, location.search, products]);
-
-    useEffect(() => {
-        if (isEditing) return;
-
-        const autoCost = getCityDeliveryCost(formData.city);
-        const currentCost = parseFloat(formData.shipping_cost ?? 0);
-        const normalizedCurrent = Number.isFinite(currentCost) ? currentCost : 0;
-
-        if (Math.abs(autoCost - normalizedCurrent) > 0.009) {
-            setFormData((prev) => ({ ...prev, shipping_cost: autoCost }));
-        }
-    }, [formData.city, formData.shipping_cost, cities, isEditing]);
 
     const fetchProducts = async () => {
         try {
@@ -217,20 +206,25 @@ export default function OrderForm() {
         if (!companyId) {
             setDeliveryCompanyCities([]);
             setDeliveryCitiesError('');
+            setDeliveryCitiesWarning('');
             return;
         }
         try {
             setDeliveryCitiesLoading(true);
             setDeliveryCitiesError('');
+            setDeliveryCitiesWarning('');
             const response = await api.get(`/orders/delivery-companies/${companyId}/cities`);
-            setDeliveryCompanyCities(Array.isArray(response.data) ? response.data : []);
-            if (!response.data || response.data.length === 0) {
+            const { cities, warning } = parseDeliveryCitiesResponse(response);
+            setDeliveryCompanyCities(cities);
+            setDeliveryCitiesWarning(warning);
+            if (cities.length === 0) {
                 setDeliveryCitiesError('This delivery company has no configured cities.');
             }
         } catch (error) {
             console.error('Error fetching delivery company cities:', error);
             setDeliveryCompanyCities([]);
-            setDeliveryCitiesError('Failed to load delivery cities. Please try again.');
+            setDeliveryCitiesWarning('');
+            setDeliveryCitiesError(error.response?.data?.error || 'Failed to load delivery cities. Please try again.');
         } finally {
             setDeliveryCitiesLoading(false);
         }
@@ -238,6 +232,7 @@ export default function OrderForm() {
 
     const fetchCities = async () => {
         try {
+            setCitiesLoaded(false);
             const response = await api.get('/cities');
             // For edit mode, show all cities so Shopify cities can be matched
             // For create mode, show only active cities
@@ -248,6 +243,8 @@ export default function OrderForm() {
             }
         } catch (error) {
             console.error('Error fetching cities:', error);
+        } finally {
+            setCitiesLoaded(true);
         }
     };
 
@@ -257,9 +254,18 @@ export default function OrderForm() {
             const response = await api.get(`/orders/${id}`);
             const order = response.data;
             const resolvedCity = String(order.city ?? order.client?.city ?? '').trim();
-            const resolvedShipping = (order.shipping_cost === null || order.shipping_cost === undefined)
-                ? getCityDeliveryCost(resolvedCity)
-                : order.shipping_cost;
+            const effectiveShippingCost = order.effective_shipping_cost ?? order.resolved_shipping_cost ?? order.shipping_cost ?? '';
+            setCurrentOrderTrackingCode(order.delivery_tracking_code || '');
+            setCurrentOrderConfirmedAt(order.confirmed_at || null);
+
+            console.debug('[OrderForm] initial order data loaded', {
+                orderId: order.id,
+                city: resolvedCity,
+                deliveryCity: order.delivery_city || resolvedCity || '',
+                savedShippingCost: order.shipping_cost,
+                effectiveShippingCost,
+                shippingResolution: order.shipping_cost_resolution || null,
+            });
             
             setFormData({
                 client_name: order.client?.name || '',
@@ -276,9 +282,13 @@ export default function OrderForm() {
                 city: resolvedCity,
                 notes: order.notes || '',
                 whatsapp: order.whatsapp || '',
-                shipping_cost: resolvedShipping,
+                shipping_cost: effectiveShippingCost,
                 shipping_included_in_price: Boolean(order.shipping_included_in_price),
                 discount: order.discount || 0
+            });
+            setInitialPricingContext({
+                city: resolvedCity,
+                delivery_integration_id: order.delivery_integration_id || '',
             });
             
             if (order.items && order.items.length > 0) {
@@ -322,10 +332,26 @@ export default function OrderForm() {
         setOrderItems(newItems);
     };
 
+    const resolvedShipping = resolveShippingCost({
+        cityName: formData.city,
+        cities,
+        emptyCost: 35,
+    });
     const parsedShipping = parseFloat(formData.shipping_cost ?? '');
-    const shippingCost = Number.isFinite(parsedShipping) && parsedShipping > 0
-        ? parsedShipping
-        : getCityDeliveryCost(formData.city);
+    const hasSavedShippingCost = formData.shipping_cost !== '' && formData.shipping_cost !== null && formData.shipping_cost !== undefined
+        && Number.isFinite(parsedShipping);
+    const hasPricingContextChanged = Boolean(
+        isEditing
+        && initialPricingContext
+        && (
+            !sameCityName(formData.city, initialPricingContext.city)
+            || String(formData.delivery_integration_id || '') !== String(initialPricingContext.delivery_integration_id || '')
+        )
+    );
+    const shouldUseResolvedShipping = !isEditing || hasPricingContextChanged || !hasSavedShippingCost;
+    const shippingCost = shouldUseResolvedShipping
+        ? resolvedShipping.cost
+        : parsedShipping;
     const shippingIncludedInPrice = Boolean(formData.shipping_included_in_price);
     const discountValue = parseFloat(formData.discount ?? 0) || 0;
     const fulfillmentPrice = getFulfillmentPrice(settings.order_fulfillment_cost);
@@ -375,6 +401,20 @@ export default function OrderForm() {
 
     // Once a confirmation agent has been set on an existing order, lock the field
     const isConfirmationLocked = isEditing && !!formData.confirmation_agent_id && !isAdminUser;
+    const isConfirmationStyleStatusLocked = () => {
+        if (currentOrderTrackingCode) {
+            return true;
+        }
+
+        if (formData.delivery_person_id) {
+            return true;
+        }
+
+        return Boolean(currentOrderConfirmedAt) || formData.status === 'confirmed';
+    };
+    const isSellerStatusLocked = isVendorUser
+        && isEditing
+        && isConfirmationStyleStatusLocked();
 
         // Keep delivery city in sync with shipping city whenever company is selected.
         useEffect(() => {
@@ -395,6 +435,41 @@ export default function OrderForm() {
             setShowCityDropdown(false);
         }, [formData.delivery_integration_id]);
 
+    useEffect(() => {
+        if (!citiesLoaded || !shouldUseResolvedShipping) {
+            return;
+        }
+
+        const currentCost = parseFloat(formData.shipping_cost ?? '');
+        if (!Number.isFinite(currentCost) || Math.abs(currentCost - resolvedShipping.cost) > 0.009) {
+            console.debug('[OrderForm] delivery city + price resolution', {
+                city: formData.city,
+                deliveryIntegrationId: formData.delivery_integration_id || null,
+                resolvedShippingCost: resolvedShipping.cost,
+                resolutionSource: resolvedShipping.source,
+                matchedCity: resolvedShipping.matchedCity,
+                usedFallback: resolvedShipping.usedFallback,
+                reason: isEditing ? 'edit_context_changed_or_missing_saved_value' : 'create_auto_sync',
+            });
+
+            setFormData((prev) => ({
+                ...prev,
+                shipping_cost: resolvedShipping.cost,
+            }));
+        }
+    }, [
+        citiesLoaded,
+        shouldUseResolvedShipping,
+        resolvedShipping.cost,
+        resolvedShipping.source,
+        resolvedShipping.matchedCity,
+        resolvedShipping.usedFallback,
+        formData.city,
+        formData.delivery_integration_id,
+        formData.shipping_cost,
+        isEditing,
+    ]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
@@ -403,16 +478,28 @@ export default function OrderForm() {
         try {
             const submitData = {
                 ...formData,
+                shipping_cost: shippingCost,
+                shipping_cost_source: 'auto',
                 vendor_id: isVendorUser ? (user?.vendor?.id || formData.vendor_id || null) : (formData.vendor_id || null),
                 items: orderItems
             };
+
+            console.debug('[OrderForm] price sent back on save', {
+                isEditing,
+                orderId: id || null,
+                city: submitData.city,
+                deliveryCity: submitData.delivery_city,
+                deliveryIntegrationId: submitData.delivery_integration_id || null,
+                shippingCost: submitData.shipping_cost,
+                shippingCostSource: submitData.shipping_cost_source,
+            });
 
             const response = isEditing
                 ? await api.put(`/orders/${id}`, submitData)
                 : await api.post('/orders', submitData);
 
             if (response.data?.delivery_error) {
-                alert(`Order saved but delivery failed: ${response.data.delivery_error}`);
+                alert(formatDeliveryDispatchFailureMessage(response.data.delivery_error));
             } else if (submitData.status === 'confirmed' && submitData.delivery_integration_id && !response.data?.delivery_tracking_code) {
                 alert('Order saved, but no tracking code was returned by the delivery provider.');
             }
@@ -568,26 +655,31 @@ export default function OrderForm() {
                                                 </div>
                                                 {filteredCityOptions.map((city) => (
                                                     <button
-                                                        key={city.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setFormData({
-                                                                ...formData,
-                                                                city: city.name,
-                                                                shipping_cost: getCityDeliveryCost(city.name)
-                                                            });
-                                                            setShowCityDropdown(false);
-                                                        }}
+                                                                key={city.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const nextShipping = resolveShippingCost({
+                                                                        cityName: city.name,
+                                                                        cities,
+                                                                        emptyCost: 35,
+                                                                    }).cost;
+                                                                    setFormData({
+                                                                        ...formData,
+                                                                        city: city.name,
+                                                                        shipping_cost: nextShipping
+                                                                    });
+                                                                    setShowCityDropdown(false);
+                                                                }}
                                                         className={`w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b border-gray-100 transition-colors ${
                                                             formData.city === city.name ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                                                         }`}
                                                     >
                                                                 <div className="flex items-center justify-between">
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-900">{city.name}</p>
-                                                                        <div className="flex gap-2 mt-0.5">
-                                                                            <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
-                                                                                {getCityDeliveryCost(city.name)} DH
+                                                                        <div>
+                                                                            <p className="text-sm font-medium text-gray-900">{city.name}</p>
+                                                                            <div className="flex gap-2 mt-0.5">
+                                                                                <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">
+                                                                                {resolveShippingCost({ cityName: city.name, cities, emptyCost: 35 }).cost} DH
                                                                             </span>
                                                                             {city.isCurrentOrderCity && (
                                                                                 <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
@@ -664,23 +756,37 @@ export default function OrderForm() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {/* Order Status - only show when editing */}
-                        {isEditing && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Order Status</label>
-                                <select
-                                    value={formData.status}
-                                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent capitalize"
-                                >
-                                    <option value="pending">Pending</option>
-                                    <option value="confirmed">Confirmed</option>
-                                    <option value="shipped">Shipped</option>
-                                    <option value="delivered">Delivered</option>
-                                    <option value="cancelled">Cancelled</option>
-                                </select>
-                            </div>
-                        )}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Order Status</label>
+                            <select
+                                value={formData.status}
+                                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                disabled={isSellerStatusLocked}
+                                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent capitalize ${
+                                    isSellerStatusLocked ? 'bg-gray-100 cursor-not-allowed text-gray-500' : ''
+                                }`}
+                            >
+                                {statusOptions.map((statusOption) => (
+                                    <option key={statusOption.value} value={statusOption.value}>
+                                        {statusOption.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {isSellerStatusLocked && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {currentOrderTrackingCode
+                                        ? 'Status is locked for sellers after the order is handed to a delivery company.'
+                                        : formData.delivery_person_id
+                                            ? 'Status is locked for sellers once a delivery person is assigned.'
+                                            : 'Status is locked for sellers once the order has been confirmed.'}
+                                </p>
+                            )}
+                            {!isEditing && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Choose <span className="font-medium">Confirmed</span> to send the order immediately after save.
+                                </p>
+                            )}
+                        </div>
 
                         {isVendorUser ? (
                             <div>
@@ -857,10 +963,12 @@ export default function OrderForm() {
                                             )}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-red-600">{deliveryCitiesError || 'No cities available for this company.'}</p>
+                                        <p className={`text-xs ${deliveryCitiesError ? 'text-red-600' : 'text-gray-500'}`}>
+                                            {deliveryCitiesError || 'No cities available for this company.'}
+                                        </p>
                                     )}
-                                    {deliveryCitiesError && (
-                                        <p className="text-xs text-red-600">{deliveryCitiesError}</p>
+                                    {deliveryCitiesWarning && (
+                                        <p className="text-xs text-amber-700">{deliveryCitiesWarning}</p>
                                     )}
                                 </div>
                             )}

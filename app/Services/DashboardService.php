@@ -67,7 +67,7 @@ class DashboardService
         $todayStart = Carbon::today();
         $todayEnd = Carbon::today()->endOfDay();
         $commissionPerOrder = (float) $user->effective_commission_per_order;
-        $inProgressStatuses = ['pending', 'picked_up', 'ready_for_shipping', 'out_for_delivery', 'return_requested'];
+        $inProgressStatuses = ['pending', 'reported', 'picked_up', 'ready_for_shipping', 'out_for_delivery', 'return_requested'];
 
         $currentMonthStart = Carbon::now()->startOfMonth();
         $currentMonthEnd = Carbon::now()->endOfMonth();
@@ -246,7 +246,7 @@ class DashboardService
             ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
         $todayStart = Carbon::today();
         $todayEnd = Carbon::today()->endOfDay();
-        $activeStatuses = ['confirmed', 'picked_up', 'ready_for_shipping', 'shipped', 'out_for_delivery'];
+        $activeStatuses = ['confirmed', 'reported', 'picked_up', 'ready_for_shipping', 'shipped', 'out_for_delivery'];
 
         $currentMonthStart = Carbon::now()->startOfMonth();
         $currentMonthEnd = Carbon::now()->endOfMonth();

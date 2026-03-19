@@ -5,7 +5,66 @@
 }
 
 @layer base {
+    html.dark {
+        color-scheme: dark;
+    }
+
+    html.dark .app-theme-shell {
+        --app-surface-1: #0f172a;
+        --app-surface-2: #111827;
+        --app-surface-3: #1e293b;
+        --app-border: #334155;
+        --app-text-strong: #e2e8f0;
+        --app-text-muted: #94a3b8;
+    }
+
     body {
         font-family: var(--font-sans);
+        transition: background-color 200ms ease, color 200ms ease;
+    }
+
+    html.dark .app-theme-shell :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100) {
+        background-color: var(--app-surface-2) !important;
+    }
+
+    html.dark .app-theme-shell [class*="bg-white/"] {
+        background-color: rgba(15, 23, 42, 0.88) !important;
+    }
+
+    html.dark .app-theme-shell [class*="border-white/"] {
+        border-color: rgba(51, 65, 85, 0.9) !important;
+    }
+
+    html.dark .app-theme-shell :is(.border-slate-100, .border-slate-200, .border-slate-300, .border-gray-100, .border-gray-200, .border-gray-300) {
+        border-color: var(--app-border) !important;
+    }
+
+    html.dark .app-theme-shell :is(.text-slate-900, .text-slate-800, .text-slate-700, .text-gray-900, .text-gray-800, .text-gray-700) {
+        color: var(--app-text-strong) !important;
+    }
+
+    html.dark .app-theme-shell :is(.text-slate-600, .text-slate-500, .text-slate-400, .text-gray-600, .text-gray-500, .text-gray-400) {
+        color: var(--app-text-muted) !important;
+    }
+
+    html.dark .app-theme-shell :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
+        background-color: var(--app-surface-3) !important;
+        border-color: var(--app-border) !important;
+        color: var(--app-text-strong) !important;
+    }
+
+    html.dark .app-theme-shell :is(input, textarea)::placeholder {
+        color: var(--app-text-muted) !important;
+    }
+
+    html.dark .app-theme-shell [class*="bg-gradient-to-"][class*="from-"][class*="-50"][class*="to-"][class*="-50"] {
+        background-image: none !important;
+        background-color: var(--app-surface-2) !important;
+    }
+
+    html.dark .app-theme-shell [class*="hover:bg-gray-50"]:hover,
+    html.dark .app-theme-shell [class*="hover:bg-slate-50"]:hover,
+    html.dark .app-theme-shell [class*="hover:bg-white"]:hover {
+        background-color: var(--app-surface-3) !important;
     }
 }

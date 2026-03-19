@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Order;
-use App\Models\ApiIntegration;
 use App\Services\BMDeliveryService;
+use App\Services\DeliveryStatusMapper;
 use App\Services\TawsilexService;
 use App\Services\OrderService;
 use Illuminate\Console\Command;
@@ -16,7 +16,8 @@ class SyncDeliveryStatuses extends Command
     protected $description = 'Sync order statuses from delivery companies (BMDelivery, Tawsilex)';
 
     public function __construct(
-        private OrderService $orderService
+        private OrderService $orderService,
+        private DeliveryStatusMapper $deliveryStatusMapper,
     ) {
         parent::__construct();
     }
@@ -107,7 +108,7 @@ class SyncDeliveryStatuses extends Command
                     $this->info("  Delivery status changed: {$result['old_delivery_status']} → {$result['new_delivery_status']}");
                     
                     // Update order status based on delivery status
-                    $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
+                    $orderStatus = $this->deliveryStatusMapper->mapToOrderStatus($result['new_delivery_status'], $integration->provider);
                     
                     if ($orderStatus && $orderStatus !== $order->status) {
                         $this->orderService->updateOrderStatus(
@@ -122,7 +123,7 @@ class SyncDeliveryStatuses extends Command
                     $this->info("  No delivery status change (current: {$result['new_delivery_status']})");
                     
                     // Even if delivery status didn't change, check if order status needs updating
-                    $orderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'], $integration->provider);
+                    $orderStatus = $this->deliveryStatusMapper->mapToOrderStatus($result['new_delivery_status'], $integration->provider);
                     
                     if ($orderStatus && $orderStatus !== $order->status) {
                         $this->orderService->updateOrderStatus(
@@ -154,96 +155,5 @@ class SyncDeliveryStatuses extends Command
         $this->info("  Status Changed: {$statusChangedCount}");
 
         return 0;
-    }
-
-    /**
-     * Map delivery company status to internal order status
-     */
-    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus, ?string $provider = null): ?string
-    {
-        if (!$deliveryStatus) {
-            return null;
-        }
-
-        $normalizedStatus = strtolower(trim($deliveryStatus));
-        $normalizedProvider = strtolower(trim((string) $provider));
-
-        $statusMap = [
-            'pending' => 'pending',
-            'confirmed' => 'confirmed',
-            'picked_up' => 'picked_up',
-            'in_transit' => 'shipped',
-            'out_for_delivery' => 'out_for_delivery',
-            'delivered' => 'delivered',
-            'cancelled' => 'cancelled',
-            'returned' => 'returned',
-            'failed' => 'cancelled',
-            'refused' => 'refused',
-            
-            // BMDelivery French statuses (from actual API response)
-            'en attente de ramassage' => 'confirmed',
-            'en attente de rammage' => 'confirmed',
-            'ramassé' => 'picked_up',
-            'ramasse' => 'picked_up',
-            'prêt pour expédition' => 'ready_for_shipping',
-            'pret pour expedition' => 'ready_for_shipping',
-            'expédié' => 'shipped',
-            'expedie' => 'shipped',
-            'en cours de livraison' => 'out_for_delivery',
-            'en livraison' => 'out_for_delivery',
-            'livré' => 'delivered',
-            'livre' => 'delivered',
-            'refusé' => 'refused',
-            'refuse' => 'refused',
-            'retourné' => 'returned',
-            'retourne' => 'returned',
-            'annulé' => 'cancelled',
-            'annule' => 'cancelled',
-            'demande de retour' => 'return_requested',
-            'demande_de_retour' => 'return_requested',
-            'injoignable' => 'cancelled',
-            'injoignable client' => 'cancelled',
-            'hors zone' => 'cancelled',
-            'adresse incomplète' => 'cancelled',
-            'adresse incomplete' => 'cancelled',
-            'reporté' => 'confirmed',
-            'reporte' => 'confirmed',
-            'en cours de préparation' => 'ready_for_shipping',
-            'en cours de preparation' => 'ready_for_shipping',
-            
-            // BMDelivery statuses (normalized)
-            'ramassage' => 'picked_up',
-            'en attente' => 'confirmed',
-            'en_attente' => 'confirmed',
-            'en cours' => 'shipped',
-            'en_cours' => 'shipped',
-            'en route' => 'out_for_delivery',
-            'en_route' => 'out_for_delivery',
-            'execute' => 'delivered',
-            'exécuté' => 'delivered',
-            'retour' => 'returned',
-            'interesse' => 'confirmed',
-            'intéressé' => 'confirmed',
-            
-            'preparation' => 'confirmed',
-            'expedie' => 'shipped',
-            'livraison' => 'out_for_delivery',
-        ];
-
-        if ($normalizedProvider === 'tawsilex') {
-            $tawsilexStatusMap = [
-                'sent' => 'shipped',
-                'livree' => 'delivered',
-                'livrée' => 'delivered',
-                'livre' => 'delivered',
-                'livré' => 'delivered',
-            ];
-
-            if (isset($tawsilexStatusMap[$normalizedStatus])) {
-                return $tawsilexStatusMap[$normalizedStatus];
-            }
-        }
-
-        return $statusMap[$normalizedStatus] ?? null;
     }
 }

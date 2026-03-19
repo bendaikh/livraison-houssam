@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { isConfirmationAgentRole } from '../../utils/roles';
+import { isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
 
 export default function UserList() {
     const [users, setUsers] = useState([]);
@@ -24,6 +24,10 @@ export default function UserList() {
         commission_per_order: 0
     });
     const [errors, setErrors] = useState({});
+
+    const selectedRole = roles.find((role) => role.id === Number(formData.role_id));
+    const shouldShowCommissionHelper =
+        isConfirmationAgentRole(selectedRole?.slug) || isDeliveryPersonRole(selectedRole?.slug);
 
     useEffect(() => {
         fetchUsers();
@@ -349,37 +353,26 @@ export default function UserList() {
                                     </select>
                                 </div>
 
-                                {/* Commission Field - Only show for confirmation agents and delivery persons */}
-                                {formData.role_id && (() => {
-                                    const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
-                                    return selectedRole && (isConfirmationAgentRole(selectedRole.slug) || ['delivery_person', 'delivery'].includes(selectedRole.slug));
-                                })() && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Commission Per Order (MAD)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            value={formData.commission_per_order}
-                                            onChange={(e) => setFormData({ ...formData, commission_per_order: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            placeholder="e.g., 5.00"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            {(() => {
-                                                const selectedRole = roles.find(r => r.id === parseInt(formData.role_id));
-                                                if (isConfirmationAgentRole(selectedRole?.slug)) {
-                                                    return 'Commission earned per delivered order';
-                                                } else if (['delivery_person', 'delivery'].includes(selectedRole?.slug)) {
-                                                    return 'Commission earned per delivered order';
-                                                }
-                                            })()}
-                                        </p>
-                                        {errors.commission_per_order && <p className="text-red-500 text-xs mt-1">{errors.commission_per_order[0]}</p>}
-                                    </div>
-                                )}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Commission Per Order (MAD)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={formData.commission_per_order}
+                                        onChange={(e) => setFormData({ ...formData, commission_per_order: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="e.g., 5.00"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {shouldShowCommissionHelper
+                                            ? 'Commission earned per delivered order'
+                                            : 'Optional. Used for confirmation and delivery roles.'}
+                                    </p>
+                                    {errors.commission_per_order && <p className="text-red-500 text-xs mt-1">{errors.commission_per_order[0]}</p>}
+                                </div>
                             </div>
 
                             <div>

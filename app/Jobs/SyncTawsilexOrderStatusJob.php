@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Order;
+use App\Services\DeliveryStatusMapper;
 use App\Services\OrderService;
 use App\Services\TawsilexService;
 use Illuminate\Bus\Queueable;
@@ -27,7 +28,11 @@ class SyncTawsilexOrderStatusJob implements ShouldQueue
     {
     }
 
-    public function handle(TawsilexService $tawsilexService, OrderService $orderService): void
+    public function handle(
+        TawsilexService $tawsilexService,
+        OrderService $orderService,
+        DeliveryStatusMapper $deliveryStatusMapper
+    ): void
     {
         $order = Order::with('deliveryIntegration')->find($this->orderId);
 
@@ -67,7 +72,7 @@ class SyncTawsilexOrderStatusJob implements ShouldQueue
                 ->setApiToken($apiToken)
                 ->syncOrderStatus($order);
 
-            $mappedOrderStatus = $this->mapDeliveryStatusToOrderStatus($result['new_delivery_status'] ?? null);
+            $mappedOrderStatus = $deliveryStatusMapper->mapToOrderStatus($result['new_delivery_status'] ?? null, 'tawsilex');
 
             if ($mappedOrderStatus && $mappedOrderStatus !== $order->status) {
                 $orderService->updateOrderStatus(
@@ -87,29 +92,4 @@ class SyncTawsilexOrderStatusJob implements ShouldQueue
         }
     }
 
-    private function mapDeliveryStatusToOrderStatus(?string $deliveryStatus): ?string
-    {
-        if (!$deliveryStatus) {
-            return null;
-        }
-
-        $status = mb_strtolower(trim($deliveryStatus));
-
-        $statusMap = [
-            'sent' => 'shipped',
-            'livree' => 'delivered',
-            'livrée' => 'delivered',
-            'livre' => 'delivered',
-            'livré' => 'delivered',
-            'livraison' => 'out_for_delivery',
-            'en livraison' => 'out_for_delivery',
-            'ramassé' => 'picked_up',
-            'ramasse' => 'picked_up',
-            'retour' => 'returned',
-            'annule' => 'cancelled',
-            'annulé' => 'cancelled',
-        ];
-
-        return $statusMap[$status] ?? null;
-    }
 }

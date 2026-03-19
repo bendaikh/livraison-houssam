@@ -37,6 +37,9 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('Logout error:', error);
         }
+        document.documentElement.classList.remove('dark');
+        document.body.classList.remove('dark');
+        sessionStorage.removeItem('theme');
         localStorage.removeItem('token');
         setUser(null);
     };

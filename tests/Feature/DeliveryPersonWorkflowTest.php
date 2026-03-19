@@ -49,6 +49,72 @@ class DeliveryPersonWorkflowTest extends TestCase
         $response->assertJsonPath('data.0.id', $assignedToFirst->id);
     }
 
+    public function test_delivery_person_orders_show_unpaid_first_and_paid_last(): void
+    {
+        [, $deliveryPerson] = $this->createDeliveryPeople();
+        $client = $this->createClient();
+        $oldCreatedAt = now()->subDays(2);
+        $paidCreatedAt = now()->subDay();
+        $newestCreatedAt = now();
+
+        $oldUnpaidOrder = Order::create([
+            'client_id' => $client->id,
+            'delivery_person_id' => $deliveryPerson->id,
+            'status' => 'confirmed',
+            'source' => 'manual',
+            'subtotal' => 80,
+            'total' => 80,
+        ]);
+        $oldUnpaidOrder->forceFill(['created_at' => $oldCreatedAt, 'updated_at' => $oldCreatedAt])->saveQuietly();
+
+        $newPaidOrder = Order::create([
+            'client_id' => $client->id,
+            'delivery_person_id' => $deliveryPerson->id,
+            'status' => 'delivered',
+            'source' => 'manual',
+            'subtotal' => 120,
+            'total' => 120,
+            'collected_amount' => 120,
+            'delivery_person_commission' => 20,
+            'amount_due_to_admin' => 100,
+        ]);
+        $newPaidOrder->forceFill(['created_at' => $paidCreatedAt, 'updated_at' => $paidCreatedAt])->saveQuietly();
+
+        $newestUnpaidOrder = Order::create([
+            'client_id' => $client->id,
+            'delivery_person_id' => $deliveryPerson->id,
+            'status' => 'out_for_delivery',
+            'source' => 'manual',
+            'subtotal' => 95,
+            'total' => 95,
+        ]);
+        $newestUnpaidOrder->forceFill(['created_at' => $newestCreatedAt, 'updated_at' => $newestCreatedAt])->saveQuietly();
+
+        $billing = DeliveryPersonBilling::create([
+            'delivery_person_id' => $deliveryPerson->id,
+            'period_start' => now()->toDateString(),
+            'period_end' => now()->toDateString(),
+            'total_orders' => 1,
+            'total_collected' => 120,
+            'total_commission' => 20,
+            'total_due_to_admin' => 100,
+            'paid_at' => now(),
+        ]);
+
+        $billing->orders()->attach($newPaidOrder->id);
+
+        Sanctum::actingAs($deliveryPerson);
+
+        $response = $this->getJson('/api/orders');
+
+        $response->assertOk();
+        $response->assertJsonCount(3, 'data');
+        $this->assertSame(
+            [$newestUnpaidOrder->id, $oldUnpaidOrder->id, $newPaidOrder->id],
+            collect($response->json('data'))->pluck('id')->all()
+        );
+    }
+
     public function test_delivery_person_cannot_update_locked_order(): void
     {
         [, $deliveryPerson] = $this->createDeliveryPeople();
