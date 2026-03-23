@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import OrderModal from '../../components/OrderModal';
+import { isVendorRole } from '../../utils/roles';
 import { 
     Package, Store, Users, Search, ToggleLeft, ToggleRight, Trash2, TrendingUp, X,
-    CheckCircle, DollarSign, Hash, ChevronDown, ChevronUp, Grid, List as ListIcon, Eye
+    CheckCircle, DollarSign, Hash, ChevronDown, ChevronUp, Grid, List as ListIcon, Eye, ShoppingBag
 } from 'lucide-react';
 
 export default function MarketplaceProducts() {
@@ -18,8 +20,10 @@ export default function MarketplaceProducts() {
     const [expandedProducts, setExpandedProducts] = useState(new Set());
     const [detailProduct, setDetailProduct] = useState(null);
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [orderProduct, setOrderProduct] = useState(null);
+    const [showOrderModal, setShowOrderModal] = useState(false);
     
-    const isVendor = user?.role?.slug === 'vendor';
+    const isVendor = isVendorRole(user?.role?.slug);
     const isConfirmationAgent = ['confirmation_agent', 'agent_confirmation'].includes(user?.role?.slug);
     const canManageAssignments = !isVendor && !isConfirmationAgent;
 
@@ -51,6 +55,16 @@ export default function MarketplaceProducts() {
     const closeProductDetails = () => {
         setShowDetailModal(false);
         setDetailProduct(null);
+    };
+
+    const openOrderModal = (product) => {
+        setOrderProduct(product);
+        setShowOrderModal(true);
+    };
+
+    const closeOrderModal = () => {
+        setShowOrderModal(false);
+        setOrderProduct(null);
     };
 
     const toggleActivation = async (assignmentId) => {
@@ -105,7 +119,11 @@ export default function MarketplaceProducts() {
                         </div>
                         <span>Marketplace</span>
                     </h1>
-                    <p className="text-slate-500 mt-1">Browse marketplace products and inspect product details.</p>
+                    <p className="text-slate-500 mt-1">
+                        {isVendor
+                            ? 'Browse marketplace products and place orders directly.'
+                            : 'Browse marketplace products and inspect product details.'}
+                    </p>
                 </div>
             </div>
 
@@ -211,7 +229,11 @@ export default function MarketplaceProducts() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 overflow-hidden">
                     <div className="p-6 border-b border-slate-100">
                         <h3 className="text-lg font-semibold text-slate-800">Marketplace Products</h3>
-                        <p className="text-sm text-slate-500 mt-1">Marketplace is view-only. Open a product to inspect its details.</p>
+                        <p className="text-sm text-slate-500 mt-1">
+                            {isVendor
+                                ? 'Open details or place an order directly from marketplace.'
+                                : 'Marketplace is view-only. Open a product to inspect its details.'}
+                        </p>
                     </div>
 
                     <div className="divide-y divide-slate-100">
@@ -276,6 +298,15 @@ export default function MarketplaceProducts() {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
+                                                    {isVendor && (
+                                                        <button
+                                                            onClick={() => openOrderModal(product)}
+                                                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-emerald-500/25 transition-all flex items-center space-x-2"
+                                                        >
+                                                            <ShoppingBag size={18} />
+                                                            <span>Order</span>
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => openProductDetails(product)}
                                                         className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all flex items-center space-x-2"
@@ -446,13 +477,27 @@ export default function MarketplaceProducts() {
                                         )}
 
                                         {/* Actions */}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); openProductDetails(product); }}
-                                            className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                                        >
-                                            <Eye size={16} />
-                                            <span>View details</span>
-                                        </button>
+                                        <div className="space-y-2">
+                                            {isVendor && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openOrderModal(product);
+                                                    }}
+                                                    className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                                                >
+                                                    <ShoppingBag size={16} />
+                                                    <span>Place order</span>
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); openProductDetails(product); }}
+                                                className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                                            >
+                                                <Eye size={16} />
+                                                <span>View details</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -535,13 +580,37 @@ export default function MarketplaceProducts() {
                                     </div>
                                 )}
 
-                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                                    Marketplace is view-only. Create or edit orders from the Orders section.
-                                </div>
+                                {isVendor ? (
+                                    <button
+                                        onClick={() => {
+                                            closeProductDetails();
+                                            openOrderModal(detailProduct);
+                                        }}
+                                        className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg font-semibold transition-all flex items-center justify-center space-x-2"
+                                    >
+                                        <ShoppingBag size={18} />
+                                        <span>Place Order</span>
+                                    </button>
+                                ) : (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                        Marketplace is view-only. Create or edit orders from the Orders section.
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showOrderModal && orderProduct && (
+                <OrderModal
+                    product={orderProduct}
+                    initialQuantity={1}
+                    formatCurrency={formatCurrency}
+                    source="marketplace"
+                    onClose={closeOrderModal}
+                    onOrderCreated={() => window.location.href = '/orders'}
+                />
             )}
         </div>
     );

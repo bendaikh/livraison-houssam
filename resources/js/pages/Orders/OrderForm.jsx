@@ -33,6 +33,7 @@ export default function OrderForm() {
     const [currentOrderTrackingCode, setCurrentOrderTrackingCode] = useState('');
     const [currentOrderConfirmedAt, setCurrentOrderConfirmedAt] = useState(null);
     const [currentOrderReturnedToConfirmationAt, setCurrentOrderReturnedToConfirmationAt] = useState(null);
+    const [currentOrderDeliveryWorkflowLocked, setCurrentOrderDeliveryWorkflowLocked] = useState(false);
     const [deliveryCompanyCities, setDeliveryCompanyCities] = useState([]);
     const [deliveryCitiesLoading, setDeliveryCitiesLoading] = useState(false);
     const [deliveryCitiesError, setDeliveryCitiesError] = useState('');
@@ -259,6 +260,7 @@ export default function OrderForm() {
             setCurrentOrderTrackingCode(order.delivery_tracking_code || '');
             setCurrentOrderConfirmedAt(order.confirmed_at || null);
             setCurrentOrderReturnedToConfirmationAt(order.returned_to_confirmation_at || null);
+            setCurrentOrderDeliveryWorkflowLocked(Boolean(order.delivery_workflow_locked));
 
             console.debug('[OrderForm] initial order data loaded', {
                 orderId: order.id,
@@ -417,6 +419,27 @@ export default function OrderForm() {
     const isSellerStatusLocked = isVendorUser
         && isEditing
         && (Boolean(currentOrderReturnedToConfirmationAt) || isConfirmationStyleStatusLocked());
+    const adminDeliveryCompanyLockedStatuses = [
+        'picked_up',
+        'ready_for_shipping',
+        'shipped',
+        'out_for_delivery',
+        'delivered',
+        'cancelled',
+        'refused',
+        'returned',
+        'no_response',
+        'return_requested',
+    ];
+    const isAdminDeliveryCompanyStatusLocked = isAdminUser
+        && isEditing
+        && Boolean(formData.delivery_integration_id)
+        && Boolean(currentOrderTrackingCode)
+        && adminDeliveryCompanyLockedStatuses.includes(formData.status);
+    const isAdminStatusLocked = isAdminUser
+        && isEditing
+        && (currentOrderDeliveryWorkflowLocked || isAdminDeliveryCompanyStatusLocked);
+    const statusFieldDisabled = isSellerStatusLocked || isAdminStatusLocked;
 
         // Keep delivery city in sync with shipping city whenever company is selected.
         useEffect(() => {
@@ -763,9 +786,9 @@ export default function OrderForm() {
                             <select
                                 value={formData.status}
                                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                disabled={isSellerStatusLocked}
+                                disabled={statusFieldDisabled}
                                 className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent capitalize ${
-                                    isSellerStatusLocked ? 'bg-gray-100 cursor-not-allowed text-gray-500' : ''
+                                    statusFieldDisabled ? 'bg-gray-100 cursor-not-allowed text-gray-500' : ''
                                 }`}
                             >
                                 {statusOptions.map((statusOption) => (
@@ -774,9 +797,13 @@ export default function OrderForm() {
                                     </option>
                                 ))}
                             </select>
-                            {isSellerStatusLocked && (
+                            {statusFieldDisabled && (
                                 <p className="text-xs text-gray-500 mt-1">
-                                    {currentOrderTrackingCode
+                                    {isAdminStatusLocked
+                                        ? currentOrderDeliveryWorkflowLocked
+                                            ? 'Status is locked for admins after the delivery person invoice is marked as paid.'
+                                            : 'Status is locked for admins once the delivery company marks the order as picked up.'
+                                        : currentOrderTrackingCode
                                         ? 'Status is locked for sellers after the order is handed to a delivery company.'
                                         : currentOrderReturnedToConfirmationAt
                                             ? 'Status is locked for sellers while the order is back in the confirmation workflow.'

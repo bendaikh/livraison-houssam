@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\DeliveryPersonBilling;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
@@ -153,6 +154,85 @@ class DeliveryPersonWorkflowTest extends TestCase
         ]);
 
         $response->assertForbidden();
+    }
+
+    public function test_admin_cannot_change_status_from_edit_endpoint_after_delivery_invoice_is_paid(): void
+    {
+        [, $deliveryPerson] = $this->createDeliveryPeople();
+        $admin = $this->createAdmin();
+        $client = $this->createClient();
+        $product = $this->createProduct();
+
+        $order = Order::create([
+            'client_id' => $client->id,
+            'delivery_person_id' => $deliveryPerson->id,
+            'status' => 'delivered',
+            'source' => 'manual',
+            'subtotal' => 150,
+            'total' => 150,
+            'shipping_cost' => 0,
+            'collected_amount' => 150,
+            'delivery_person_commission' => 20,
+            'amount_due_to_admin' => 130,
+            'delivered_at' => now(),
+            'shipping_address' => 'Casablanca',
+            'city' => 'Casablanca',
+            'phone' => $client->phone,
+        ]);
+
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'sku' => $product->sku,
+            'quantity' => 1,
+            'price' => 150,
+            'subtotal' => 150,
+            'is_upsell' => false,
+        ]);
+
+        $billing = DeliveryPersonBilling::create([
+            'delivery_person_id' => $deliveryPerson->id,
+            'period_start' => now()->toDateString(),
+            'period_end' => now()->toDateString(),
+            'total_orders' => 1,
+            'total_collected' => 150,
+            'total_commission' => 20,
+            'total_due_to_admin' => 130,
+            'paid_at' => now(),
+        ]);
+
+        $billing->orders()->attach($order->id);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->putJson("/api/orders/{$order->id}", [
+            'client_id' => $client->id,
+            'client_name' => $client->name,
+            'client_phone' => $client->phone,
+            'vendor_id' => null,
+            'delivery_agent_id' => null,
+            'delivery_integration_id' => null,
+            'delivery_person_id' => $deliveryPerson->id,
+            'confirmation_agent_id' => null,
+            'delivery_city' => 'Casablanca',
+            'status' => 'returned',
+            'source' => 'manual',
+            'items' => [[
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'price' => 150,
+            ]],
+            'shipping_cost' => 0,
+            'shipping_included_in_price' => false,
+            'discount' => 0,
+            'shipping_address' => 'Casablanca',
+            'city' => 'Casablanca',
+            'notes' => 'Admin attempted to change a settled delivery order.',
+            'whatsapp' => '0612345678',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertSame('delivered', $order->fresh()->status);
     }
 
     public function test_delivery_person_must_add_motif_for_refused_status(): void
@@ -453,6 +533,18 @@ class DeliveryPersonWorkflowTest extends TestCase
             'name' => 'Test Client',
             'phone' => '0612345678',
             'address' => 'Casablanca',
+            'is_active' => true,
+        ]);
+    }
+
+    private function createProduct(): Product
+    {
+        return Product::create([
+            'name' => 'Test Product',
+            'sku' => 'SKU-DELIVERY-1',
+            'price' => 150,
+            'company_price' => 110,
+            'stock_quantity' => 20,
             'is_active' => true,
         ]);
     }

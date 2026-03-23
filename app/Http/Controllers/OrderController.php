@@ -17,6 +17,19 @@ use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
+    private const ADMIN_DELIVERY_COMPANY_LOCKED_STATUSES = [
+        'picked_up',
+        'ready_for_shipping',
+        'shipped',
+        'out_for_delivery',
+        'delivered',
+        'cancelled',
+        'refused',
+        'returned',
+        'no_response',
+        'return_requested',
+    ];
+
     public function __construct(
         private OrderService $orderService,
         private ShippingPriceService $shippingPriceService,
@@ -293,6 +306,7 @@ class OrderController extends Controller
         $oldStatus = $order->status;
         $newStatus = $validated['status'] ?? $oldStatus;
 
+        $this->ensureAdminCanManuallyUpdateStatus($request, $order, $newStatus);
         $this->ensureSellerCanManuallyUpdateStatus($request, $order, $newStatus);
         
         // Prevent changing confirmation agent once set
@@ -361,6 +375,7 @@ class OrderController extends Controller
         }
 
         $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $validated['status']);
+        $this->ensureAdminCanManuallyUpdateStatus($request, $order, $validated['status']);
         $this->ensureSellerCanManuallyUpdateStatus($request, $order, $validated['status']);
 
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
@@ -1024,6 +1039,23 @@ class OrderController extends Controller
         }
     }
 
+    private function ensureAdminCanManuallyUpdateStatus(Request $request, Order $order, ?string $requestedStatus = null): void
+    {
+        $user = $request->user();
+
+        if (!$user?->isAdmin()) {
+            return;
+        }
+
+        if ($requestedStatus === null || $requestedStatus === $order->status) {
+            return;
+        }
+
+        if ($this->isAdminStatusLocked($order)) {
+            abort(403, $this->getAdminStatusLockMessage($order));
+        }
+    }
+
     private function isConfirmationAgentStatusLocked(Order $order, ?string $requestedStatus = null): bool
     {
         if (!empty($order->delivery_tracking_code)) {
@@ -1082,6 +1114,33 @@ class OrderController extends Controller
         }
 
         return 'Status is read-only for sellers once the order has been confirmed.';
+    }
+
+    private function isAdminStatusLocked(Order $order): bool
+    {
+        if ($this->isDeliveryWorkflowLocked($order)) {
+            return true;
+        }
+
+        return $this->isAdminDeliveryCompanyStatusLocked($order);
+    }
+
+    private function isAdminDeliveryCompanyStatusLocked(Order $order): bool
+    {
+        if (empty($order->delivery_integration_id) || empty($order->delivery_tracking_code)) {
+            return false;
+        }
+
+        return in_array($order->status, self::ADMIN_DELIVERY_COMPANY_LOCKED_STATUSES, true);
+    }
+
+    private function getAdminStatusLockMessage(Order $order): string
+    {
+        if ($this->isDeliveryWorkflowLocked($order)) {
+            return 'Status is read-only for admins after the delivery person invoice is marked as paid.';
+        }
+
+        return 'Status is read-only for admins once the delivery company marks the order as picked up.';
     }
 
     private function ensureDeliveryWorkflowUnlocked(Order $order): void

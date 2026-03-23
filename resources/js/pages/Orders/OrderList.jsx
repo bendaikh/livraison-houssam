@@ -5,7 +5,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X } from 'lucide-react';
 import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
-import { isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
+import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import { formatDeliveryDispatchFailureMessage } from '../../utils/delivery';
 
@@ -61,6 +61,7 @@ export default function OrderList({ status = '' }) {
         page: 1
     });
     const roleSlug = user?.role?.slug;
+    const isAdminUser = isAdminRole(roleSlug);
     const isVendorUser = isVendorRole(roleSlug);
     const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
     const isDeliveryPersonUser = isDeliveryPersonRole(roleSlug);
@@ -285,6 +286,45 @@ export default function OrderList({ status = '' }) {
 
     const getDeliveryWorkflowLockMessage = () => {
         return 'This order is locked because the related delivery invoice has been marked as paid.';
+    };
+
+    const deliveryCompanyAdminLockedStatuses = [
+        'picked_up',
+        'ready_for_shipping',
+        'shipped',
+        'out_for_delivery',
+        'delivered',
+        'cancelled',
+        'refused',
+        'returned',
+        'no_response',
+        'return_requested',
+    ];
+
+    const isAdminDeliveryCompanyStatusLocked = (order) => {
+        if (!isAdminUser) {
+            return false;
+        }
+
+        return Boolean(order?.delivery_integration_id)
+            && Boolean(order?.delivery_tracking_code)
+            && deliveryCompanyAdminLockedStatuses.includes(order?.status);
+    };
+
+    const isAdminStatusLocked = (order) => {
+        if (!isAdminUser) {
+            return false;
+        }
+
+        return isDeliveryWorkflowLocked(order) || isAdminDeliveryCompanyStatusLocked(order);
+    };
+
+    const getAdminStatusLockMessage = (order) => {
+        if (isDeliveryWorkflowLocked(order)) {
+            return 'Status is locked for admins after the delivery person invoice is marked as paid.';
+        }
+
+        return 'Status is locked for admins once the delivery company marks the order as picked up.';
     };
 
     const getStatusOptionsForOrder = (order) => {
@@ -1073,12 +1113,15 @@ export default function OrderList({ status = '' }) {
                         const confirmationStatusLocked = isConfirmationAgentUser && isConfirmationAgentStatusLocked(order);
                         const sellerStatusLocked = isSellerStatusLocked(order);
                         const deliveryWorkflowIsLocked = isDeliveryPersonUser && isDeliveryWorkflowLocked(order);
+                        const adminStatusLocked = isAdminStatusLocked(order);
                         const statusLockMessage = confirmationStatusLocked
                             ? getConfirmationAgentStatusLockMessage(order)
                             : sellerStatusLocked
                                 ? getSellerStatusLockMessage(order)
                             : deliveryWorkflowIsLocked
                                 ? getDeliveryWorkflowLockMessage(order)
+                            : adminStatusLocked
+                                ? getAdminStatusLockMessage(order)
                                 : '';
                         const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
                         const interactiveDeliveryTone = companyLabel
@@ -1136,13 +1179,13 @@ export default function OrderList({ status = '' }) {
                                             </span>
                                         )}
                                     </div>
-                                    {confirmationStatusLocked || sellerStatusLocked || deliveryWorkflowIsLocked ? (
+                                    {confirmationStatusLocked || sellerStatusLocked || deliveryWorkflowIsLocked || adminStatusLocked ? (
                                         <div className="flex flex-col items-end gap-1 flex-shrink-0" title={statusLockMessage}>
                                             <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getStatusBadgeColor(order.status)}`}>
                                                 {formatStatusLabel(order.status)}
                                             </span>
                                             <span className="text-[9px] font-medium text-slate-500">
-                                                {deliveryWorkflowIsLocked ? 'Invoice locked' : 'Delivery controlled'}
+                                                {deliveryWorkflowIsLocked || (adminStatusLocked && isDeliveryWorkflowLocked(order)) ? 'Invoice locked' : 'Delivery controlled'}
                                             </span>
                                         </div>
                                     ) : (

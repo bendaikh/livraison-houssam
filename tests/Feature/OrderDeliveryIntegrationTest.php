@@ -369,6 +369,32 @@ class OrderDeliveryIntegrationTest extends TestCase
         $this->assertSame('delivered', $order->status);
     }
 
+    public function test_admin_cannot_manually_change_delivery_company_status_after_pickup(): void
+    {
+        $admin = $this->createAdmin();
+        $client = $this->createClient();
+        $product = $this->createProduct();
+        $integration = $this->createDeliveryIntegration();
+        $order = $this->createPendingOrder($client, $product);
+
+        $order->update([
+            'status' => 'picked_up',
+            'delivery_integration_id' => $integration->id,
+            'delivery_tracking_code' => 'BMD-LOCK-001',
+            'delivery_status' => 'Ramassé',
+            'picked_up_at' => now(),
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/status", [
+            'status' => 'cancelled',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertSame('picked_up', $order->fresh()->status);
+    }
+
     public function test_show_order_response_includes_shipping_price_resolution_metadata(): void
     {
         $admin = $this->createAdmin();
