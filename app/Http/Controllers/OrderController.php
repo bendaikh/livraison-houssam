@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BlacklistEntry;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Services\DeliveryStatusMapper;
@@ -140,10 +141,6 @@ class OrderController extends Controller
 
     public function store(Request $request)
     {
-        if ($request->user()?->isConfirmationAgent()) {
-            abort(403, 'Confirmation agents cannot create orders.');
-        }
-
         if ($request->user()?->isDeliveryPerson()) {
             abort(403, 'Delivery people cannot create orders.');
         }
@@ -177,6 +174,11 @@ class OrderController extends Controller
             'whatsapp' => 'nullable|string',
         ]);
         $validated = $this->applyAuthenticatedVendor($request, $validated);
+        if ($request->user()?->isConfirmationAgent()) {
+            $validated['confirmation_agent_id'] = $request->user()->id;
+        }
+        $validated['created_by_user_id'] = $request->user()?->id;
+        $this->ensureProductsAllowedForSeller($validated['items'] ?? [], $validated['vendor_id'] ?? null);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated);
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated);
 
@@ -246,7 +248,9 @@ class OrderController extends Controller
         $this->authorizeOrderAccess($request, $order);
 
         if ($request->user()?->isConfirmationAgent()) {
-            abort(403, 'Confirmation agents must use the confirmation workflow endpoint.');
+            if (!$this->canConfirmationAgentEditBaseItems($order, $request->user())) {
+                abort(403, 'Confirmation agents must use the confirmation workflow endpoint.');
+            }
         }
 
         if ($request->user()?->isDeliveryPerson()) {
@@ -282,6 +286,7 @@ class OrderController extends Controller
             'whatsapp' => 'nullable|string',
         ]);
         $validated = $this->applyAuthenticatedVendor($request, $validated);
+        $this->ensureProductsAllowedForSeller($validated['items'] ?? [], $validated['vendor_id'] ?? $order->vendor_id);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated, $order);
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
 
@@ -308,6 +313,7 @@ class OrderController extends Controller
 
         $this->ensureAdminCanManuallyUpdateStatus($request, $order, $newStatus);
         $this->ensureSellerCanManuallyUpdateStatus($request, $order, $newStatus);
+        $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $newStatus);
         
         // Prevent changing confirmation agent once set
         if (
@@ -731,6 +737,10 @@ class OrderController extends Controller
             'callback_date' => 'nullable|date',
             'shipping_address' => 'nullable|string',
             'notes' => 'nullable|string',
+            'items' => 'sometimes|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.price' => 'required|numeric|min:0',
             'delivery_person_id' => 'nullable|exists:users,id',
             'delivery_integration_id' => 'nullable|exists:api_integrations,id',
             'delivery_city' => 'nullable|string|max:255',
@@ -741,6 +751,9 @@ class OrderController extends Controller
         ]);
 
         $this->ensureConfirmationAgentCanManuallyUpdateStatus($request, $order, $validated['status'] ?? null);
+        $this->ensureConfirmationAgentCanEditBaseItems($request, $order, $validated);
+        $this->ensureProductsAllowedForSeller($validated['items'] ?? [], $order->vendor_id);
+        $this->ensureProductsAllowedForSeller($validated['upsell_items'] ?? [], $order->vendor_id, 'upsell_items');
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
 
         $order = $this->orderService->updateConfirmationWorkflow($order->id, $request->user(), $validated);
@@ -1198,6 +1211,91 @@ class OrderController extends Controller
                 'delivery_city' => ['Select a delivery city before confirming the order.'],
             ]);
         }
+    }
+
+    private function ensureProductsAllowedForSeller(array $items, mixed $vendorId, string $fieldPrefix = 'items'): void
+    {
+        if (empty($vendorId) || empty($items)) {
+            return;
+        }
+
+        $normalizedVendorId = (int) $vendorId;
+        $productIds = collect($items)
+            ->pluck('product_id')
+            ->filter()
+            ->map(fn ($productId) => (int) $productId)
+            ->unique()
+            ->values();
+
+        if ($productIds->isEmpty()) {
+            return;
+        }
+
+        $allowedProductIds = Product::query()
+            ->whereIn('id', $productIds)
+            ->where(function ($query) use ($normalizedVendorId) {
+                $query->where('vendor_id', $normalizedVendorId)
+                    ->orWhereHas('marketplaceProducts', function ($marketplaceQuery) use ($normalizedVendorId) {
+                        $marketplaceQuery
+                            ->where('vendor_id', $normalizedVendorId)
+                            ->where('is_active', true);
+                    });
+            })
+            ->pluck('id')
+            ->map(fn ($productId) => (int) $productId)
+            ->all();
+
+        $validationErrors = [];
+
+        foreach ($items as $index => $item) {
+            $productId = (int) ($item['product_id'] ?? 0);
+
+            if ($productId === 0 || in_array($productId, $allowedProductIds, true)) {
+                continue;
+            }
+
+            $validationErrors["{$fieldPrefix}.{$index}.product_id"] = ['Selected product is not allowed for the chosen seller.'];
+        }
+
+        if (!empty($validationErrors)) {
+            throw ValidationException::withMessages($validationErrors);
+        }
+    }
+
+    private function ensureConfirmationAgentCanEditBaseItems(Request $request, Order $order, array $validated): void
+    {
+        if (!array_key_exists('items', $validated)) {
+            return;
+        }
+
+        $user = $request->user();
+
+        if (!$this->canConfirmationAgentEditBaseItems($order, $user)) {
+            abort(403, 'Only confirmation agents who created this order can edit its products.');
+        }
+    }
+
+    private function canConfirmationAgentEditBaseItems(Order $order, ?User $user): bool
+    {
+        if (!$user?->isConfirmationAgent()) {
+            return false;
+        }
+
+        $createdByUserId = (int) ($order->created_by_user_id ?? 0);
+
+        if ($createdByUserId <= 0 && $order->source === 'manual') {
+            $createdByUserId = (int) ($order->history()->oldest('id')->value('user_id') ?? 0);
+        }
+
+        if ($createdByUserId !== (int) $user->id) {
+            return false;
+        }
+
+        if (!empty($order->returned_to_confirmation_at)) {
+            return true;
+        }
+
+        return empty($order->confirmed_at) && $order->status === 'pending';
     }
 
     private function extractAssignmentPayload(Request $request, array $validated): array

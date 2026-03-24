@@ -453,6 +453,14 @@ export default function OrderList({ status = '' }) {
             return order.vendor.name;
         }
 
+        if (order.confirmation_agent?.name) {
+            return order.confirmation_agent.name;
+        }
+
+        if (order.confirmation_agent_id && String(order.confirmation_agent_id) === String(user?.id)) {
+            return user?.name || 'You';
+        }
+
         if (user?.vendor?.id && String(order.vendor_id) === String(user.vendor.id)) {
             return user.vendor.name || user.name || '';
         }
@@ -903,7 +911,7 @@ export default function OrderList({ status = '' }) {
                 <div>
                     <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
                 </div>
-                {!isConfirmationAgentUser && !isDeliveryPersonUser && !isVendorUser && (
+                {!isDeliveryPersonUser && !isVendorUser && (
                     <button
                         onClick={() => navigate('/orders/create')}
                         className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"

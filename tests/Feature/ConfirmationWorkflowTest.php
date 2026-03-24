@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BlacklistEntry;
 use App\Models\Client;
 use App\Models\Order;
+use App\Models\OrderHistory;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
@@ -226,6 +227,306 @@ class ConfirmationWorkflowTest extends TestCase
         $this->assertSame('Updated street 123, Casablanca', $order->fresh()->client->address);
     }
 
+    public function test_confirmation_agent_can_create_manual_order_and_is_assigned_automatically(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $otherAgent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $product = $this->createProductForVendor($vendorUser->vendor);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->postJson('/api/orders', [
+            'client_name' => 'Manual Client',
+            'client_phone' => '0655555555',
+            'vendor_id' => $vendorUser->vendor->id,
+            'confirmation_agent_id' => $otherAgent->id,
+            'status' => 'pending',
+            'source' => 'manual',
+            'items' => [[
+                'product_id' => $product->id,
+                'quantity' => 2,
+                'price' => 140,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'shipping_address' => 'Casablanca centre',
+            'city' => 'Casablanca',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('confirmation_agent_id', $agent->id);
+        $response->assertJsonPath('created_by_user_id', $agent->id);
+        $response->assertJsonPath('client.name', 'Manual Client');
+        $response->assertJsonPath('items.0.product_id', $product->id);
+    }
+
+    public function test_confirmation_agent_cannot_create_seller_order_with_product_not_allowed_for_that_seller(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $forbiddenProduct = $this->createStandaloneProduct();
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->postJson('/api/orders', [
+            'client_name' => 'Manual Client',
+            'client_phone' => '0655555556',
+            'vendor_id' => $vendorUser->vendor->id,
+            'status' => 'pending',
+            'source' => 'manual',
+            'items' => [[
+                'product_id' => $forbiddenProduct->id,
+                'quantity' => 1,
+                'price' => 120,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'shipping_address' => 'Casablanca centre',
+            'city' => 'Casablanca',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['items.0.product_id']);
+    }
+
+    public function test_confirmation_workflow_rejects_upsell_products_not_allowed_for_the_seller(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $order = $this->createOrderForVendor($vendorUser->vendor, $agent);
+        $forbiddenProduct = $this->createStandaloneProduct();
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/confirmation-workflow", [
+            'upsell_items' => [[
+                'product_id' => $forbiddenProduct->id,
+                'quantity' => 1,
+                'price' => 120,
+            ]],
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['upsell_items.0.product_id']);
+    }
+
+    public function test_confirmation_agent_can_edit_base_items_for_order_they_created(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $originalProduct = $this->createProductForVendor($vendorUser->vendor);
+        $replacementProduct = Product::create([
+            'name' => 'Seller Product Two',
+            'sku' => 'SELLER-PRODUCT-002',
+            'vendor_id' => $vendorUser->vendor->id,
+            'price' => 160,
+            'cost_price' => 80,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $originalProduct, $agent);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/confirmation-workflow", [
+            'items' => [[
+                'product_id' => $replacementProduct->id,
+                'quantity' => 2,
+                'price' => 160,
+            ]],
+            'upsell_items' => [],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('items.0.product_id', $replacementProduct->id);
+        $response->assertJsonPath('items.0.quantity', 2);
+    }
+
+    public function test_confirmation_agent_cannot_edit_base_items_for_order_they_did_not_create(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $creator = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $originalProduct = $this->createProductForVendor($vendorUser->vendor);
+        $replacementProduct = Product::create([
+            'name' => 'Seller Product Three',
+            'sku' => 'SELLER-PRODUCT-003',
+            'vendor_id' => $vendorUser->vendor->id,
+            'price' => 170,
+            'cost_price' => 85,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $originalProduct, $creator);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/confirmation-workflow", [
+            'items' => [[
+                'product_id' => $replacementProduct->id,
+                'quantity' => 1,
+                'price' => 170,
+            ]],
+            'upsell_items' => [],
+        ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_confirmation_agent_can_use_standard_edit_endpoint_for_order_they_created(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $originalProduct = $this->createProductForVendor($vendorUser->vendor);
+        $replacementProduct = Product::create([
+            'name' => 'Seller Product Four',
+            'sku' => 'SELLER-PRODUCT-004',
+            'vendor_id' => $vendorUser->vendor->id,
+            'price' => 180,
+            'cost_price' => 90,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $originalProduct, $agent);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->putJson("/api/orders/{$order->id}", [
+            'client_id' => $order->client_id,
+            'client_name' => $order->client->name,
+            'client_phone' => $order->client->phone,
+            'vendor_id' => $vendorUser->vendor->id,
+            'delivery_agent_id' => null,
+            'delivery_integration_id' => null,
+            'delivery_person_id' => null,
+            'confirmation_agent_id' => $order->confirmation_agent_id,
+            'delivery_city' => 'Casablanca',
+            'status' => 'pending',
+            'source' => 'manual',
+            'items' => [[
+                'product_id' => $replacementProduct->id,
+                'quantity' => 1,
+                'price' => 180,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'discount' => 0,
+            'shipping_address' => 'Casablanca',
+            'city' => 'Casablanca',
+            'notes' => 'Updated by creator agent.',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('items.0.product_id', $replacementProduct->id);
+    }
+
+    public function test_confirmation_agent_cannot_use_standard_edit_endpoint_for_order_they_did_not_create(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $creator = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $originalProduct = $this->createProductForVendor($vendorUser->vendor);
+        $replacementProduct = Product::create([
+            'name' => 'Seller Product Five',
+            'sku' => 'SELLER-PRODUCT-005',
+            'vendor_id' => $vendorUser->vendor->id,
+            'price' => 190,
+            'cost_price' => 95,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $originalProduct, $creator);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->putJson("/api/orders/{$order->id}", [
+            'client_id' => $order->client_id,
+            'client_name' => $order->client->name,
+            'client_phone' => $order->client->phone,
+            'vendor_id' => $vendorUser->vendor->id,
+            'delivery_agent_id' => null,
+            'delivery_integration_id' => null,
+            'delivery_person_id' => null,
+            'confirmation_agent_id' => $order->confirmation_agent_id,
+            'delivery_city' => 'Casablanca',
+            'status' => 'pending',
+            'source' => 'manual',
+            'items' => [[
+                'product_id' => $replacementProduct->id,
+                'quantity' => 1,
+                'price' => 190,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'discount' => 0,
+            'shipping_address' => 'Casablanca',
+            'city' => 'Casablanca',
+            'notes' => 'Should not be allowed.',
+        ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_confirmation_agent_can_use_standard_edit_endpoint_for_legacy_manual_order_they_created(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $originalProduct = $this->createProductForVendor($vendorUser->vendor);
+        $replacementProduct = Product::create([
+            'name' => 'Seller Product Six',
+            'sku' => 'SELLER-PRODUCT-006',
+            'vendor_id' => $vendorUser->vendor->id,
+            'price' => 200,
+            'cost_price' => 100,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $originalProduct, $agent);
+        $order->update(['created_by_user_id' => null]);
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'user_id' => $agent->id,
+            'status' => 'pending',
+            'note' => 'Order created',
+        ]);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->putJson("/api/orders/{$order->id}", [
+            'client_id' => $order->client_id,
+            'client_name' => $order->client->name,
+            'client_phone' => $order->client->phone,
+            'vendor_id' => $vendorUser->vendor->id,
+            'delivery_agent_id' => null,
+            'delivery_integration_id' => null,
+            'delivery_person_id' => null,
+            'confirmation_agent_id' => $order->confirmation_agent_id,
+            'delivery_city' => 'Casablanca',
+            'status' => 'pending',
+            'source' => 'manual',
+            'items' => [[
+                'product_id' => $replacementProduct->id,
+                'quantity' => 1,
+                'price' => 200,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'discount' => 0,
+            'shipping_address' => 'Casablanca',
+            'city' => 'Casablanca',
+            'notes' => 'Updated legacy order.',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('items.0.product_id', $replacementProduct->id);
+    }
+
     public function test_seller_only_sees_blacklist_badge_while_confirmation_agent_sees_full_blacklist_details(): void
     {
         $agent = $this->createConfirmationAgent();
@@ -412,5 +713,54 @@ class ConfirmationWorkflowTest extends TestCase
             'min_stock_quantity' => 1,
             'is_active' => true,
         ]);
+    }
+
+    private function createStandaloneProduct(): Product
+    {
+        return Product::create([
+            'name' => 'Standalone Product',
+            'sku' => 'STANDALONE-PRODUCT-001',
+            'price' => 120,
+            'cost_price' => 60,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+    }
+
+    private function createEditableOrderForConfirmationAgent(User $agent, Vendor $vendor, Product $product, User $creator): Order
+    {
+        $client = Client::create([
+            'name' => 'Editable Client',
+            'phone' => '0666666666',
+            'address' => 'Casablanca',
+            'is_active' => true,
+        ]);
+
+        $order = Order::create([
+            'client_id' => $client->id,
+            'vendor_id' => $vendor->id,
+            'confirmation_agent_id' => $agent->id,
+            'created_by_user_id' => $creator->id,
+            'status' => 'pending',
+            'source' => 'manual',
+            'subtotal' => 140,
+            'total' => 140,
+            'shipping_address' => 'Casablanca',
+            'city' => 'Casablanca',
+            'phone' => $client->phone,
+        ]);
+
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'sku' => $product->sku,
+            'quantity' => 1,
+            'price' => 140,
+            'subtotal' => 140,
+            'is_upsell' => false,
+        ]);
+
+        return $order->fresh(['items.product', 'client']);
     }
 }

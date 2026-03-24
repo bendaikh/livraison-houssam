@@ -9,6 +9,54 @@ import { formatDeliveryDispatchFailureMessage, parseDeliveryCitiesResponse } fro
 import { resolveShippingCost, sameCityName } from '../../utils/shipping';
 import ConfirmationWorkflowForm from './ConfirmationWorkflowForm';
 
+const getImageSrc = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+    if (imagePath.startsWith('/')) return imagePath;
+    return `/storage/${imagePath}`;
+};
+
+const getProductImageSrc = (product) => getImageSrc(product?.images?.[0] || null);
+
+const isProductAllowedForVendor = (product, vendorId) => {
+    if (!vendorId) {
+        return true;
+    }
+
+    const normalizedVendorId = String(vendorId);
+
+    if (String(product?.vendor_id || '') === normalizedVendorId) {
+        return true;
+    }
+
+    return (product?.marketplace_products || []).some((assignment) => (
+        String(assignment.vendor_id) === normalizedVendorId && Boolean(assignment.is_active)
+    ));
+};
+
+const wasOrderCreatedByCurrentConfirmationAgent = (order, userId) => {
+    if (!order || !userId) {
+        return false;
+    }
+
+    if (String(order.created_by_user_id || '') === String(userId)) {
+        return true;
+    }
+
+    if (order.source !== 'manual') {
+        return false;
+    }
+
+    const firstHistoryEntry = [...(order.history || [])]
+        .sort((left, right) => {
+            const leftId = Number(left?.id || 0);
+            const rightId = Number(right?.id || 0);
+            return leftId - rightId;
+        })[0];
+
+    return String(firstHistoryEntry?.user_id || '') === String(userId);
+};
+
 export default function OrderForm() {
     const { formatCurrency, settings } = useSettings();
     const { user } = useAuth();
@@ -33,6 +81,8 @@ export default function OrderForm() {
     const [currentOrderTrackingCode, setCurrentOrderTrackingCode] = useState('');
     const [currentOrderConfirmedAt, setCurrentOrderConfirmedAt] = useState(null);
     const [currentOrderReturnedToConfirmationAt, setCurrentOrderReturnedToConfirmationAt] = useState(null);
+    const [currentOrderCreatedByUserId, setCurrentOrderCreatedByUserId] = useState(undefined);
+    const [currentOrderHistory, setCurrentOrderHistory] = useState([]);
     const [currentOrderDeliveryWorkflowLocked, setCurrentOrderDeliveryWorkflowLocked] = useState(false);
     const [deliveryCompanyCities, setDeliveryCompanyCities] = useState([]);
     const [deliveryCitiesLoading, setDeliveryCitiesLoading] = useState(false);
@@ -110,13 +160,16 @@ export default function OrderForm() {
             fetchOrder();
         } else {
             setInitialPricingContext(null);
+            setCurrentOrderCreatedByUserId(undefined);
+            setCurrentOrderHistory([]);
             setFormData((prev) => ({
                 ...prev,
                 vendor_id: user?.vendor?.id || prev.vendor_id,
+                confirmation_agent_id: isConfirmationAgentUser ? String(user?.id || '') : prev.confirmation_agent_id,
                 shipping_included_in_price: isAdminUser,
             }));
         }
-    }, [id, user, isEditing, isAdminUser]);
+    }, [id, user, isEditing, isAdminUser, isConfirmationAgentUser]);
 
     useEffect(() => {
         if (isEditing || queryPrefillApplied || products.length === 0) return;
@@ -260,6 +313,8 @@ export default function OrderForm() {
             setCurrentOrderTrackingCode(order.delivery_tracking_code || '');
             setCurrentOrderConfirmedAt(order.confirmed_at || null);
             setCurrentOrderReturnedToConfirmationAt(order.returned_to_confirmation_at || null);
+            setCurrentOrderCreatedByUserId(order.created_by_user_id ?? null);
+            setCurrentOrderHistory(order.history || []);
             setCurrentOrderDeliveryWorkflowLocked(Boolean(order.delivery_workflow_locked));
 
             console.debug('[OrderForm] initial order data loaded', {
@@ -304,6 +359,8 @@ export default function OrderForm() {
             }
         } catch (error) {
             console.error('Error fetching order:', error);
+            setCurrentOrderCreatedByUserId(null);
+            setCurrentOrderHistory([]);
         } finally {
             setLoading(false);
         }
@@ -359,6 +416,9 @@ export default function OrderForm() {
     const shippingIncludedInPrice = Boolean(formData.shipping_included_in_price);
     const discountValue = parseFloat(formData.discount ?? 0) || 0;
     const fulfillmentPrice = getFulfillmentPrice(settings.order_fulfillment_cost);
+    const availableProducts = formData.vendor_id
+        ? products.filter((product) => isProductAllowedForVendor(product, formData.vendor_id))
+        : products;
 
     const calculateSubtotal = () => {
         return orderItems.reduce((sum, item) => {
@@ -495,6 +555,29 @@ export default function OrderForm() {
         isEditing,
     ]);
 
+    useEffect(() => {
+        if (!formData.vendor_id) {
+            return;
+        }
+
+        setOrderItems((prev) => prev.map((item) => {
+            if (!item.product_id) {
+                return item;
+            }
+
+            const selectedProduct = products.find((product) => String(product.id) === String(item.product_id));
+            if (!selectedProduct || isProductAllowedForVendor(selectedProduct, formData.vendor_id)) {
+                return item;
+            }
+
+            return {
+                ...item,
+                product_id: '',
+                price: 0,
+            };
+        }));
+    }, [formData.vendor_id, products]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
@@ -539,13 +622,31 @@ export default function OrderForm() {
         }
     };
 
-    if (isConfirmationAgentUser) {
-        return isEditing ? <ConfirmationWorkflowForm /> : (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8">
-                <h1 className="text-2xl font-bold text-slate-900">Create Order</h1>
-                <p className="text-slate-500 mt-2">Confirmation agents cannot create orders.</p>
+    const canConfirmationAgentUseCreateStyleEdit = isConfirmationAgentUser
+        && isEditing
+        && (
+            String(currentOrderCreatedByUserId || '') === String(user?.id || '')
+            || wasOrderCreatedByCurrentConfirmationAgent({
+                created_by_user_id: currentOrderCreatedByUserId,
+                source: formData.source,
+                history: currentOrderHistory,
+            }, user?.id)
+        )
+        && (
+            Boolean(currentOrderReturnedToConfirmationAt)
+            || (!currentOrderConfirmedAt && formData.status === 'pending')
+        );
+
+    if (isConfirmationAgentUser && isEditing && currentOrderCreatedByUserId === undefined) {
+        return (
+            <div className="flex h-80 items-center justify-center">
+                <div className="text-slate-500">Loading order...</div>
             </div>
         );
+    }
+
+    if (isConfirmationAgentUser && isEditing && !canConfirmationAgentUseCreateStyleEdit) {
+        return <ConfirmationWorkflowForm />;
     }
 
     return (
@@ -843,31 +944,49 @@ export default function OrderForm() {
                                         <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                                     ))}
                                 </select>
+                                {isConfirmationAgentUser && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        If you choose a seller, the order goes to that seller. If you leave it empty, your name will appear in the Seller column.
+                                    </p>
+                                )}
                             </div>
                         )}
 
                         {/* Hide Agent Confirmation and Delivery Person for sellers - only admin assigns these */}
                         {!isVendorUser && (
                             <>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation Agent</label>
-                                    <select
-                                        value={formData.confirmation_agent_id}
-                                        onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
-                                        disabled={isConfirmationLocked}
-                                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isConfirmationLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                    >
-                                        <option value="">Select Agent</option>
-                                        {confirmationAgents.map(agent => (
-                                            <option key={agent.id} value={agent.id}>{agent.name}</option>
-                                        ))}
-                                    </select>
-                                    {isConfirmationLocked && (
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            Agent already confirmed for this order; changes are locked.
-                                        </p>
-                                    )}
-                                </div>
+                                {isConfirmationAgentUser ? (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation Agent</label>
+                                        <input
+                                            type="text"
+                                            value={user?.name || 'Current confirmation agent'}
+                                            disabled
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Manual orders created from this account are assigned to you automatically.</p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation Agent</label>
+                                        <select
+                                            value={formData.confirmation_agent_id}
+                                            onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
+                                            disabled={isConfirmationLocked}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isConfirmationLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                        >
+                                            <option value="">Select Agent</option>
+                                            {confirmationAgents.map(agent => (
+                                                <option key={agent.id} value={agent.id}>{agent.name}</option>
+                                            ))}
+                                        </select>
+                                        {isConfirmationLocked && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Agent already confirmed for this order; changes are locked.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1033,10 +1152,35 @@ export default function OrderForm() {
                         </button>
                     </div>
 
+                    {formData.vendor_id && (
+                        <p className="mb-4 text-sm text-slate-500">
+                            Showing only products allowed for the selected seller.
+                        </p>
+                    )}
+
                     <div className="space-y-3">
-                        {orderItems.map((item, index) => (
-                            <div key={index} className="grid grid-cols-12 gap-3 items-end">
-                                <div className="col-span-5">
+                        {orderItems.map((item, index) => {
+                            const selectedProduct = products.find((product) => String(product.id) === String(item.product_id));
+                            const productImage = getProductImageSrc(selectedProduct);
+
+                            return (
+                            <div key={index} className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-12 md:items-end">
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
+                                    <div className="flex h-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                        {productImage ? (
+                                            <img
+                                                src={productImage}
+                                                alt={selectedProduct?.name || 'Selected product'}
+                                                className="h-full w-full object-cover"
+                                            />
+                                        ) : (
+                                            <span className="px-3 text-center text-xs text-slate-400">No image</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="md:col-span-4">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Product <span className="text-red-500">*</span>
                                     </label>
@@ -1047,15 +1191,21 @@ export default function OrderForm() {
                                         required
                                     >
                                         <option value="">Select Product</option>
-                                        {products.map(product => (
+                                        {availableProducts.map(product => (
                                             <option key={product.id} value={product.id}>
                                                 {product.name} - {product.sku}
                                             </option>
                                         ))}
                                     </select>
+                                    {selectedProduct && (
+                                        <p className="mt-2 text-xs text-slate-500">
+                                            {selectedProduct.name}
+                                            {selectedProduct.sku ? ` • ${selectedProduct.sku}` : ''}
+                                        </p>
+                                    )}
                                 </div>
 
-                                <div className="col-span-2">
+                                <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Quantity <span className="text-red-500">*</span>
                                     </label>
@@ -1069,7 +1219,7 @@ export default function OrderForm() {
                                     />
                                 </div>
 
-                                <div className="col-span-2">
+                                <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Price <span className="text-red-500">*</span>
                                     </label>
@@ -1083,7 +1233,7 @@ export default function OrderForm() {
                                     />
                                 </div>
 
-                                <div className="col-span-2">
+                                <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
                                     <input
                                         type="text"
@@ -1093,7 +1243,7 @@ export default function OrderForm() {
                                     />
                                 </div>
 
-                                <div className="col-span-1">
+                                <div className="md:col-span-2">
                                     {orderItems.length > 1 && (
                                         <button
                                             type="button"
@@ -1105,7 +1255,8 @@ export default function OrderForm() {
                                     )}
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 

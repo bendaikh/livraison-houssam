@@ -16,6 +16,7 @@ class Order extends Model
         'delivery_agent_id',
         'delivery_person_id',
         'confirmation_agent_id',
+        'created_by_user_id',
         'callback_date',
         'delivery_integration_id',
         'status',
@@ -106,6 +107,11 @@ class Order extends Model
     public function confirmationAgent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmation_agent_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
     public function deliveryIntegration(): BelongsTo

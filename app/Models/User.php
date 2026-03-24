@@ -84,6 +84,11 @@ class User extends Authenticatable
         return $this->hasMany(Order::class, 'confirmation_agent_id');
     }
 
+    public function createdOrders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'created_by_user_id');
+    }
+
     public function assignedDeliveryOrders(): HasMany
     {
         return $this->hasMany(Order::class, 'delivery_person_id');

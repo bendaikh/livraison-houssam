@@ -1,9 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { calculateUpsellProfit, getProductBasePrice } from '../../utils/profit';
 import SearchableSelect from '../../components/SearchableSelect';
+
+const getImageSrc = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+    if (imagePath.startsWith('/')) return imagePath;
+    return `/storage/${imagePath}`;
+};
+
+const getProductImageSrc = (product) => getImageSrc(product?.images?.[0] || null);
+
+const isProductAllowedForVendor = (product, vendorId) => {
+    if (!vendorId) {
+        return true;
+    }
+
+    const normalizedVendorId = String(vendorId);
+
+    if (String(product?.vendor_id || '') === normalizedVendorId) {
+        return true;
+    }
+
+    return (product?.marketplace_products || []).some((assignment) => (
+        String(assignment.vendor_id) === normalizedVendorId && Boolean(assignment.is_active)
+    ));
+};
 
 const STATUS_OPTIONS = [
     'pending',
@@ -39,6 +65,7 @@ const STATUS_LABELS = {
 export default function ConfirmationWorkflowForm() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const { formatCurrency } = useSettings();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -50,6 +77,7 @@ export default function ConfirmationWorkflowForm() {
     const [deliveryCitiesLoading, setDeliveryCitiesLoading] = useState(false);
     const [errors, setErrors] = useState({});
     const [formData, setFormData] = useState(EMPTY_FORM);
+    const [baseItemsDraft, setBaseItemsDraft] = useState([]);
     const [upsellItems, setUpsellItems] = useState([]);
     const [deliveryMethod, setDeliveryMethod] = useState('person');
 
@@ -93,6 +121,17 @@ export default function ConfirmationWorkflowForm() {
                 delivery_integration_id: currentOrder.delivery_integration_id ? String(currentOrder.delivery_integration_id) : '',
                 delivery_city: currentOrder.delivery_city || currentOrder.city || '',
             });
+            setBaseItemsDraft(
+                (currentOrder.items || [])
+                    .filter((item) => !item.is_upsell)
+                    .map((item) => ({
+                        product_id: String(item.product_id),
+                        quantity: item.quantity,
+                        price: item.price,
+                        product_name: item.product?.name || item.product_name || 'Product',
+                        sku: item.product?.sku || item.sku || '',
+                    }))
+            );
             setUpsellItems(
                 (currentOrder.items || [])
                     .filter((item) => item.is_upsell)
@@ -124,10 +163,22 @@ export default function ConfirmationWorkflowForm() {
         }
     };
 
-    const baseItems = useMemo(
-        () => (order?.items || []).filter((item) => !item.is_upsell),
-        [order]
-    );
+    const baseItems = useMemo(() => {
+        return baseItemsDraft.map((item, index) => {
+            const product = products.find((entry) => String(entry.id) === String(item.product_id));
+
+            return {
+                id: `base-${index}`,
+                product_id: item.product_id,
+                quantity: item.quantity,
+                price: item.price,
+                subtotal: (parseFloat(item.price) || 0) * (parseInt(item.quantity || 0, 10) || 0),
+                product,
+                product_name: product?.name || item.product_name || 'Product',
+                sku: product?.sku || item.sku || '',
+            };
+        });
+    }, [baseItemsDraft, products]);
 
     const existingUpsellTotal = useMemo(() => {
         return (order?.items || [])
@@ -153,9 +204,26 @@ export default function ConfirmationWorkflowForm() {
         }, 0);
     }, [products, upsellItems]);
 
+    const availableUpsellProducts = useMemo(() => {
+        if (!order?.vendor_id) {
+            return products;
+        }
+
+        return products.filter((product) => isProductAllowedForVendor(product, order.vendor_id));
+    }, [order?.vendor_id, products]);
+
+    const baseItemsSubtotal = useMemo(() => {
+        return baseItems.reduce((sum, item) => sum + (parseFloat(item.subtotal) || 0), 0);
+    }, [baseItems]);
+
+    const nonItemAdjustment = useMemo(() => {
+        const currentItemsTotal = (order?.items || []).reduce((sum, item) => sum + (parseFloat(item.subtotal) || 0), 0);
+        return (parseFloat(order?.total) || 0) - currentItemsTotal;
+    }, [order]);
+
     const projectedTotal = useMemo(() => {
-        return ((parseFloat(order?.total) || 0) - existingUpsellTotal) + upsellTotal;
-    }, [existingUpsellTotal, order?.total, upsellTotal]);
+        return baseItemsSubtotal + upsellTotal + nonItemAdjustment;
+    }, [baseItemsSubtotal, nonItemAdjustment, upsellTotal]);
 
     const isStatusReadOnly = useMemo(() => {
         if (!order) {
@@ -184,6 +252,22 @@ export default function ConfirmationWorkflowForm() {
             || (Boolean(order.delivery_person_id) && (Boolean(order.confirmed_at) || order.status === 'confirmed'));
     }, [order]);
 
+    const canEditBaseItems = useMemo(() => {
+        if (!order || !user) {
+            return false;
+        }
+
+        if (String(order.created_by_user_id || '') !== String(user.id)) {
+            return false;
+        }
+
+        if (order.returned_to_confirmation_at) {
+            return true;
+        }
+
+        return !order.confirmed_at && order.status === 'pending';
+    }, [order, user]);
+
     const statusReadOnlyMessage = order?.delivery_tracking_code
         ? 'Status is now controlled by the delivery company because a tracking code exists.'
         : order?.delivery_person_id && (Boolean(order?.confirmed_at) || order?.status === 'confirmed')
@@ -198,6 +282,33 @@ export default function ConfirmationWorkflowForm() {
 
     const addUpsellRow = () => {
         setUpsellItems((prev) => [...prev, { product_id: '', quantity: 1, price: 0 }]);
+    };
+
+    const addBaseItemRow = () => {
+        setBaseItemsDraft((prev) => [...prev, { product_id: '', quantity: 1, price: 0, product_name: '', sku: '' }]);
+    };
+
+    const updateBaseItem = (index, field, value) => {
+        setBaseItemsDraft((prev) => prev.map((item, itemIndex) => {
+            if (itemIndex !== index) {
+                return item;
+            }
+
+            const nextItem = { ...item, [field]: value };
+
+            if (field === 'product_id') {
+                const product = products.find((entry) => String(entry.id) === String(value));
+                nextItem.price = product?.company_price || product?.price || product?.recommended_price || 0;
+                nextItem.product_name = product?.name || '';
+                nextItem.sku = product?.sku || '';
+            }
+
+            return nextItem;
+        }));
+    };
+
+    const removeBaseItem = (index) => {
+        setBaseItemsDraft((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
     };
 
     const updateUpsellItem = (index, field, value) => {
@@ -236,6 +347,52 @@ export default function ConfirmationWorkflowForm() {
         }));
     };
 
+    useEffect(() => {
+        if (!order?.vendor_id) {
+            return;
+        }
+
+        setBaseItemsDraft((prev) => prev.map((item) => {
+            if (!item.product_id) {
+                return item;
+            }
+
+            const selectedProduct = products.find((product) => String(product.id) === String(item.product_id));
+            if (!selectedProduct || isProductAllowedForVendor(selectedProduct, order.vendor_id)) {
+                return item;
+            }
+
+            return {
+                ...item,
+                product_id: '',
+                price: 0,
+            };
+        }));
+    }, [order?.vendor_id, products]);
+
+    useEffect(() => {
+        if (!order?.vendor_id) {
+            return;
+        }
+
+        setUpsellItems((prev) => prev.map((item) => {
+            if (!item.product_id) {
+                return item;
+            }
+
+            const selectedProduct = products.find((product) => String(product.id) === String(item.product_id));
+            if (!selectedProduct || isProductAllowedForVendor(selectedProduct, order.vendor_id)) {
+                return item;
+            }
+
+            return {
+                ...item,
+                product_id: '',
+                price: 0,
+            };
+        }));
+    }, [order?.vendor_id, products]);
+
     const submitWorkflow = async () => {
         setErrors({});
 
@@ -255,6 +412,16 @@ export default function ConfirmationWorkflowForm() {
                     price: Number(item.price),
                 })),
         };
+
+        if (canEditBaseItems) {
+            payload.items = baseItemsDraft
+                .filter((item) => item.product_id)
+                .map((item) => ({
+                    product_id: Number(item.product_id),
+                    quantity: Number(item.quantity),
+                    price: Number(item.price),
+                }));
+        }
 
         try {
             setSaving(true);
@@ -311,13 +478,22 @@ export default function ConfirmationWorkflowForm() {
                             </span>
                         )}
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => navigate('/orders')}
-                        className="w-full md:w-auto rounded-xl border border-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors"
-                    >
-                        Back to Orders
-                    </button>
+                    <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
+                        <button
+                            type="button"
+                            onClick={() => navigate('/orders/create')}
+                            className="w-full md:w-auto rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400 transition-colors"
+                        >
+                            Create Order
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/orders')}
+                            className="w-full md:w-auto rounded-xl border border-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors"
+                        >
+                            Back to Orders
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -572,8 +748,21 @@ export default function ConfirmationWorkflowForm() {
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
                         <div className="flex-1">
                             <h2 className="text-lg font-semibold text-slate-900">Original Items</h2>
-                            <p className="mt-1 text-sm text-slate-500">Base order items are kept as-is while the confirmation agent adds upsells.</p>
+                            <p className="mt-1 text-sm text-slate-500">
+                                {canEditBaseItems
+                                    ? 'You created this order, so you can edit its base products before saving.'
+                                    : 'Base order items are kept as-is while the confirmation agent adds upsells.'}
+                            </p>
                         </div>
+                        {canEditBaseItems && (
+                            <button
+                                type="button"
+                                onClick={addBaseItemRow}
+                                className="w-full md:w-auto rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors shadow-sm"
+                            >
+                                + Add Product
+                            </button>
+                        )}
                     </div>
 
                     <div className="mt-4 space-y-3">
@@ -582,18 +771,116 @@ export default function ConfirmationWorkflowForm() {
                                 No items in this order.
                             </div>
                         ) : (
-                            baseItems.map((item) => (
-                                <div key={item.id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-4 hover:shadow-sm transition-all">
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-slate-900">{item.product?.name || item.product_name || 'Product'}</p>
-                                        <p className="mt-1 text-sm text-slate-500">Quantity: {item.quantity}</p>
+                            baseItems.map((item) => {
+                                const productImage = getProductImageSrc(item.product);
+
+                                if (canEditBaseItems) {
+                                    return (
+                                        <div key={item.id} className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-12 md:items-end">
+                                            <div className="md:col-span-2">
+                                                <label className="mb-1.5 block text-sm font-medium text-slate-700">Image</label>
+                                                <div className="flex h-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                                    {productImage ? (
+                                                        <img
+                                                            src={productImage}
+                                                            alt={item.product?.name || item.product_name || 'Product'}
+                                                            className="h-full w-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <span className="px-2 text-center text-xs text-slate-400">No image</span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="md:col-span-4">
+                                                <label className="mb-1.5 block text-sm font-medium text-slate-700">Product</label>
+                                                <select
+                                                    value={item.product_id}
+                                                    onChange={(event) => updateBaseItem(baseItems.findIndex((entry) => entry.id === item.id), 'product_id', event.target.value)}
+                                                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                                                >
+                                                    <option value="">Select product</option>
+                                                    {availableUpsellProducts.map((product) => (
+                                                        <option key={product.id} value={product.id}>{product.name}</option>
+                                                    ))}
+                                                </select>
+                                                {item.sku && (
+                                                    <p className="mt-2 text-xs text-slate-500">{item.sku}</p>
+                                                )}
+                                                {errors[`items.${baseItems.findIndex((entry) => entry.id === item.id)}.product_id`] && (
+                                                    <p className="mt-1 text-xs text-rose-600">{errors[`items.${baseItems.findIndex((entry) => entry.id === item.id)}.product_id`][0]}</p>
+                                                )}
+                                            </div>
+
+                                            <div className="md:col-span-2">
+                                                <label className="mb-1.5 block text-sm font-medium text-slate-700">Quantity</label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={item.quantity}
+                                                    onChange={(event) => updateBaseItem(baseItems.findIndex((entry) => entry.id === item.id), 'quantity', event.target.value)}
+                                                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                                                />
+                                            </div>
+
+                                            <div className="md:col-span-2">
+                                                <label className="mb-1.5 block text-sm font-medium text-slate-700">Unit Price</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={item.price}
+                                                    onChange={(event) => updateBaseItem(baseItems.findIndex((entry) => entry.id === item.id), 'price', event.target.value)}
+                                                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                                                />
+                                            </div>
+
+                                            <div className="md:col-span-2">
+                                                <label className="mb-1.5 block text-sm font-medium text-slate-700">Total</label>
+                                                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                                                    {formatCurrency(item.subtotal || 0)}
+                                                </div>
+                                            </div>
+
+                                            <div className="md:col-span-2">
+                                                {baseItems.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeBaseItem(baseItems.findIndex((entry) => entry.id === item.id))}
+                                                        className="w-full rounded-2xl border border-rose-300 bg-white px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-50 transition-colors"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div key={item.id} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-4 hover:shadow-sm transition-all">
+                                        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                                            {productImage ? (
+                                                <img
+                                                    src={productImage}
+                                                    alt={item.product?.name || item.product_name || 'Product'}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <span className="px-2 text-center text-xs text-slate-400">No image</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold text-slate-900">{item.product?.name || item.product_name || 'Product'}</p>
+                                            <p className="mt-1 text-sm text-slate-500">Quantity: {item.quantity}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-semibold text-slate-900">{formatCurrency(item.subtotal || 0)}</p>
+                                            <p className="text-xs text-slate-500 mt-1">{item.quantity} × {formatCurrency((item.subtotal || 0) / item.quantity)}</p>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-semibold text-slate-900">{formatCurrency(item.subtotal || 0)}</p>
-                                        <p className="text-xs text-slate-500 mt-1">{item.quantity} × {formatCurrency((item.subtotal || 0) / item.quantity)}</p>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
@@ -620,7 +907,17 @@ export default function ConfirmationWorkflowForm() {
                             </div>
                         )}
 
-                        {upsellItems.map((item, index) => (
+                        {order?.vendor_id && (
+                            <p className="text-sm text-slate-500">
+                                Showing only products allowed for this seller.
+                            </p>
+                        )}
+
+                        {upsellItems.map((item, index) => {
+                            const selectedProduct = products.find((product) => String(product.id) === String(item.product_id));
+                            const productImage = getProductImageSrc(selectedProduct);
+
+                            return (
                             <div key={index} className="space-y-3 rounded-2xl border border-slate-200 p-4 bg-slate-50">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div className="md:col-span-2">
@@ -631,10 +928,31 @@ export default function ConfirmationWorkflowForm() {
                                             className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                                         >
                                             <option value="">Select product</option>
-                                            {products.map((product) => (
+                                            {availableUpsellProducts.map((product) => (
                                                 <option key={product.id} value={product.id}>{product.name}</option>
                                             ))}
                                         </select>
+                                        {item.product_id && (
+                                            <div className="mt-3 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                                                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                                                    {productImage ? (
+                                                        <img
+                                                            src={productImage}
+                                                            alt={selectedProduct?.name || 'Selected product'}
+                                                            className="h-full w-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <span className="px-2 text-center text-xs text-slate-400">No image</span>
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold text-slate-900">{selectedProduct?.name || 'Selected product'}</p>
+                                                    <p className="text-xs text-slate-500">
+                                                        {selectedProduct?.sku || 'No SKU'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div>
@@ -683,7 +1001,8 @@ export default function ConfirmationWorkflowForm() {
                                     </button>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
 
                         {errors.upsell_items && <p className="text-xs text-rose-600">{errors.upsell_items[0]}</p>}
                     </div>

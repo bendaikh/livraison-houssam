@@ -46,6 +46,7 @@ class OrderService
                 'delivery_integration_id' => $data['delivery_integration_id'] ?? null,
                 'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
+                'created_by_user_id' => $data['created_by_user_id'] ?? null,
                 'callback_date' => $data['callback_date'] ?? null,
                 'delivery_city' => $data['delivery_city'] ?? null,
                 'status' => $data['status'] ?? 'pending',
@@ -830,8 +831,40 @@ class OrderService
             $previousCallbackDate = $order->callback_date;
             $previousShippingAddress = $order->shipping_address;
             $previousNotes = $order->notes;
+            $existingBaseItems = $baseItems
+                ->map(fn ($item) => [
+                    'product_id' => (int) $item->product_id,
+                    'quantity' => (int) $item->quantity,
+                    'price' => (float) $item->price,
+                ])
+                ->values();
             $existingUpsellCount = $order->items->where('is_upsell', true)->count();
             $existingUpsellSubtotal = (float) $order->items->where('is_upsell', true)->sum('subtotal');
+            $baseItemsPayload = array_key_exists('items', $data)
+                ? collect($data['items'] ?? [])
+                    ->filter(fn ($item) => !empty($item['product_id']) && (int) ($item['quantity'] ?? 0) > 0)
+                    ->map(function ($item) {
+                        $price = (float) ($item['price'] ?? 0);
+                        $quantity = (int) $item['quantity'];
+
+                        return [
+                            'product_id' => (int) $item['product_id'],
+                            'quantity' => $quantity,
+                            'price' => $price,
+                            'subtotal' => $price * $quantity,
+                            'is_upsell' => false,
+                        ];
+                    })
+                    ->values()
+                : $baseItems
+                    ->map(fn ($item) => [
+                        'product_id' => (int) $item->product_id,
+                        'quantity' => (int) $item->quantity,
+                        'price' => (float) $item->price,
+                        'subtotal' => (float) $item->subtotal,
+                        'is_upsell' => false,
+                    ])
+                    ->values();
             $upsellItems = collect($data['upsell_items'] ?? [])
                 ->filter(fn ($item) => !empty($item['product_id']) && (int) ($item['quantity'] ?? 0) > 0)
                 ->map(function ($item) {
@@ -848,16 +881,7 @@ class OrderService
                 })
                 ->values();
 
-            $combinedItems = $baseItems
-                ->map(fn ($item) => [
-                    'product_id' => $item->product_id,
-                    'product_name' => $item->product_name,
-                    'sku' => $item->sku,
-                    'quantity' => $item->quantity,
-                    'price' => $item->price,
-                    'subtotal' => $item->subtotal,
-                    'is_upsell' => false,
-                ])
+            $combinedItems = $baseItemsPayload
                 ->concat($upsellItems)
                 ->values()
                 ->all();
@@ -884,9 +908,9 @@ class OrderService
                 ]);
             }
 
-            $order->items()->where('is_upsell', true)->delete();
+            $order->items()->delete();
 
-            foreach ($upsellItems as $item) {
+            foreach ($baseItemsPayload->concat($upsellItems) as $item) {
                 $product = \App\Models\Product::find($item['product_id']);
 
                 $order->items()->create([
@@ -896,7 +920,7 @@ class OrderService
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
                     'subtotal' => $item['subtotal'],
-                    'is_upsell' => true,
+                    'is_upsell' => (bool) ($item['is_upsell'] ?? false),
                 ]);
             }
 
@@ -912,6 +936,20 @@ class OrderService
 
             if (array_key_exists('notes', $data) && $previousNotes !== $order->notes) {
                 $this->addHistory($order->id, $order->status, 'Workflow notes updated by confirmation agent.');
+            }
+
+            if (
+                array_key_exists('items', $data)
+                && $existingBaseItems->values()->all() !== $baseItemsPayload
+                    ->map(fn ($item) => [
+                        'product_id' => (int) $item['product_id'],
+                        'quantity' => (int) $item['quantity'],
+                        'price' => (float) $item['price'],
+                    ])
+                    ->values()
+                    ->all()
+            ) {
+                $this->addHistory($order->id, $order->status, 'Base products updated by confirmation agent.');
             }
 
             if (
