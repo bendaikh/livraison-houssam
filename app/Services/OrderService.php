@@ -46,6 +46,7 @@ class OrderService
                 'delivery_integration_id' => $data['delivery_integration_id'] ?? null,
                 'delivery_person_id' => $data['delivery_person_id'] ?? null,
                 'confirmation_agent_id' => $data['confirmation_agent_id'] ?? null,
+                'confirmation_assigned_at' => !empty($data['confirmation_agent_id']) ? now() : null,
                 'created_by_user_id' => $data['created_by_user_id'] ?? null,
                 'callback_date' => $data['callback_date'] ?? null,
                 'delivery_city' => $data['delivery_city'] ?? null,
@@ -144,6 +145,7 @@ class OrderService
                 'whatsapp' => $data['whatsapp'] ?? null,
             ];
 
+            $updateData = array_merge($updateData, $this->prepareConfirmationAssignmentAttributes($order, $data));
             $updateData = array_merge($updateData, $this->prepareDeliveryAssignmentAttributes($order, $data));
             
             $order->update($updateData);
@@ -770,7 +772,10 @@ class OrderService
             }
 
             if ((int) $order->confirmation_agent_id !== (int) $user->id) {
-                $order->update(['confirmation_agent_id' => $user->id]);
+                $order->update([
+                    'confirmation_agent_id' => $user->id,
+                    'confirmation_assigned_at' => now(),
+                ]);
                 $this->addHistory($order->id, $order->status, 'Order assigned to confirmation agent ' . $user->name);
             }
 
@@ -785,6 +790,7 @@ class OrderService
 
             $order->update([
                 'confirmation_agent_id' => $confirmationAgentId,
+                'confirmation_assigned_at' => $confirmationAgentId ? now() : null,
                 'callback_date' => $confirmationAgentId ? $order->callback_date : null,
             ]);
 
@@ -831,6 +837,7 @@ class OrderService
             $previousCallbackDate = $order->callback_date;
             $previousShippingAddress = $order->shipping_address;
             $previousNotes = $order->notes;
+            $previousDiscount = (float) $order->discount;
             $existingBaseItems = $baseItems
                 ->map(fn ($item) => [
                     'product_id' => (int) $item->product_id,
@@ -890,7 +897,7 @@ class OrderService
                 'shipping_cost' => $order->shipping_cost,
                 'shipping_included_in_price' => $order->shipping_included_in_price,
                 'tax' => $order->tax,
-                'discount' => $order->discount,
+                'discount' => $data['discount'] ?? $order->discount,
             ], $order);
 
             $callbackDate = $data['callback_date'] ?? null;
@@ -898,6 +905,9 @@ class OrderService
                 'callback_date' => $callbackDate ?: null,
                 'subtotal' => $subtotal,
                 'total' => $total,
+                'discount' => array_key_exists('discount', $data)
+                    ? (float) ($data['discount'] ?? 0)
+                    : $order->discount,
                 'shipping_address' => $data['shipping_address'] ?? $order->shipping_address,
                 'notes' => $data['notes'] ?? $order->notes,
             ]);
@@ -936,6 +946,10 @@ class OrderService
 
             if (array_key_exists('notes', $data) && $previousNotes !== $order->notes) {
                 $this->addHistory($order->id, $order->status, 'Workflow notes updated by confirmation agent.');
+            }
+
+            if (array_key_exists('discount', $data) && abs($previousDiscount - (float) $order->discount) > 0.001) {
+                $this->addHistory($order->id, $order->status, 'Discount updated by confirmation agent.');
             }
 
             if (
@@ -1029,6 +1043,28 @@ class OrderService
             ->all();
 
         return $currentValues;
+    }
+
+    private function prepareConfirmationAssignmentAttributes(Order $order, array $attributes): array
+    {
+        if (!array_key_exists('confirmation_agent_id', $attributes)) {
+            return [];
+        }
+
+        $nextAgentId = !empty($attributes['confirmation_agent_id'])
+            ? (int) $attributes['confirmation_agent_id']
+            : null;
+        $currentAgentId = !empty($order->confirmation_agent_id)
+            ? (int) $order->confirmation_agent_id
+            : null;
+
+        if ($nextAgentId === $currentAgentId) {
+            return [];
+        }
+
+        return [
+            'confirmation_assigned_at' => $nextAgentId ? now() : null,
+        ];
     }
 
     private function calculateOrderTotals(array $items, array $data, ?Order $order = null): array

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\MoroccanPhone;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -29,5 +30,16 @@ class Client extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Client $client) {
+            $normalizedPhone = MoroccanPhone::normalize($client->phone);
+
+            if ($normalizedPhone !== '') {
+                $client->phone = $normalizedPhone;
+            }
+        });
     }
 }

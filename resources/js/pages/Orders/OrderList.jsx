@@ -52,10 +52,12 @@ export default function OrderList({ status = '' }) {
         marketplace: 0,
         whatsapp: 0
     });
+    const [vendors, setVendors] = useState([]);
     const [filters, setFilters] = useState({
         search: '',
         status: status,
         source: '',
+        vendor_id: '',
         date_from: '',
         date_to: '',
         page: 1
@@ -101,13 +103,48 @@ export default function OrderList({ status = '' }) {
         fetchShopifyIntegration();
     }, [filters, assignmentScope, location.search, isConfirmationAgentUser, isDeliveryPersonUser]);
 
-    const fetchOrders = async () => {
+    useEffect(() => {
+        if (isDeliveryPersonUser || isVendorUser) {
+            return;
+        }
+
+        fetchVendors();
+    }, [isDeliveryPersonUser, isVendorUser]);
+
+    useEffect(() => {
+        if (!isConfirmationAgentUser || assignmentScope !== 'available') {
+            return undefined;
+        }
+
+        const refreshAvailableQueue = () => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+
+            fetchOrders({ silent: true });
+        };
+
+        const intervalId = window.setInterval(refreshAvailableQueue, 5000);
+        document.addEventListener('visibilitychange', refreshAvailableQueue);
+        window.addEventListener('focus', refreshAvailableQueue);
+
+        return () => {
+            window.clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', refreshAvailableQueue);
+            window.removeEventListener('focus', refreshAvailableQueue);
+        };
+    }, [isConfirmationAgentUser, assignmentScope, filters, location.search, pagination.per_page]);
+
+    const fetchOrders = async ({ silent = false } = {}) => {
         try {
-            setLoading(true);
+            if (!silent) {
+                setLoading(true);
+            }
             const params = new URLSearchParams();
             if (filters.search) params.append('search', filters.search);
             if (filters.status) params.append('status', filters.status);
             if (filters.source) params.append('source', filters.source);
+            if (filters.vendor_id) params.append('vendor_id', filters.vendor_id);
             if (filters.date_from) params.append('date_from', filters.date_from);
             if (filters.date_to) params.append('date_to', filters.date_to);
             params.append('page', filters.page);
@@ -151,7 +188,18 @@ export default function OrderList({ status = '' }) {
         } catch (error) {
             console.error('Error fetching orders:', error);
         } finally {
-            setLoading(false);
+            if (!silent) {
+                setLoading(false);
+            }
+        }
+    };
+
+    const fetchVendors = async () => {
+        try {
+            const response = await api.get('/vendors?is_active=1&per_page=200');
+            setVendors(response.data?.data || response.data || []);
+        } catch (error) {
+            console.error('Error fetching vendors:', error);
         }
     };
 
@@ -1030,17 +1078,17 @@ export default function OrderList({ status = '' }) {
 
             {/* Filters */}
             <div className="bg-white rounded-lg p-3 shadow-sm mb-3 border border-gray-100">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
                     <input
                         type="text"
                         placeholder="Search..."
                         value={filters.search}
-                        onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                        onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                     <select
                         value={filters.status}
-                        onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                        onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
                         <option value="">Status</option>
@@ -1056,7 +1104,7 @@ export default function OrderList({ status = '' }) {
                     </select>
                     <select
                         value={filters.source}
-                        onChange={(e) => setFilters({ ...filters, source: e.target.value })}
+                        onChange={(e) => setFilters({ ...filters, source: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
                         <option value="">Source</option>
@@ -1067,16 +1115,28 @@ export default function OrderList({ status = '' }) {
                         <option value="marketplace">Marketplace</option>
                         <option value="whatsapp">WhatsApp</option>
                     </select>
+                    {!isDeliveryPersonUser && !isVendorUser && (
+                        <select
+                            value={filters.vendor_id}
+                            onChange={(e) => setFilters({ ...filters, vendor_id: e.target.value, page: 1 })}
+                            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
+                        >
+                            <option value="">Seller</option>
+                            {vendors.map((vendor) => (
+                                <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                            ))}
+                        </select>
+                    )}
                     <input
                         type="date"
                         value={filters.date_from}
-                        onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
+                        onChange={(e) => setFilters({ ...filters, date_from: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                     <input
                         type="date"
                         value={filters.date_to}
-                        onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
+                        onChange={(e) => setFilters({ ...filters, date_to: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                 </div>

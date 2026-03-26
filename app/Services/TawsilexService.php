@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Support\MoroccanPhone;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -217,29 +218,7 @@ class TawsilexService
 
     private function normalizeMoroccanPhone(?string $phone): string
     {
-        if (empty($phone)) {
-            return '';
-        }
-
-        $digits = preg_replace('/\D+/', '', $phone);
-
-        if (empty($digits)) {
-            return '';
-        }
-
-        if (str_starts_with($digits, '00')) {
-            $digits = substr($digits, 2);
-        }
-
-        if (str_starts_with($digits, '212')) {
-            $digits = '0' . substr($digits, 3);
-        }
-
-        if (!str_starts_with($digits, '0')) {
-            $digits = '0' . $digits;
-        }
-
-        return $digits;
+        return MoroccanPhone::normalize($phone);
     }
 
     private function isValidMoroccanPhone(string $phone): bool

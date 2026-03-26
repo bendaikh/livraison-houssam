@@ -227,6 +227,33 @@ class ConfirmationWorkflowTest extends TestCase
         $this->assertSame('Updated street 123, Casablanca', $order->fresh()->client->address);
     }
 
+    public function test_confirmation_workflow_can_update_discount_for_automatic_orders(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $product = $this->createProductForVendor($vendorUser->vendor);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $product, $agent);
+        $order->update([
+            'source' => 'shopify',
+            'discount' => 0,
+            'total' => 140,
+        ]);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/confirmation-workflow", [
+            'discount' => 15,
+            'upsell_items' => [],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('discount', '15.00');
+        $response->assertJsonPath('total', '125.00');
+
+        $this->assertSame('15.00', $order->fresh()->discount);
+        $this->assertSame('125.00', $order->fresh()->total);
+    }
+
     public function test_confirmation_agent_can_create_manual_order_and_is_assigned_automatically(): void
     {
         $agent = $this->createConfirmationAgent();
@@ -258,6 +285,35 @@ class ConfirmationWorkflowTest extends TestCase
         $response->assertJsonPath('confirmation_agent_id', $agent->id);
         $response->assertJsonPath('created_by_user_id', $agent->id);
         $response->assertJsonPath('client.name', 'Manual Client');
+        $response->assertJsonPath('items.0.product_id', $product->id);
+    }
+
+    public function test_confirmation_agent_can_create_manual_order_with_legacy_article_id_payload(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $product = $this->createProductForVendor($vendorUser->vendor);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->postJson('/api/orders', [
+            'client_name' => 'Legacy Client',
+            'client_phone' => '0655555577',
+            'vendor_id' => $vendorUser->vendor->id,
+            'status' => 'pending',
+            'source' => 'manual',
+            'items' => [[
+                'article_id' => $product->id,
+                'quantity' => 1,
+                'price' => 140,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'shipping_address' => 'Casablanca centre',
+            'city' => 'Casablanca',
+        ]);
+
+        $response->assertCreated();
         $response->assertJsonPath('items.0.product_id', $product->id);
     }
 
@@ -344,6 +400,39 @@ class ConfirmationWorkflowTest extends TestCase
         $response->assertJsonPath('items.0.quantity', 2);
     }
 
+    public function test_confirmation_agent_confirmation_workflow_accepts_legacy_article_id_payload_for_editable_base_items(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $originalProduct = $this->createProductForVendor($vendorUser->vendor);
+        $replacementProduct = Product::create([
+            'name' => 'Seller Product Legacy',
+            'sku' => 'SELLER-PRODUCT-LEGACY',
+            'vendor_id' => $vendorUser->vendor->id,
+            'price' => 180,
+            'cost_price' => 90,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $originalProduct, $agent);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->patchJson("/api/orders/{$order->id}/confirmation-workflow", [
+            'items' => [[
+                'article_id' => $replacementProduct->id,
+                'quantity' => 2,
+                'price' => 180,
+            ]],
+            'upsell_items' => [],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('items.0.product_id', $replacementProduct->id);
+        $response->assertJsonPath('items.0.quantity', 2);
+    }
+
     public function test_confirmation_agent_cannot_edit_base_items_for_order_they_did_not_create(): void
     {
         $agent = $this->createConfirmationAgent();
@@ -418,6 +507,54 @@ class ConfirmationWorkflowTest extends TestCase
             'shipping_address' => 'Casablanca',
             'city' => 'Casablanca',
             'notes' => 'Updated by creator agent.',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('items.0.product_id', $replacementProduct->id);
+    }
+
+    public function test_confirmation_agent_standard_edit_endpoint_accepts_legacy_article_id_payload(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser('seller');
+        $originalProduct = $this->createProductForVendor($vendorUser->vendor);
+        $replacementProduct = Product::create([
+            'name' => 'Seller Product Six',
+            'sku' => 'SELLER-PRODUCT-006',
+            'vendor_id' => $vendorUser->vendor->id,
+            'price' => 200,
+            'cost_price' => 100,
+            'stock_quantity' => 10,
+            'min_stock_quantity' => 1,
+            'is_active' => true,
+        ]);
+        $order = $this->createEditableOrderForConfirmationAgent($agent, $vendorUser->vendor, $originalProduct, $agent);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->putJson("/api/orders/{$order->id}", [
+            'client_id' => $order->client_id,
+            'client_name' => $order->client->name,
+            'client_phone' => $order->client->phone,
+            'vendor_id' => $vendorUser->vendor->id,
+            'delivery_agent_id' => null,
+            'delivery_integration_id' => null,
+            'delivery_person_id' => null,
+            'confirmation_agent_id' => $order->confirmation_agent_id,
+            'delivery_city' => 'Casablanca',
+            'status' => 'pending',
+            'source' => 'manual',
+            'items' => [[
+                'article_id' => $replacementProduct->id,
+                'quantity' => 1,
+                'price' => 200,
+            ]],
+            'shipping_cost' => 35,
+            'shipping_included_in_price' => false,
+            'discount' => 0,
+            'shipping_address' => 'Casablanca',
+            'city' => 'Casablanca',
+            'notes' => 'Updated by creator agent with legacy payload.',
         ]);
 
         $response->assertOk();
@@ -554,6 +691,73 @@ class ConfirmationWorkflowTest extends TestCase
         $agentResponse->assertJsonPath('data.0.blacklist_entry.cancellation_timing', 'after_confirmation');
     }
 
+    public function test_confirmation_agent_orders_are_sorted_by_latest_assignment_time(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $olderOrder = $this->createOrderForConfirmationAgent($agent);
+        $newerOrder = $this->createOrderForConfirmationAgent($agent);
+
+        $olderOrder->update([
+            'created_at' => now()->subDay(),
+            'confirmation_assigned_at' => now()->subHours(4),
+        ]);
+
+        $newerOrder->update([
+            'created_at' => now()->subDays(3),
+            'confirmation_assigned_at' => now()->subHour(),
+        ]);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->getJson('/api/orders');
+
+        $response->assertOk();
+        $response->assertJsonPath('data.0.id', $newerOrder->id);
+        $response->assertJsonPath('data.1.id', $olderOrder->id);
+    }
+
+    public function test_confirmation_agent_can_filter_orders_by_seller(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $firstVendorUser = $this->createVendorUser('seller');
+        $secondVendorUser = $this->createVendorUser('seller_two');
+
+        $matchingOrder = $this->createOrderForVendor($firstVendorUser->vendor, $agent);
+        $this->createOrderForVendor($secondVendorUser->vendor, $agent);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->getJson('/api/orders?vendor_id=' . $firstVendorUser->vendor->id);
+
+        $response->assertOk();
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $matchingOrder->id);
+    }
+
+    public function test_blacklist_matches_moroccan_phone_variants(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $vendorUser = $this->createVendorUser();
+        $order = $this->createOrderForVendor($vendorUser->vendor, $agent);
+
+        BlacklistEntry::create([
+            'phone_number' => '0612345678',
+            'reason' => 'Phone blocked',
+            'cancellation_timing' => 'after_confirmation',
+        ]);
+
+        $order->client->update(['phone' => '+212612345678']);
+        $order->update(['phone' => '00212612345678']);
+
+        Sanctum::actingAs($agent);
+
+        $response = $this->getJson('/api/orders');
+
+        $response->assertOk();
+        $response->assertJsonPath('data.0.is_blacklisted', true);
+        $response->assertJsonPath('data.0.blacklist_entry.reason', 'Phone blocked');
+    }
+
     private function createConfirmationAgent(): User
     {
         $role = Role::firstOrCreate(
@@ -591,7 +795,7 @@ class ConfirmationWorkflowTest extends TestCase
         $role = Role::firstOrCreate(
             ['slug' => $slug],
             [
-                'name' => $slug === 'seller' ? 'Seller Portal' : 'Seller',
+                'name' => $slug === 'seller' ? 'Seller Portal' : ucwords(str_replace('_', ' ', $slug)),
                 'permissions' => ['view_own_orders'],
             ]
         );
@@ -603,8 +807,8 @@ class ConfirmationWorkflowTest extends TestCase
 
         Vendor::create([
             'user_id' => $user->id,
-            'name' => 'Seller One',
-            'email' => 'seller-one@example.com',
+            'name' => 'Seller ' . $user->id,
+            'email' => "seller-{$user->id}@example.com",
             'phone' => '0611111111',
             'is_active' => true,
         ]);

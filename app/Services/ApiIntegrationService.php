@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Client;
 use App\Models\Product;
 use App\Models\Vendor;
+use App\Support\MoroccanPhone;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Services\GoogleSheetService;
@@ -519,35 +520,9 @@ class ApiIntegrationService
 
     private function normalizeMoroccanPhone(?string $phone): ?string
     {
-        if (empty($phone)) {
-            return null;
-        }
+        $normalized = MoroccanPhone::normalize($phone);
 
-        $digits = preg_replace('/\D+/', '', $phone);
-
-        if (empty($digits)) {
-            return null;
-        }
-
-        // Remove leading international prefix
-        if (str_starts_with($digits, '00')) {
-            $digits = substr($digits, 2);
-        }
-
-        if (str_starts_with($digits, '212')) {
-            $digits = '0' . substr($digits, 3);
-        }
-
-        // Ensure we keep the leading zero when possible
-        if (!str_starts_with($digits, '0')) {
-            if (strlen($digits) === 9) {
-                $digits = '0' . $digits;
-            } elseif (strlen($digits) > 0) {
-                $digits = '0' . $digits;
-            }
-        }
-
-        return $digits;
+        return $normalized !== '' ? $normalized : null;
     }
 
     /**

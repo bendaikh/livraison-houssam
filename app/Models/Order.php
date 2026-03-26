@@ -16,6 +16,7 @@ class Order extends Model
         'delivery_agent_id',
         'delivery_person_id',
         'confirmation_agent_id',
+        'confirmation_assigned_at',
         'created_by_user_id',
         'callback_date',
         'delivery_integration_id',
@@ -70,6 +71,7 @@ class Order extends Model
         'total' => 'decimal:2',
         'commission_amount' => 'decimal:2',
         'returned_to_confirmation_at' => 'datetime',
+        'confirmation_assigned_at' => 'datetime',
         'confirmed_at' => 'datetime',
         'callback_date' => 'datetime',
         'picked_up_at' => 'datetime',
@@ -181,6 +183,18 @@ class Order extends Model
         static::creating(function ($order) {
             if (!$order->order_number) {
                 $order->order_number = 'ORD-' . strtoupper(uniqid());
+            }
+        });
+
+        static::saving(function ($order) {
+            $normalizedPhone = \App\Support\MoroccanPhone::normalize($order->phone);
+            if ($normalizedPhone !== '') {
+                $order->phone = $normalizedPhone;
+            }
+
+            $normalizedWhatsapp = \App\Support\MoroccanPhone::normalize($order->whatsapp);
+            if ($normalizedWhatsapp !== '') {
+                $order->whatsapp = $normalizedWhatsapp;
             }
         });
     }

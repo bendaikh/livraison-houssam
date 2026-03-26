@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\MoroccanPhone;
 use Illuminate\Database\Eloquent\Model;
 
 class BlacklistEntry extends Model
@@ -15,7 +16,7 @@ class BlacklistEntry extends Model
 
     public static function normalizePhone(?string $phoneNumber): string
     {
-        return preg_replace('/\D+/', '', (string) $phoneNumber) ?? '';
+        return MoroccanPhone::normalize($phoneNumber);
     }
 
     protected static function booted(): void

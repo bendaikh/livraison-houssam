@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Support\MoroccanPhone;
 use App\Services\DeliveryStatusMapper;
 use App\Services\OrderService;
 use App\Services\ShippingPriceService;
@@ -112,7 +113,12 @@ class OrderController extends Controller
 
         $perPage = $request->get('per_page', 15);
 
-        if (
+        $customSorted = false;
+
+        if ($user && $user->isConfirmationAgent() && $request->get('assignment_scope', 'my') !== 'available') {
+            $query->orderByRaw('COALESCE(returned_to_confirmation_at, confirmation_assigned_at, created_at) DESC');
+            $customSorted = true;
+        } elseif (
             $user
             && $user->isDeliveryPerson()
             && Schema::hasTable('delivery_person_billings')
@@ -125,7 +131,10 @@ class OrderController extends Controller
             ]);
 
             $query->orderBy('paid_delivery_billings_count')->latest();
-        } else {
+            $customSorted = true;
+        }
+
+        if (!$customSorted) {
             $query->latest();
         }
 
@@ -141,6 +150,8 @@ class OrderController extends Controller
 
     public function store(Request $request)
     {
+        $this->normalizeLegacyItemProductKeys($request);
+
         if ($request->user()?->isDeliveryPerson()) {
             abort(403, 'Delivery people cannot create orders.');
         }
@@ -173,6 +184,14 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);
+        $normalizedClientPhone = MoroccanPhone::normalize($validated['client_phone'] ?? null);
+        if ($normalizedClientPhone !== '') {
+            $validated['client_phone'] = $normalizedClientPhone;
+        }
+        if (array_key_exists('whatsapp', $validated)) {
+            $normalizedWhatsapp = MoroccanPhone::normalize($validated['whatsapp'] ?? null);
+            $validated['whatsapp'] = $normalizedWhatsapp !== '' ? $normalizedWhatsapp : $validated['whatsapp'];
+        }
         $validated = $this->applyAuthenticatedVendor($request, $validated);
         if ($request->user()?->isConfirmationAgent()) {
             $validated['confirmation_agent_id'] = $request->user()->id;
@@ -245,6 +264,8 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order)
     {
+        $this->normalizeLegacyItemProductKeys($request);
+
         $this->authorizeOrderAccess($request, $order);
 
         if ($request->user()?->isConfirmationAgent()) {
@@ -285,6 +306,14 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
         ]);
+        $normalizedClientPhone = MoroccanPhone::normalize($validated['client_phone'] ?? null);
+        if ($normalizedClientPhone !== '') {
+            $validated['client_phone'] = $normalizedClientPhone;
+        }
+        if (array_key_exists('whatsapp', $validated)) {
+            $normalizedWhatsapp = MoroccanPhone::normalize($validated['whatsapp'] ?? null);
+            $validated['whatsapp'] = $normalizedWhatsapp !== '' ? $normalizedWhatsapp : $validated['whatsapp'];
+        }
         $validated = $this->applyAuthenticatedVendor($request, $validated);
         $this->ensureProductsAllowedForSeller($validated['items'] ?? [], $validated['vendor_id'] ?? $order->vendor_id);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated, $order);
@@ -726,6 +755,8 @@ class OrderController extends Controller
 
     public function updateConfirmationWorkflow(Request $request, Order $order)
     {
+        $this->normalizeLegacyItemProductKeys($request, ['items', 'upsell_items']);
+
         if (!$request->user()?->isConfirmationAgent()) {
             abort(403, 'Only confirmation agents can use this workflow.');
         }
@@ -737,6 +768,7 @@ class OrderController extends Controller
             'callback_date' => 'nullable|date',
             'shipping_address' => 'nullable|string',
             'notes' => 'nullable|string',
+            'discount' => 'nullable|numeric|min:0',
             'items' => 'sometimes|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
@@ -1417,6 +1449,38 @@ class OrderController extends Controller
         $payload['blacklist_entry'] = $order->getAttribute('blacklist_entry');
 
         return $payload;
+    }
+
+    private function normalizeLegacyItemProductKeys(Request $request, array $itemGroups = ['items']): void
+    {
+        $normalizedPayload = [];
+
+        foreach ($itemGroups as $group) {
+            $items = $request->input($group);
+
+            if (!is_array($items)) {
+                continue;
+            }
+
+            $normalizedPayload[$group] = array_map(function ($item) {
+                if (!is_array($item)) {
+                    return $item;
+                }
+
+                if (
+                    empty($item['product_id'])
+                    && !empty($item['article_id'])
+                ) {
+                    $item['product_id'] = $item['article_id'];
+                }
+
+                return $item;
+            }, $items);
+        }
+
+        if (!empty($normalizedPayload)) {
+            $request->merge($normalizedPayload);
+        }
     }
 
     private function resolveShippingIncludedInPrice(Request $request, array $validated, ?Order $order = null): bool

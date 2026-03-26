@@ -51,6 +51,7 @@ const EMPTY_FORM = {
     callback_date: '',
     shipping_address: '',
     notes: '',
+    discount: 0,
     delivery_person_id: '',
     delivery_integration_id: '',
     delivery_city: '',
@@ -117,6 +118,7 @@ export default function ConfirmationWorkflowForm() {
                 callback_date: currentOrder.callback_date ? String(currentOrder.callback_date).slice(0, 10) : '',
                 shipping_address: currentOrder.shipping_address || currentOrder.client?.address || '',
                 notes: currentOrder.notes || '',
+                discount: currentOrder.discount || 0,
                 delivery_person_id: currentOrder.delivery_person_id ? String(currentOrder.delivery_person_id) : '',
                 delivery_integration_id: currentOrder.delivery_integration_id ? String(currentOrder.delivery_integration_id) : '',
                 delivery_city: currentOrder.delivery_city || currentOrder.city || '',
@@ -218,12 +220,17 @@ export default function ConfirmationWorkflowForm() {
 
     const nonItemAdjustment = useMemo(() => {
         const currentItemsTotal = (order?.items || []).reduce((sum, item) => sum + (parseFloat(item.subtotal) || 0), 0);
-        return (parseFloat(order?.total) || 0) - currentItemsTotal;
+        const currentDiscount = parseFloat(order?.discount) || 0;
+        return (parseFloat(order?.total) || 0) - currentItemsTotal + currentDiscount;
     }, [order]);
 
+    const discountValue = useMemo(() => {
+        return parseFloat(formData.discount || 0) || 0;
+    }, [formData.discount]);
+
     const projectedTotal = useMemo(() => {
-        return baseItemsSubtotal + upsellTotal + nonItemAdjustment;
-    }, [baseItemsSubtotal, nonItemAdjustment, upsellTotal]);
+        return baseItemsSubtotal + upsellTotal + nonItemAdjustment - discountValue;
+    }, [baseItemsSubtotal, discountValue, nonItemAdjustment, upsellTotal]);
 
     const isStatusReadOnly = useMemo(() => {
         if (!order) {
@@ -401,6 +408,7 @@ export default function ConfirmationWorkflowForm() {
             callback_date: formData.callback_date || null,
             shipping_address: formData.shipping_address || '',
             notes: formData.notes || '',
+            discount: discountValue,
             delivery_person_id: deliveryMethod === 'person' ? (formData.delivery_person_id ? Number(formData.delivery_person_id) : null) : null,
             delivery_integration_id: deliveryMethod === 'company' ? (formData.delivery_integration_id ? Number(formData.delivery_integration_id) : null) : null,
             delivery_city: deliveryMethod === 'company' ? (formData.delivery_city || '') : null,
@@ -548,6 +556,20 @@ export default function ConfirmationWorkflowForm() {
                                         placeholder="Save call notes, confirmation remarks, or workflow notes."
                                     />
                                     {errors.notes && <p className="mt-1 text-xs text-rose-600">{errors.notes[0]}</p>}
+                                </div>
+
+                                <div>
+                                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Discount</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.discount}
+                                        onChange={(event) => setFormData((prev) => ({ ...prev, discount: event.target.value }))}
+                                        className="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                                        placeholder="0.00"
+                                    />
+                                    {errors.discount && <p className="mt-1 text-xs text-rose-600">{errors.discount[0]}</p>}
                                 </div>
                             </div>
                         </div>
@@ -720,6 +742,10 @@ export default function ConfirmationWorkflowForm() {
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-slate-600">Upsell profit</span>
                                     <span className="font-semibold text-emerald-700">{formatCurrency(upsellProfitTotal)}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="text-slate-600">Discount</span>
+                                    <span className="font-semibold text-rose-700">-{formatCurrency(discountValue)}</span>
                                 </div>
                                 <div className="flex items-center justify-between border-t border-slate-200 pt-4 text-sm">
                                     <span className="font-semibold text-slate-900">Projected total</span>
