@@ -458,7 +458,7 @@ export default function HomePage() {
                             <div key={product.id} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition transform hover:-translate-y-2">
                                 <div className="aspect-square bg-gray-200 overflow-hidden">
                                     {product.images && product.images[0] ? (
-                                        <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+                                        <img src={`/storage/${product.images[0]}`} alt={product.name} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center">
                                             <Package className="w-16 h-16 text-gray-400" />
