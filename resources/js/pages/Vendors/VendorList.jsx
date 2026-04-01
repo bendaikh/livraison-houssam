@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { MOROCCAN_BANKS } from '../../constants/moroccanBanks';
 import BankLogo from '../../components/BankLogo';
@@ -11,6 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function VendorList() {
+    const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const [vendors, setVendors] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -152,16 +155,16 @@ export default function VendorList() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-                        Seller Management
+                        {t('admin.vendors.title')}
                     </h1>
-                    <p className="text-slate-600 mt-1">Manage your seller network</p>
+                    <p className="text-slate-600 mt-1">{t('admin.vendors.subtitle')}</p>
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
                     className="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 font-semibold shadow-lg shadow-orange-500/30 transition-all flex items-center justify-center space-x-2"
                 >
                     <Plus size={20} />
-                    <span>Add Seller</span>
+                    <span>{t('admin.vendors.addVendor')}</span>
                 </button>
             </div>
 
@@ -170,7 +173,7 @@ export default function VendorList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Total Sellers</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.vendors.totalVendors')}</p>
                             <p className="text-3xl font-bold text-slate-800 mt-2">{stats.total}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
@@ -182,7 +185,7 @@ export default function VendorList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Active Sellers</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.vendors.activeVendors')}</p>
                             <p className="text-3xl font-bold text-emerald-600 mt-2">{stats.active}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
@@ -194,7 +197,7 @@ export default function VendorList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Inactive</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.common.inactive')}</p>
                             <p className="text-3xl font-bold text-slate-600 mt-2">{stats.inactive}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-slate-500 to-slate-600 rounded-xl flex items-center justify-center">
@@ -206,7 +209,7 @@ export default function VendorList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Total Sales</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.vendors.totalSales')}</p>
                             <p className="text-3xl font-bold text-orange-600 mt-2">{formatCurrency(stats.totalSales)}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
@@ -408,7 +411,7 @@ export default function VendorList() {
                             {/* Actions */}
                             <div className="flex items-center space-x-2 pt-4 border-t border-slate-200">
                                 <Link
-                                    to={`/vendors/${vendor.id}`}
+                                    to={appPath(`/vendors/${vendor.id}`)}
                                     className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-all text-center text-sm"
                                 >
                                     View Details

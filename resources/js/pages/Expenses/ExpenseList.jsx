@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { 
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function ExpenseList() {
+    const { t } = useTranslation();
     const { formatCurrency, settings } = useSettings();
     const [expenses, setExpenses] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -152,16 +154,16 @@ export default function ExpenseList() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">
-                        Expense Management
+                        {t('admin.expenses.title')}
                     </h1>
-                    <p className="text-slate-600 mt-1">Track and manage business expenses</p>
+                    <p className="text-slate-600 mt-1">{t('admin.expenses.subtitle')}</p>
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
                     className="px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 font-semibold shadow-lg shadow-red-500/30 transition-all flex items-center justify-center space-x-2"
                 >
                     <Plus size={20} />
-                    <span>Add Expense</span>
+                    <span>{t('admin.expenses.addExpense')}</span>
                 </button>
             </div>
 
@@ -170,9 +172,9 @@ export default function ExpenseList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Total Expenses</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.expenses.totalExpenses')}</p>
                             <p className="text-3xl font-bold text-red-600 mt-2">{formatCurrency(stats.total)}</p>
-                            <p className="text-xs text-slate-500 mt-1">{stats.count} transactions</p>
+                            <p className="text-xs text-slate-500 mt-1">{stats.count} {t('admin.expenses.transactions')}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
                             <DollarSign size={28} className="text-white" />
@@ -183,9 +185,9 @@ export default function ExpenseList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">This Month</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.expenses.thisMonth')}</p>
                             <p className="text-3xl font-bold text-orange-600 mt-2">{formatCurrency(stats.thisMonth)}</p>
-                            <p className="text-xs text-slate-500 mt-1">Current period</p>
+                            <p className="text-xs text-slate-500 mt-1">{t('admin.expenses.currentPeriod')}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center">
                             <Calendar size={28} className="text-white" />
@@ -196,9 +198,9 @@ export default function ExpenseList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Categories</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.menu.categories')}</p>
                             <p className="text-3xl font-bold text-slate-800 mt-2">{categories.length}</p>
-                            <p className="text-xs text-slate-500 mt-1">Expense types</p>
+                            <p className="text-xs text-slate-500 mt-1">{t('admin.expenses.expenseTypes')}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                             <Tag size={28} className="text-white" />

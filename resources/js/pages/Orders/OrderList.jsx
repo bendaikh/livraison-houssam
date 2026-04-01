@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,8 +9,10 @@ import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
 import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import { formatDeliveryDispatchFailureMessage } from '../../utils/delivery';
+import { appPath } from '../../constants/appPaths';
 
 export default function OrderList({ status = '' }) {
+    const { t } = useTranslation();
     const { formatCurrency, settings } = useSettings();
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -806,7 +809,7 @@ export default function OrderList({ status = '' }) {
                             <button
                                 onClick={() => {
                                     setAssignmentScope('my');
-                                    navigate('/orders');
+                                    navigate(appPath('/orders'));
                                 }}
                                 className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
                                     assignmentScope === 'my'
@@ -821,7 +824,7 @@ export default function OrderList({ status = '' }) {
                             <button
                                 onClick={() => {
                                     setAssignmentScope('todo');
-                                    navigate('/orders?todo=today');
+                                    navigate(`${appPath('/orders')}?todo=today`);
                                 }}
                                 className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
                                     assignmentScope === 'todo' || new URLSearchParams(location.search).get('todo') === 'today'
@@ -840,7 +843,7 @@ export default function OrderList({ status = '' }) {
                         <div className="grid grid-cols-1 md:grid-cols-[1.6fr_0.8fr_auto] gap-3">
                             <input
                                 type="text"
-                                placeholder="Search by client, phone, or order number"
+                                placeholder={t('admin.orders.searchPlaceholder')}
                                 value={filters.search}
                                 onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value, page: 1 }))}
                                 className={`px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100 placeholder:text-slate-500 focus:ring-slate-700' : 'border-slate-300 focus:ring-slate-300'}`}
@@ -869,7 +872,7 @@ export default function OrderList({ status = '' }) {
                     {loading ? (
                         <div className={`rounded-[28px] border p-12 text-center ${isDarkMode ? 'border-slate-800 bg-slate-900 text-slate-400' : 'border-slate-200 bg-white text-slate-500'}`}>
                             <div className="inline-block animate-spin h-8 w-8 border-4 border-slate-200 border-t-slate-700 rounded-full mb-3"></div>
-                            <p className="text-base font-medium">Loading orders...</p>
+                            <p className="text-base font-medium">{t('admin.orders.loadingOrders')}</p>
                         </div>
                     ) : orders.length === 0 ? (
                         <div className={`rounded-[28px] border p-12 text-center ${isDarkMode ? 'border-slate-800 bg-slate-900 text-slate-400' : 'border-slate-200 bg-white text-slate-500'}`}>
@@ -961,7 +964,7 @@ export default function OrderList({ status = '' }) {
                 </div>
                 {!isDeliveryPersonUser && !isVendorUser && (
                     <button
-                        onClick={() => navigate('/orders/create')}
+                        onClick={() => navigate(appPath('/orders/create'))}
                         className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
                     >
                         + Create Order
@@ -974,7 +977,7 @@ export default function OrderList({ status = '' }) {
                     <button
                         onClick={() => {
                             setAssignmentScope('my');
-                            navigate('/orders');
+                            navigate(appPath('/orders'));
                         }}
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                             assignmentScope === 'my' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
@@ -986,7 +989,7 @@ export default function OrderList({ status = '' }) {
                         <button
                             onClick={() => {
                                 setAssignmentScope('available');
-                                navigate('/orders');
+                                navigate(appPath('/orders'));
                             }}
                             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                                 assignmentScope === 'available' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
@@ -998,7 +1001,7 @@ export default function OrderList({ status = '' }) {
                     <button
                         onClick={() => {
                             setAssignmentScope('todo');
-                            navigate('/orders?todo=today');
+                            navigate(`${appPath('/orders')}?todo=today`);
                         }}
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                             assignmentScope === 'todo' || new URLSearchParams(location.search).get('todo') === 'today'
@@ -1147,11 +1150,11 @@ export default function OrderList({ status = '' }) {
                 {loading ? (
                     <div className="bg-white rounded-lg p-12 text-center text-gray-500">
                         <div className="inline-block animate-spin h-8 w-8 border-4 border-blue-200 border-t-blue-600 rounded-full mb-3"></div>
-                        <p className="text-base font-medium">Loading orders...</p>
+                        <p className="text-base font-medium">{t('admin.orders.loadingOrders')}</p>
                     </div>
                 ) : orders.length === 0 ? (
                     <div className="bg-white rounded-lg p-12 text-center text-gray-500">
-                        <p className="text-base font-medium">No orders found</p>
+                        <p className="text-base font-medium">{t('admin.orders.noOrdersFound')}</p>
                         <p className="text-sm mt-1">
                             {isConfirmationAgentUser
                                 ? 'Try another queue or wait for new assignments.'
@@ -1493,7 +1496,7 @@ export default function OrderList({ status = '' }) {
                                         </button>
                                         {canWorkOnOrder && (
                                             <Link
-                                                to={`/orders/${order.id}`}
+                                                to={appPath(`/orders/${order.id}`)}
                                                 className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors flex-shrink-0"
                                                 title="View Details"
                                             >
@@ -1502,7 +1505,7 @@ export default function OrderList({ status = '' }) {
                                         )}
                                         {canWorkOnOrder && !isDeliveryPersonUser && (
                                             <Link
-                                                to={`/orders/${order.id}/edit`}
+                                                to={appPath(`/orders/${order.id}/edit`)}
                                                 className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors flex-shrink-0"
                                                 title="Edit Order"
                                             >

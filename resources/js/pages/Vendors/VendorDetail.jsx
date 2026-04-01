@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import BankLogo from '../../components/BankLogo';
 import { 
@@ -82,7 +83,7 @@ export default function VendorDetail() {
                     <h2 className="text-xl font-bold text-red-900 mb-2">Seller Not Found</h2>
                     <p className="text-red-700 mb-4">The seller you're looking for doesn't exist.</p>
                     <button
-                        onClick={() => navigate('/vendors')}
+                        onClick={() => navigate(appPath('/vendors'))}
                         className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
                         Back to Sellers
@@ -98,7 +99,7 @@ export default function VendorDetail() {
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <button
-                        onClick={() => navigate('/vendors')}
+                        onClick={() => navigate(appPath('/vendors'))}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                         <ArrowLeft size={24} />
@@ -111,7 +112,7 @@ export default function VendorDetail() {
                     </div>
                 </div>
                 <button
-                    onClick={() => navigate('/vendors')}
+                    onClick={() => navigate(appPath('/vendors'))}
                     className="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 font-semibold shadow-lg shadow-orange-500/30 transition-all flex items-center space-x-2"
                 >
                     <ArrowLeft size={20} />
@@ -398,7 +399,7 @@ export default function VendorDetail() {
                         {products.map((product) => (
                             <Link
                                 key={product.id}
-                                to={`/products/${product.id}`}
+                                to={appPath(`/products/${product.id}`)}
                                 className="bg-slate-50 rounded-xl p-4 hover:shadow-md transition-all border border-slate-200 hover:border-orange-300"
                             >
                                 {product.image_url && (

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { appPath } from '../../constants/appPaths';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -93,7 +94,7 @@ export default function ConfirmationAgentBilling() {
     }, [billings]);
 
     if (isAdmin) {
-        return <Navigate to="/billing?role=confirmation" replace />;
+        return <Navigate to={`${appPath('/billing')}?role=confirmation`} replace />;
     }
 
     if (!canView) {

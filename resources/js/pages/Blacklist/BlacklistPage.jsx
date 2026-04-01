@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Ban, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -9,6 +10,7 @@ const EMPTY_FORM = {
 };
 
 export default function BlacklistPage() {
+    const { t } = useTranslation();
     const [entries, setEntries] = useState([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ export default function BlacklistPage() {
             if (error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
             } else {
-                alert(error.response?.data?.message || 'Failed to save blacklist entry.');
+                alert(error.response?.data?.message || t('admin.blacklist.saveFailed'));
             }
         } finally {
             setSaving(false);
@@ -81,7 +83,7 @@ export default function BlacklistPage() {
     };
 
     const handleDelete = async (entry) => {
-        if (!window.confirm(`Remove ${entry.phone_number} from the blacklist?`)) {
+        if (!window.confirm(t('admin.blacklist.deleteConfirm', { phone: entry.phone_number }))) {
             return;
         }
 
@@ -93,7 +95,7 @@ export default function BlacklistPage() {
             await fetchEntries();
         } catch (error) {
             console.error('Error deleting blacklist entry:', error);
-            alert(error.response?.data?.message || 'Failed to delete blacklist entry.');
+            alert(error.response?.data?.message || t('admin.blacklist.deleteFailed'));
         }
     };
 
@@ -106,8 +108,8 @@ export default function BlacklistPage() {
                             <Ban size={22} />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold text-slate-900">Blacklist</h1>
-                            <p className="text-slate-500">Manage blocked phone numbers for cancelled orders.</p>
+                            <h1 className="text-3xl font-bold text-slate-900">{t('admin.blacklist.title')}</h1>
+                            <p className="text-slate-500">{t('admin.blacklist.subtitle')}</p>
                         </div>
                     </div>
                 </div>
@@ -118,7 +120,7 @@ export default function BlacklistPage() {
                         type="text"
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
-                        placeholder="Search phone or reason..."
+                        placeholder={t('admin.blacklist.searchPlaceholder')}
                         className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3"
                     />
                 </div>
@@ -129,9 +131,9 @@ export default function BlacklistPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <h2 className="text-lg font-semibold text-slate-900">
-                                {editingEntry ? 'Edit entry' : 'Add number'}
+                                {editingEntry ? t('admin.blacklist.editEntry') : t('admin.blacklist.addNumber')}
                             </h2>
-                            <p className="text-sm text-slate-500">Admins and confirmation agents can manage this list.</p>
+                            <p className="text-sm text-slate-500">{t('admin.blacklist.manageDescription')}</p>
                         </div>
                         {editingEntry && (
                             <button
@@ -146,7 +148,7 @@ export default function BlacklistPage() {
 
                     <form onSubmit={handleSubmit} className="mt-5 space-y-4">
                         <div>
-                            <label className="mb-1.5 block text-sm font-medium text-slate-700">Phone number</label>
+                            <label className="mb-1.5 block text-sm font-medium text-slate-700">{t('admin.blacklist.phoneNumber')}</label>
                             <input
                                 type="text"
                                 value={formData.phone_number}
@@ -158,26 +160,26 @@ export default function BlacklistPage() {
                         </div>
 
                         <div>
-                            <label className="mb-1.5 block text-sm font-medium text-slate-700">Cancellation timing</label>
+                            <label className="mb-1.5 block text-sm font-medium text-slate-700">{t('admin.blacklist.cancellationTiming')}</label>
                             <select
                                 value={formData.cancellation_timing}
                                 onChange={(event) => setFormData((prev) => ({ ...prev, cancellation_timing: event.target.value }))}
                                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5"
                             >
-                                <option value="before_confirmation">Before confirmation</option>
-                                <option value="after_confirmation">After confirmation</option>
+                                <option value="before_confirmation">{t('admin.blacklist.beforeConfirmation')}</option>
+                                <option value="after_confirmation">{t('admin.blacklist.afterConfirmation')}</option>
                             </select>
                             {errors.cancellation_timing && <p className="mt-1 text-xs text-rose-600">{errors.cancellation_timing[0]}</p>}
                         </div>
 
                         <div>
-                            <label className="mb-1.5 block text-sm font-medium text-slate-700">Reason</label>
+                            <label className="mb-1.5 block text-sm font-medium text-slate-700">{t('admin.blacklist.reason')}</label>
                             <textarea
                                 rows="5"
                                 value={formData.reason}
                                 onChange={(event) => setFormData((prev) => ({ ...prev, reason: event.target.value }))}
                                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5"
-                                placeholder="Explain why this number is blacklisted."
+                                placeholder={t('admin.blacklist.reasonPlaceholder')}
                             />
                             {errors.reason && <p className="mt-1 text-xs text-rose-600">{errors.reason[0]}</p>}
                         </div>
@@ -188,30 +190,30 @@ export default function BlacklistPage() {
                             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                         >
                             <Plus size={16} />
-                            <span>{saving ? 'Saving...' : editingEntry ? 'Update entry' : 'Add to blacklist'}</span>
+                            <span>{saving ? t('admin.common.saving') : editingEntry ? t('admin.blacklist.updateEntry') : t('admin.blacklist.addToBlacklist')}</span>
                         </button>
                     </form>
                 </div>
 
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                     <div className="border-b border-slate-200 px-6 py-4">
-                        <h2 className="text-lg font-semibold text-slate-900">Blocked numbers</h2>
-                        <p className="text-sm text-slate-500">{entries.length} entries loaded</p>
+                        <h2 className="text-lg font-semibold text-slate-900">{t('admin.blacklist.blockedNumbers')}</h2>
+                        <p className="text-sm text-slate-500">{entries.length} {t('admin.blacklist.entriesLoaded')}</p>
                     </div>
 
                     {loading ? (
-                        <div className="px-6 py-12 text-center text-sm text-slate-500">Loading blacklist...</div>
+                        <div className="px-6 py-12 text-center text-sm text-slate-500">{t('admin.common.loading')}</div>
                     ) : entries.length === 0 ? (
-                        <div className="px-6 py-12 text-center text-sm text-slate-500">No blacklisted numbers found.</div>
+                        <div className="px-6 py-12 text-center text-sm text-slate-500">{t('admin.blacklist.noEntries')}</div>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-slate-200">
                                 <thead className="bg-slate-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Reason</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">When cancelled</th>
-                                        <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{t('admin.blacklist.phone')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{t('admin.blacklist.reason')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{t('admin.blacklist.whenCancelled')}</th>
+                                        <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{t('admin.common.actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -220,7 +222,9 @@ export default function BlacklistPage() {
                                             <td className="px-6 py-4 text-sm font-semibold text-slate-900">{entry.phone_number}</td>
                                             <td className="px-6 py-4 text-sm text-slate-600">{entry.reason}</td>
                                             <td className="px-6 py-4 text-sm text-slate-600">
-                                                {String(entry.cancellation_timing || '').replace(/_/g, ' ')}
+                                                {entry.cancellation_timing === 'before_confirmation' 
+                                                    ? t('admin.blacklist.beforeConfirmation') 
+                                                    : t('admin.blacklist.afterConfirmation')}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center justify-end gap-2">

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { appPath } from '../../constants/appPaths';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -108,7 +109,7 @@ export default function DeliveryPersonBilling() {
     };
 
     if (isAdmin) {
-        return <Navigate to="/billing?role=delivery" replace />;
+        return <Navigate to={`${appPath('/billing')}?role=delivery`} replace />;
     }
 
     if (!canView) {

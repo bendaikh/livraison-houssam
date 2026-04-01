@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
     Save, Building2, Globe, DollarSign, ShoppingCart, 
     Bell, Percent, AlertCircle, CheckCircle2, Loader2,
@@ -7,6 +8,7 @@ import {
 import api from '../../utils/api';
 
 export default function Settings() {
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
@@ -80,7 +82,7 @@ export default function Settings() {
             setSettings(prevSettings => ({ ...prevSettings, ...response.data }));
         } catch (error) {
             console.error('Error fetching settings:', error);
-            setMessage({ type: 'error', text: 'Failed to load settings' });
+            setMessage({ type: 'error', text: t('admin.settings.loadFailed') });
         } finally {
             setLoading(false);
         }
@@ -194,24 +196,24 @@ export default function Settings() {
         try {
             setSaving(true);
             await api.put('/settings', { settings });
-            setMessage({ type: 'success', text: 'Settings saved successfully!' });
+            setMessage({ type: 'success', text: t('admin.settings.saved') });
             setTimeout(() => setMessage(null), 3000);
         } catch (error) {
             console.error('Error saving settings:', error);
-            setMessage({ type: 'error', text: 'Failed to save settings' });
+            setMessage({ type: 'error', text: t('admin.settings.saveFailed') });
         } finally {
             setSaving(false);
         }
     };
 
     const tabs = [
-        { id: 'general', label: 'General', icon: Globe },
-        { id: 'currency', label: 'Currency', icon: DollarSign },
-        { id: 'company', label: 'Company', icon: Building2 },
-        { id: 'orders', label: 'Orders', icon: ShoppingCart },
-        { id: 'cities', label: 'Cities', icon: MapPinned },
-        { id: 'notifications', label: 'Notifications', icon: Bell },
-        { id: 'commission', label: 'Commission', icon: Percent },
+        { id: 'general', label: t('admin.settings.general'), icon: Globe },
+        { id: 'currency', label: t('admin.settings.currency'), icon: DollarSign },
+        { id: 'company', label: t('admin.settings.company'), icon: Building2 },
+        { id: 'orders', label: t('admin.menu.orders'), icon: ShoppingCart },
+        { id: 'cities', label: t('admin.settings.cities'), icon: MapPinned },
+        { id: 'notifications', label: t('admin.settings.notifications'), icon: Bell },
+        { id: 'commission', label: t('admin.settings.commission'), icon: Percent },
     ];
 
     if (loading) {
@@ -226,8 +228,8 @@ export default function Settings() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-                    <p className="text-gray-600 mt-1">Manage your application settings and preferences</p>
+                    <h1 className="text-3xl font-bold text-gray-900">{t('admin.settings.title')}</h1>
+                    <p className="text-gray-600 mt-1">{t('admin.settings.subtitle')}</p>
                 </div>
                 <button
                     onClick={handleSubmit}
@@ -237,12 +239,12 @@ export default function Settings() {
                     {saving ? (
                         <>
                             <Loader2 size={20} className="animate-spin" />
-                            <span>Saving...</span>
+                            <span>{t('admin.common.saving')}</span>
                         </>
                     ) : (
                         <>
                             <Save size={20} />
-                            <span>Save Changes</span>
+                            <span>{t('admin.settings.save')}</span>
                         </>
                     )}
                 </button>

@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { Shield, Plus, Edit, Trash2, Users, CheckCircle } from 'lucide-react';
 
 export default function RoleList() {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -25,14 +28,14 @@ export default function RoleList() {
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Are you sure you want to delete this role?')) return;
+        if (!confirm(t('admin.roles.deleteConfirm'))) return;
 
         try {
             await api.delete(`/roles/${id}`);
             fetchRoles();
         } catch (error) {
             console.error('Error deleting role:', error);
-            alert('Error deleting role. It may be assigned to users.');
+            alert(t('admin.roles.deleteFailed'));
         }
     };
 
@@ -49,15 +52,15 @@ export default function RoleList() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Roles</h1>
-                    <p className="text-gray-500 mt-1">Manage user roles and permissions</p>
+                    <h1 className="text-3xl font-bold text-gray-900">{t('admin.roles.title')}</h1>
+                    <p className="text-gray-500 mt-1">{t('admin.roles.subtitle')}</p>
                 </div>
                 <button
-                    onClick={() => navigate('/roles/create')}
+                    onClick={() => navigate(appPath('/roles/create'))}
                     className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                     <Plus size={20} />
-                    <span>Create Role</span>
+                    <span>{t('admin.roles.addRole')}</span>
                 </button>
             </div>
 
@@ -89,7 +92,7 @@ export default function RoleList() {
                         <div className="flex items-center space-x-2 mb-4 text-sm">
                             <CheckCircle size={16} className="text-green-500" />
                             <span className="text-gray-600">
-                                {Array.isArray(role.permissions) ? role.permissions.length : 0} permissions
+                                {Array.isArray(role.permissions) ? role.permissions.length : 0} {t('admin.roles.permissions')}
                             </span>
                         </div>
 
@@ -97,18 +100,18 @@ export default function RoleList() {
                         <div className="flex items-center space-x-2 mb-4 text-sm">
                             <Users size={16} className="text-blue-500" />
                             <span className="text-gray-600">
-                                {role.users_count || 0} users
+                                {role.users_count || 0} {t('admin.roles.users')}
                             </span>
                         </div>
 
                         {/* Actions */}
                         <div className="flex items-center space-x-2 pt-4 border-t border-gray-100">
                             <button
-                                onClick={() => navigate(`/roles/${role.id}/edit`)}
+                                onClick={() => navigate(appPath(`/roles/${role.id}/edit`))}
                                 className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                             >
                                 <Edit size={16} />
-                                <span>Edit</span>
+                                <span>{t('admin.common.edit')}</span>
                             </button>
                             <button
                                 onClick={() => handleDelete(role.id)}
@@ -116,7 +119,7 @@ export default function RoleList() {
                                 disabled={['admin', 'superadmin'].includes(role.slug)}
                             >
                                 <Trash2 size={16} />
-                                <span>Delete</span>
+                                <span>{t('admin.common.delete')}</span>
                             </button>
                         </div>
                     </div>
@@ -127,12 +130,12 @@ export default function RoleList() {
             {roles.length === 0 && (
                 <div className="text-center py-12">
                     <Shield className="mx-auto text-gray-400 mb-4" size={48} />
-                    <p className="text-gray-500 text-lg">No roles found</p>
+                    <p className="text-gray-500 text-lg">{t('admin.roles.noRoles')}</p>
                     <button
-                        onClick={() => navigate('/roles/create')}
+                        onClick={() => navigate(appPath('/roles/create'))}
                         className="mt-4 text-blue-600 hover:text-blue-800"
                     >
-                        Create your first role
+                        {t('admin.roles.createFirst')}
                     </button>
                 </div>
             )}

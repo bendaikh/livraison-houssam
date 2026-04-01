@@ -244,4 +244,28 @@ class ProductController extends Controller
 
         return response()->json(['message' => 'Image deleted successfully']);
     }
+
+    public function publicIndex(Request $request)
+    {
+        $query = Product::with(['category', 'vendor'])
+            ->where('is_active', true)
+            ->where('is_marketplace_active', true)
+            ->where('stock_quantity', '>', 0);
+
+        if ($request->has('search')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%')
+                  ->orWhere('description', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        if ($request->has('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        $perPage = $request->get('per_page', 16);
+        $products = $query->latest()->paginate($perPage);
+
+        return response()->json($products);
+    }
 }

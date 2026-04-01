@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { CheckCircle, PhoneOff, Ban, Package, Landmark, Coins, CalendarDays, RotateCcw } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
+import { appPath } from '../../constants/appPaths';
 
 export default function DeliveryPersonDashboard({ stats, period, setPeriod }) {
     const { formatCurrency } = useSettings();
@@ -179,7 +180,7 @@ export default function DeliveryPersonDashboard({ stats, period, setPeriod }) {
                             <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>Today&apos;s Callbacks</h3>
                             <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Orders that must reappear in today&apos;s task list.</p>
                         </div>
-                        <Link to="/orders?todo=today" className="text-sm font-semibold text-orange-500 hover:text-orange-400">
+                        <Link to={`${appPath('/orders')}?todo=today`} className="text-sm font-semibold text-orange-500 hover:text-orange-400">
                             Open orders
                         </Link>
                     </div>

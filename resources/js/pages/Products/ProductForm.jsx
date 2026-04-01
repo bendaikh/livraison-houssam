@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 
 export default function ProductForm() {
@@ -220,7 +221,7 @@ export default function ProductForm() {
             // Always use POST when sending FormData (Laravel handles _method internally)
             await api.post(isEditing ? `/products/${id}` : '/products', submitData);
 
-            navigate('/products');
+            navigate(appPath('/products'));
         } catch (error) {
             console.error('Error response:', error.response?.data);
             if (error.response?.data?.errors) {
@@ -268,7 +269,7 @@ export default function ProductForm() {
                     </p>
                 </div>
                 <button
-                    onClick={() => navigate('/products')}
+                    onClick={() => navigate(appPath('/products'))}
                     className="px-5 py-2.5 border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 transition-all font-medium"
                 >
                     ← Back
@@ -800,7 +801,7 @@ export default function ProductForm() {
                 <div className="flex justify-between items-center pt-6 border-t-2 border-slate-200">
                     <button
                         type="button"
-                        onClick={() => navigate('/products')}
+                        onClick={() => navigate(appPath('/products'))}
                         className="px-6 py-3 border-2 border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 font-medium transition-all"
                     >
                         Cancel

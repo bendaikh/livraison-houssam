@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAdminProductCost, getAdminProductSellPrice } from '../../utils/profit';
@@ -11,6 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function ProductList() {
+    const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -51,21 +54,21 @@ export default function ProductList() {
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this product?')) {
+        if (window.confirm(t('admin.products.deleteConfirm'))) {
             try {
                 await api.delete(`/products/${id}`);
                 fetchProducts();
             } catch (error) {
                 console.error('Error deleting product:', error);
-                alert('Failed to delete product. Please try again.');
+                alert(t('admin.products.deleteFailed'));
             }
         }
     };
 
     const getStockStatus = (product) => {
-        if (product.stock_quantity === 0) return { label: 'Out of Stock', color: 'red' };
-        if (product.stock_quantity <= product.min_stock_quantity) return { label: 'Low Stock', color: 'orange' };
-        return { label: 'In Stock', color: 'green' };
+        if (product.stock_quantity === 0) return { label: t('admin.products.outOfStock'), color: 'red' };
+        if (product.stock_quantity <= product.min_stock_quantity) return { label: t('admin.products.lowStock'), color: 'orange' };
+        return { label: t('admin.products.inStock'), color: 'green' };
     };
 
     const toggleMarketplace = async (productId, currentStatus) => {
@@ -77,7 +80,7 @@ export default function ProductList() {
             fetchProducts();
         } catch (error) {
             console.error('Error toggling marketplace:', error);
-            alert('Failed to update marketplace status');
+            alert(t('admin.products.marketplaceFailed'));
         } finally {
             setUpdatingMarketplace(null);
         }
@@ -101,16 +104,16 @@ export default function ProductList() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        Products Inventory
+                        {t('admin.products.title')}
                     </h1>
-                    <p className="text-slate-600 mt-1">Manage your product catalog</p>
+                    <p className="text-slate-600 mt-1">{t('admin.products.subtitle')}</p>
                 </div>
                 <Link
-                    to="/products/create"
+                    to={appPath('/products/create')}
                     className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 font-semibold shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center space-x-2"
                 >
                     <Plus size={20} />
-                    <span>Add Product</span>
+                    <span>{t('admin.products.addProduct')}</span>
                 </Link>
             </div>
 
@@ -119,7 +122,7 @@ export default function ProductList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Total Products</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.products.totalProducts')}</p>
                             <p className="text-3xl font-bold text-slate-800 mt-2">{stats.total}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
@@ -131,7 +134,7 @@ export default function ProductList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Active Products</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.products.activeProducts')}</p>
                             <p className="text-3xl font-bold text-emerald-600 mt-2">{stats.active}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
@@ -143,7 +146,7 @@ export default function ProductList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Low Stock</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.products.lowStock')}</p>
                             <p className="text-3xl font-bold text-orange-600 mt-2">{stats.lowStock}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center">
@@ -155,7 +158,7 @@ export default function ProductList() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Out of Stock</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.products.outOfStock')}</p>
                             <p className="text-3xl font-bold text-red-600 mt-2">{stats.outOfStock}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
@@ -176,7 +179,7 @@ export default function ProductList() {
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                             <input
                                 type="text"
-                                placeholder="Search by name or SKU..."
+                                placeholder={t('admin.products.searchPlaceholder')}
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
@@ -194,7 +197,7 @@ export default function ProductList() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            All
+                            {t('admin.products.filterAll')}
                         </button>
                         <button
                             onClick={() => setFilterStatus('active')}
@@ -204,7 +207,7 @@ export default function ProductList() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            Active
+                            {t('admin.products.filterActive')}
                         </button>
                         <button
                             onClick={() => setFilterStatus('low_stock')}
@@ -214,7 +217,7 @@ export default function ProductList() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            Low Stock
+                            {t('admin.products.filterLowStock')}
                         </button>
                     </div>
 
@@ -227,7 +230,7 @@ export default function ProductList() {
                                     ? 'bg-blue-100 text-blue-600'
                                     : 'text-slate-400 hover:bg-slate-100'
                             }`}
-                            title="Table View"
+                            title={t('admin.products.tableView')}
                         >
                             <ListIcon size={20} />
                         </button>
@@ -238,7 +241,7 @@ export default function ProductList() {
                                     ? 'bg-blue-100 text-blue-600'
                                     : 'text-slate-400 hover:bg-slate-100'
                             }`}
-                            title="Grid View"
+                            title={t('admin.products.gridView')}
                         >
                             <Grid size={20} />
                         </button>
@@ -250,24 +253,24 @@ export default function ProductList() {
             {loading ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="text-slate-600 mt-4">Loading products...</p>
+                    <p className="text-slate-600 mt-4">{t('admin.products.loadingProducts')}</p>
                 </div>
             ) : products.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Package size={40} className="text-blue-600" />
                     </div>
-                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No products found</h3>
+                    <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('admin.products.noProductsFound')}</h3>
                     <p className="text-slate-500 mb-6">
-                        {search ? 'Try a different search term' : 'Get started by adding your first product'}
+                        {search ? t('admin.products.tryDifferentSearch') : t('admin.products.getStartedMessage')}
                     </p>
                     {!search && (
                         <Link
-                            to="/products/create"
+                            to={appPath('/products/create')}
                             className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 font-medium transition-all"
                         >
                             <Plus size={18} />
-                            <span>Add Product</span>
+                            <span>{t('admin.products.addProduct')}</span>
                         </Link>
                     )}
                 </div>
@@ -277,13 +280,13 @@ export default function ProductList() {
                         <table className="w-full">
                             <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
                                 <tr>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Product</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">SKU</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Category</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Pricing</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Stock</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Status</th>
-                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Actions</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.products.product')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.products.sku')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.products.category')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.products.pricing')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.products.stock')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.products.status')}</th>
+                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.products.actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
@@ -293,7 +296,7 @@ export default function ProductList() {
                                         <tr
                                             key={product.id}
                                             className="hover:bg-slate-50 transition-colors group cursor-pointer"
-                                            onClick={() => navigate(`/products/${product.id}`)}
+                                            onClick={() => navigate(appPath(`/products/${product.id}`))}
                                         >
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center space-x-3">
@@ -327,20 +330,20 @@ export default function ProductList() {
                                                         {product.category.name}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-slate-400 text-sm">No category</span>
+                                                    <span className="text-slate-400 text-sm">{t('admin.products.noCategory')}</span>
                                                 )}
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="space-y-1">
                                                     {product.company_price && (
                                                         <div className="flex items-center space-x-2">
-                                                            <span className="text-xs text-slate-500">Prix de vente:</span>
+                                                            <span className="text-xs text-slate-500">{t('admin.products.sellingPrice')}:</span>
                                                             <span className="font-semibold text-emerald-600">{formatCurrency(product.company_price)}</span>
                                                         </div>
                                                     )}
                                                     {product.vendor_price && (
                                                         <div className="flex items-center space-x-2">
-                                                            <span className="text-xs text-slate-500">Prix de revient:</span>
+                                                            <span className="text-xs text-slate-500">{t('admin.products.costPrice')}:</span>
                                                             <span className="font-semibold text-slate-700">{formatCurrency(product.vendor_price)}</span>
                                                         </div>
                                                     )}
@@ -350,7 +353,7 @@ export default function ProductList() {
                                                 <div className="space-y-1">
                                                     <div className="flex items-center space-x-2">
                                                         <span className="font-bold text-lg text-slate-800">{product.stock_quantity}</span>
-                                                        <span className="text-xs text-slate-500">units</span>
+                                                        <span className="text-xs text-slate-500">{t('admin.products.units')}</span>
                                                     </div>
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
                                                         stockStatus.color === 'green' ? 'bg-green-100 text-green-700' :
@@ -367,7 +370,7 @@ export default function ProductList() {
                                                         ? 'bg-green-100 text-green-700' 
                                                         : 'bg-slate-100 text-slate-600'
                                                 }`}>
-                                                    {product.is_active ? '● Active' : '○ Inactive'}
+                                                    {product.is_active ? `● ${t('admin.products.active')}` : `○ ${t('admin.products.inactive')}`}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6">
@@ -380,7 +383,7 @@ export default function ProductList() {
                                                                 ? 'bg-purple-600'
                                                                 : 'bg-gray-300'
                                                         } ${updatingMarketplace === product.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
-                                                        title={product.is_marketplace_active ? 'Deactivate from Marketplace' : 'Activate for Marketplace'}
+                                                        title={product.is_marketplace_active ? t('admin.products.deactivateMarketplace') : t('admin.products.activateMarketplace')}
                                                     >
                                                         <span
                                                             className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform ${
@@ -391,17 +394,17 @@ export default function ProductList() {
                                                         </span>
                                                     </button>
                                                     <Link
-                                                        to={`/products/${product.id}/edit`}
+                                                        to={appPath(`/products/${product.id}/edit`)}
                                                         onClick={(e) => e.stopPropagation()}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                        title="Edit Product"
+                                                        title={t('admin.products.editProduct')}
                                                     >
                                                         <Edit size={18} />
                                                     </Link>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDelete(product.id); }}
                                                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                        title="Delete Product"
+                                                        title={t('admin.products.deleteProduct')}
                                                     >
                                                         <Trash2 size={18} />
                                                     </button>
@@ -426,7 +429,7 @@ export default function ProductList() {
                             <div key={product.id} className="bg-white rounded-2xl shadow-md hover:shadow-2xl border border-slate-200/50 overflow-hidden transition-all duration-300 group flex flex-col h-full">
                                 {/* Product Image Container */}
                                 <button
-                                    onClick={() => navigate(`/products/${product.id}`)}
+                                    onClick={() => navigate(appPath(`/products/${product.id}`))}
                                     className="relative h-56 w-full bg-gradient-to-br from-blue-100 to-indigo-100 text-left overflow-hidden group cursor-pointer"
                                 >
                                     {product.images && product.images.length > 0 ? (
@@ -448,7 +451,7 @@ export default function ProductList() {
                                                 ? 'bg-green-500/90 text-white' 
                                                 : 'bg-slate-500/90 text-white'
                                         }`}>
-                                            {product.is_active ? '✓ ACTIVE' : 'INACTIVE'}
+                                            {product.is_active ? `✓ ${t('admin.products.active').toUpperCase()}` : t('admin.products.inactive').toUpperCase()}
                                         </span>
                                     </div>
 
@@ -456,7 +459,7 @@ export default function ProductList() {
                                     {product.is_marketplace_active && (
                                         <div className="absolute top-3 left-3">
                                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-500/90 text-white">
-                                                Nouveau
+                                                {t('admin.products.new')}
                                             </span>
                                         </div>
                                     )}
@@ -467,7 +470,7 @@ export default function ProductList() {
                                     {/* Product Name & SKU */}
                                     <div className="mb-3">
                                         <button
-                                            onClick={() => navigate(`/products/${product.id}`)}
+                                            onClick={() => navigate(appPath(`/products/${product.id}`))}
                                             className="font-bold text-slate-800 text-base mb-1 line-clamp-2 text-left hover:text-teal-600 transition-colors cursor-pointer"
                                         >
                                             {product.name}
@@ -485,12 +488,12 @@ export default function ProductList() {
                                     {/* Prices */}
                                     <div className="space-y-2 mb-4 pb-4 border-b border-slate-200">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-xs text-slate-500 font-semibold">Prix de vente</span>
+                                            <span className="text-xs text-slate-500 font-semibold">{t('admin.products.sellingPrice')}</span>
                                             <span className="font-bold text-emerald-600 text-sm">{formatCurrency(sellingPrice)}</span>
                                         </div>
                                         {costPrice > 0 && (
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs text-slate-500 font-semibold">Prix de revient</span>
+                                                <span className="text-xs text-slate-500 font-semibold">{t('admin.products.costPrice')}</span>
                                                 <span className="text-sm text-slate-600">{formatCurrency(costPrice)}</span>
                                             </div>
                                         )}
@@ -499,7 +502,7 @@ export default function ProductList() {
                                     {/* Stock Status */}
                                     <div className="flex items-center justify-between mb-4">
                                         <div>
-                                            <p className="text-xs text-slate-500 font-semibold">Stock</p>
+                                            <p className="text-xs text-slate-500 font-semibold">{t('admin.products.stock')}</p>
                                             <p className="font-bold text-lg text-slate-800">{product.stock_quantity}</p>
                                         </div>
                                         <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
@@ -515,10 +518,10 @@ export default function ProductList() {
                                     <div className="mt-auto">
                                         {isVendor ? (
                                             <button
-                                                onClick={() => navigate(`/products/${product.id}`)}
+                                                onClick={() => navigate(appPath(`/products/${product.id}`))}
                                                 className="w-full py-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white rounded-lg font-bold text-sm transition-all shadow-md hover:shadow-lg"
                                             >
-                                                Commandez
+                                                {t('admin.products.orderNow')}
                                             </button>
                                         ) : (
                                             <div className="flex gap-2">
@@ -530,7 +533,7 @@ export default function ProductList() {
                                                             ? 'bg-purple-600'
                                                             : 'bg-gray-300'
                                                     } ${updatingMarketplace === product.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
-                                                    title={product.is_marketplace_active ? 'Deactivate from Marketplace' : 'Activate for Marketplace'}
+                                                    title={product.is_marketplace_active ? t('admin.products.deactivateMarketplace') : t('admin.products.activateMarketplace')}
                                                 >
                                                     <span
                                                         className={`inline-flex items-center justify-center h-8 w-8 transform rounded-full bg-white shadow-lg transition-transform ${
@@ -541,7 +544,7 @@ export default function ProductList() {
                                                     </span>
                                                 </button>
                                                 <Link
-                                                    to={`/products/${product.id}/edit`}
+                                                    to={appPath(`/products/${product.id}/edit`)}
                                                     className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all flex items-center justify-center"
                                                 >
                                                     <Edit size={16} />

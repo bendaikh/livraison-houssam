@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useAuth } from '../../contexts/AuthContext';
 
 const aliasMap = {
@@ -324,7 +325,7 @@ export default function GoogleSheetIntegrationPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                    <Link to="/api-integrations" className="text-gray-500 hover:text-gray-700">← Back</Link>
+                    <Link to={appPath('/api-integrations')} className="text-gray-500 hover:text-gray-700">← Back</Link>
                     <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
                             <span className="text-2xl">📊</span>

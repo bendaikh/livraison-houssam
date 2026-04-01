@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import OrderModal from '../../components/OrderModal';
 import { isVendorRole } from '../../utils/roles';
+import { appPath } from '../../constants/appPaths';
 import { 
     Package, Store, Users, Search, ToggleLeft, ToggleRight, Trash2, TrendingUp, X,
     CheckCircle, DollarSign, Hash, ChevronDown, ChevronUp, Grid, List as ListIcon, Eye, ShoppingBag
 } from 'lucide-react';
 
 export default function MarketplaceProducts() {
+    const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const [products, setProducts] = useState([]);
@@ -102,7 +105,7 @@ export default function MarketplaceProducts() {
             <div className="flex items-center justify-center h-96">
                 <div className="flex flex-col items-center space-y-4">
                     <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    <p className="text-slate-500 font-medium">Loading marketplace...</p>
+                    <p className="text-slate-500 font-medium">{t('admin.common.loading')}</p>
                 </div>
             </div>
         );
@@ -117,12 +120,10 @@ export default function MarketplaceProducts() {
                         <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/25">
                             <Store className="text-white" size={24} />
                         </div>
-                        <span>Marketplace</span>
+                        <span>{t('admin.marketplace.title')}</span>
                     </h1>
                     <p className="text-slate-500 mt-1">
-                        {isVendor
-                            ? 'Browse marketplace products and place orders directly.'
-                            : 'Browse marketplace products and inspect product details.'}
+                        {t('admin.marketplace.subtitle')}
                     </p>
                 </div>
             </div>
@@ -133,7 +134,7 @@ export default function MarketplaceProducts() {
                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200/50">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-slate-600 mb-1">Total Products</p>
+                                <p className="text-sm font-medium text-slate-600 mb-1">{t('admin.products.totalProducts')}</p>
                                 <h3 className="text-3xl font-bold text-slate-800">{statistics.total_products}</h3>
                             </div>
                             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
@@ -145,7 +146,7 @@ export default function MarketplaceProducts() {
                     <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200/50">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-slate-600 mb-1">Assigned Products</p>
+                                <p className="text-sm font-medium text-slate-600 mb-1">{t('admin.marketplace.assignedProducts')}</p>
                                 <h3 className="text-3xl font-bold text-slate-800">{statistics.assigned_products}</h3>
                             </div>
                             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
@@ -157,7 +158,7 @@ export default function MarketplaceProducts() {
                     <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-200/50">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-slate-600 mb-1">Active Assignments</p>
+                                <p className="text-sm font-medium text-slate-600 mb-1">{t('admin.marketplace.activeAssignments')}</p>
                                 <h3 className="text-3xl font-bold text-slate-800">{statistics.active_assignments}</h3>
                             </div>
                             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
@@ -170,7 +171,7 @@ export default function MarketplaceProducts() {
                         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200/50">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-slate-600 mb-1">Active Vendors</p>
+                                    <p className="text-sm font-medium text-slate-600 mb-1">{t('admin.vendors.activeVendors')}</p>
                                     <h3 className="text-3xl font-bold text-slate-800">{statistics.total_vendors}</h3>
                                 </div>
                                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
@@ -609,7 +610,7 @@ export default function MarketplaceProducts() {
                     formatCurrency={formatCurrency}
                     source="marketplace"
                     onClose={closeOrderModal}
-                    onOrderCreated={() => window.location.href = '/orders'}
+                    onOrderCreated={() => { window.location.href = appPath('/orders'); }}
                 />
             )}
         </div>

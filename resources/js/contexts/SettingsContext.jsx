@@ -22,9 +22,10 @@ export const SettingsProvider = ({ children }) => {
     }, []);
 
     useEffect(() => {
-        if (settings.app_name) {
-            document.title = `${settings.app_name} - ${settings.app_description}`;
-        }
+        if (!settings.app_name) return;
+        const path = window.location.pathname;
+        const isPublicHome = path === '/' || path === '/seller/signup';
+        document.title = isPublicHome ? settings.app_name : `${settings.app_name} - ${settings.app_description}`;
     }, [settings.app_name, settings.app_description]);
 
     const fetchSettings = async () => {

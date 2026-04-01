@@ -20,20 +20,20 @@ class ApiIntegrationController extends Controller
             $query->latest()->limit(5);
         }]);
         
-        // If user is a vendor, only show Shopify / Google Sheet integrations linked to them
+        // If user is a vendor, only show Shopify / Google Sheet / Custom API integrations linked to them
         if ($user && $user->role && $user->role->slug === 'vendor') {
             $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
             
             if ($vendor) {
                 // Show only e-commerce style integrations linked to this vendor or general ones
-                $query->whereIn('type', ['shopify', 'google_sheet'])
+                $query->whereIn('type', ['shopify', 'google_sheet', 'custom_api'])
                       ->where(function ($q) use ($vendor) {
                           $q->where('vendor_id', $vendor->id)
                             ->orWhereNull('vendor_id');
                       });
             } else {
-                // If vendor profile not found, show only Shopify/Google Sheet types
-                $query->whereIn('type', ['shopify', 'google_sheet']);
+                // If vendor profile not found, show only Shopify/Google Sheet/Custom API types
+                $query->whereIn('type', ['shopify', 'google_sheet', 'custom_api']);
             }
         }
         
@@ -46,15 +46,15 @@ class ApiIntegrationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'type' => 'required|in:shopify,delivery,google_sheet',
-            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
+            'type' => 'required|in:shopify,delivery,google_sheet,custom_api',
+            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet,custom_api',
             'vendor_id' => 'nullable|exists:vendors,id',
             'is_active' => 'boolean',
             'credentials' => 'nullable|array',
             'settings' => 'nullable|array',
         ]);
 
-        if (($validated['type'] ?? null) !== 'google_sheet' && empty($validated['credentials'])) {
+        if (($validated['type'] ?? null) !== 'google_sheet' && ($validated['type'] ?? null) !== 'custom_api' && empty($validated['credentials'])) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'credentials' => ['The credentials field is required.'],
             ]);
@@ -76,8 +76,8 @@ class ApiIntegrationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'string|max:255',
-            'type' => 'in:shopify,delivery,google_sheet',
-            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet',
+            'type' => 'in:shopify,delivery,google_sheet,custom_api',
+            'provider' => 'nullable|in:shopify,tawsilex,bmdelivery,google_sheet,custom_api',
             'vendor_id' => 'nullable|exists:vendors,id',
             'is_active' => 'boolean',
             'credentials' => 'nullable|array',
@@ -301,6 +301,70 @@ class ApiIntegrationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Failed to preview sheet: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function generateCustomApiKey(Request $request)
+    {
+        $validated = $request->validate([
+            'integration_id' => 'nullable|exists:api_integrations,id',
+        ]);
+
+        try {
+            $user = auth()->user();
+            
+            // If integration_id is provided, find it, otherwise create new one
+            if (!empty($validated['integration_id'])) {
+                $integration = ApiIntegration::findOrFail($validated['integration_id']);
+                
+                // Check if user has permission to access this integration
+                if ($integration->vendor_id && $user->role->slug === 'vendor') {
+                    $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
+                    if (!$vendor || $integration->vendor_id !== $vendor->id) {
+                        return response()->json([
+                            'message' => 'Unauthorized to access this integration',
+                        ], 403);
+                    }
+                }
+            } else {
+                // Find existing custom_api integration or create new one
+                $query = ApiIntegration::where('provider', 'custom_api');
+                
+                if ($user->role->slug === 'vendor') {
+                    $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
+                    if ($vendor) {
+                        $query->where('vendor_id', $vendor->id);
+                    }
+                }
+                
+                $integration = $query->first();
+                
+                if (!$integration) {
+                    return response()->json([
+                        'message' => 'Please create a Custom API integration first',
+                    ], 400);
+                }
+            }
+
+            // Generate a secure random API key
+            $apiKey = 'capi_' . bin2hex(random_bytes(32));
+
+            // Update integration credentials with new API key
+            $credentials = $integration->credentials ?? [];
+            $credentials['api_key'] = $apiKey;
+            $integration->credentials = $credentials;
+            $integration->save();
+
+            return response()->json($integration);
+        } catch (\Exception $e) {
+            \Log::error('Failed to generate API key', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to generate API key: ' . $e->getMessage(),
             ], 500);
         }
     }

@@ -8,6 +8,7 @@ import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import { formatDeliveryDispatchFailureMessage, parseDeliveryCitiesResponse } from '../../utils/delivery';
 import { resolveShippingCost, sameCityName } from '../../utils/shipping';
 import ConfirmationWorkflowForm from './ConfirmationWorkflowForm';
+import { appPath } from '../../constants/appPaths';
 
 const getImageSrc = (imagePath) => {
     if (!imagePath) return null;
@@ -612,7 +613,7 @@ export default function OrderForm() {
                 alert('Order saved, but no tracking code was returned by the delivery provider.');
             }
 
-            navigate('/orders');
+            navigate(appPath('/orders'));
         } catch (error) {
             if (error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
@@ -675,7 +676,7 @@ export default function OrderForm() {
 
             <div className="flex justify-between items-center">
                 <button
-                    onClick={() => navigate('/orders')}
+                    onClick={() => navigate(appPath('/orders'))}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                 >
                     Back to Orders
@@ -1344,7 +1345,7 @@ export default function OrderForm() {
                 <div className="flex justify-end space-x-3">
                     <button
                         type="button"
-                        onClick={() => navigate('/orders')}
+                        onClick={() => navigate(appPath('/orders'))}
                         className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                     >
                         Cancel

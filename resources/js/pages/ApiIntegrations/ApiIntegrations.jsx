@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function ApiIntegrations() {
@@ -37,7 +38,7 @@ export default function ApiIntegrations() {
     const allIntegrations = [
         {
             id: 'shopify',
-            path: '/api-integrations/shopify',
+            path: appPath('/api-integrations/shopify'),
             icon: '🛍️',
             title: 'Shopify',
             description: 'E-commerce Platform - Import orders and sync products',
@@ -50,7 +51,7 @@ export default function ApiIntegrations() {
         },
         {
             id: 'google_sheet',
-            path: '/api-integrations/google-sheet',
+            path: appPath('/api-integrations/google-sheet'),
             icon: '📊',
             title: 'Google Sheets',
             description: 'Import orders from a spreadsheet',
@@ -62,8 +63,21 @@ export default function ApiIntegrations() {
             vendorVisible: true,
         },
         {
+            id: 'custom_api',
+            path: appPath('/api-integrations/custom-api'),
+            icon: '🔌',
+            title: 'Custom API',
+            description: 'Connect your own platform, website, or mobile app',
+            color: 'purple',
+            bgColor: 'bg-purple-50',
+            borderColor: 'border-purple-200',
+            textColor: 'text-purple-700',
+            badgeColor: 'bg-purple-100 text-purple-800',
+            vendorVisible: true, // Vendors can use this
+        },
+        {
             id: 'tawsilex',
-            path: '/api-integrations/tawsilex',
+            path: appPath('/api-integrations/tawsilex'),
             icon: '📦',
             title: 'Tawsilex',
             description: 'Moroccan Delivery Service - Create and track shipments',
@@ -76,7 +90,7 @@ export default function ApiIntegrations() {
         },
         {
             id: 'bmdelivery',
-            path: '/api-integrations/bmdelivery',
+            path: appPath('/api-integrations/bmdelivery'),
             icon: '🚚',
             title: 'BMDelivery',
             description: 'Moroccan Delivery Service - Create and track shipments',

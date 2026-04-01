@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateAdminProductProfit, getAdminProductSellPrice } from '../../utils/profit';
@@ -410,7 +411,7 @@ export default function ProfitDashboard() {
                                         </td>
                                         <td className="py-4 px-6">
                                             <button
-                                                onClick={() => navigate(`/products/${product.id}`)}
+                                                onClick={() => navigate(appPath(`/products/${product.id}`))}
                                                 className="font-semibold text-slate-800 hover:text-emerald-600 transition-colors flex items-center space-x-2 group/name"
                                             >
                                                 <span>{product.name}</span>

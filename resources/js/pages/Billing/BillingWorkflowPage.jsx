@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -9,6 +10,7 @@ import {
     isDeliveryPersonRole,
     isVendorRole,
 } from '../../utils/roles';
+import { appPath } from '../../constants/appPaths';
 import {
     ArrowRightLeft,
     Banknote,
@@ -24,44 +26,44 @@ import {
     Wallet,
 } from 'lucide-react';
 
-const WORKFLOWS = {
+const getWorkflows = (t) => ({
     delivery: {
-        title: 'Delivery Billing',
-        subtitle: 'Cash collection and return to admin',
-        description: 'Track collected cash, delivery commission, and the balance that must be returned to admin.',
+        title: t('admin.billing.delivery.title'),
+        subtitle: t('admin.billing.delivery.subtitle'),
+        description: t('admin.billing.delivery.description'),
         tone: 'blue',
-        entityLabel: 'Delivery person',
-        emptyEntityLabel: 'All delivery people',
-        openTitle: 'Open Cash Returns',
-        openDescription: 'Delivery cash still pending settlement with admin.',
-        paidTitle: 'Paid History',
-        paidDescription: 'Settled delivery billing records kept as history.',
+        entityLabel: t('admin.billing.delivery.entityLabel'),
+        emptyEntityLabel: t('admin.billing.delivery.emptyEntityLabel'),
+        openTitle: t('admin.billing.delivery.openTitle'),
+        openDescription: t('admin.billing.delivery.openDescription'),
+        paidTitle: t('admin.billing.delivery.paidTitle'),
+        paidDescription: t('admin.billing.delivery.paidDescription'),
     },
     confirmation: {
-        title: 'Confirmation Billing',
-        subtitle: 'Salary per delivered order',
-        description: 'Track delivered orders, commission per order, and salary invoices for confirmation agents.',
+        title: t('admin.billing.confirmation.title'),
+        subtitle: t('admin.billing.confirmation.subtitle'),
+        description: t('admin.billing.confirmation.description'),
         tone: 'emerald',
-        entityLabel: 'Confirmation agent',
-        emptyEntityLabel: 'All confirmation agents',
-        openTitle: 'Pending Salaries',
-        openDescription: 'Confirmation salaries that still need to be paid.',
-        paidTitle: 'Paid History',
-        paidDescription: 'Paid salary invoices for confirmation agents.',
+        entityLabel: t('admin.billing.confirmation.entityLabel'),
+        emptyEntityLabel: t('admin.billing.confirmation.emptyEntityLabel'),
+        openTitle: t('admin.billing.confirmation.openTitle'),
+        openDescription: t('admin.billing.confirmation.openDescription'),
+        paidTitle: t('admin.billing.confirmation.paidTitle'),
+        paidDescription: t('admin.billing.confirmation.paidDescription'),
     },
     seller: {
-        title: 'Seller Billing',
-        subtitle: 'Revenue, profit, and payouts',
-        description: 'Track seller revenue, profit after platform commission, pending payouts, and invoice history.',
+        title: t('admin.billing.seller.title'),
+        subtitle: t('admin.billing.seller.subtitle'),
+        description: t('admin.billing.seller.description'),
         tone: 'orange',
-        entityLabel: 'Seller',
-        emptyEntityLabel: 'All sellers',
-        openTitle: 'Pending Payouts',
-        openDescription: 'Seller invoices that still need to be paid out.',
-        paidTitle: 'Paid Invoices History',
-        paidDescription: 'Payouts that have already been settled.',
+        entityLabel: t('admin.billing.seller.entityLabel'),
+        emptyEntityLabel: t('admin.billing.seller.emptyEntityLabel'),
+        openTitle: t('admin.billing.seller.openTitle'),
+        openDescription: t('admin.billing.seller.openDescription'),
+        paidTitle: t('admin.billing.seller.paidTitle'),
+        paidDescription: t('admin.billing.seller.paidDescription'),
     },
-};
+});
 
 const EMPTY_DASHBOARD = {
     filters: {
@@ -105,23 +107,25 @@ function getToneClasses(tone) {
 
 function getDefaultBillingPath(roleSlug) {
     if (isAdminRole(roleSlug) || isVendorRole(roleSlug)) {
-        return '/billing/sellers';
+        return appPath('/billing/sellers');
     }
 
     if (isDeliveryPersonRole(roleSlug)) {
-        return '/billing/delivery';
+        return appPath('/billing/delivery');
     }
 
     if (isConfirmationAgentRole(roleSlug)) {
-        return '/billing/confirmation';
+        return appPath('/billing/confirmation');
     }
 
     return null;
 }
 
 export default function BillingWorkflowPage({ role }) {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const { formatCurrency } = useSettings();
+    const WORKFLOWS = getWorkflows(t);
     const [searchParams, setSearchParams] = useSearchParams();
     const isAdmin = isAdminRole(user?.role?.slug);
     const canView = isAdmin

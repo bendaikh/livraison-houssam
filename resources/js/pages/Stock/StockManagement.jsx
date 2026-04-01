@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { 
     Plus, Minus, Edit, Package, AlertTriangle, TrendingUp, 
@@ -9,6 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function StockManagement() {
+    const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -118,12 +121,12 @@ export default function StockManagement() {
 
     const getStockStatus = (product) => {
         if (product.stock_quantity === 0) {
-            return { label: 'Out of Stock', color: 'red', icon: AlertTriangle };
+            return { label: t('admin.products.outOfStock'), color: 'red', icon: AlertTriangle };
         }
         if (product.stock_quantity <= product.min_stock_quantity) {
-            return { label: 'Low Stock', color: 'orange', icon: TrendingDown };
+            return { label: t('admin.products.lowStock'), color: 'orange', icon: TrendingDown };
         }
-        return { label: 'In Stock', color: 'green', icon: TrendingUp };
+        return { label: t('admin.products.inStock'), color: 'green', icon: TrendingUp };
     };
 
     const stats = {
@@ -139,16 +142,16 @@ export default function StockManagement() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                        Stock Management
+                        {t('admin.stock.title')}
                     </h1>
-                    <p className="text-slate-600 mt-1">Monitor and manage your inventory levels</p>
+                    <p className="text-slate-600 mt-1">{t('admin.stock.subtitle')}</p>
                 </div>
                 <Link
-                    to="/stock/history"
+                    to={appPath('/stock/history')}
                     className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 font-semibold shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center space-x-2"
                 >
                     <History size={20} />
-                    <span>View History</span>
+                    <span>{t('admin.stock.history')}</span>
                 </Link>
             </div>
 
@@ -157,7 +160,7 @@ export default function StockManagement() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Total Products</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.products.totalProducts')}</p>
                             <p className="text-3xl font-bold text-slate-800 mt-2">{stats.totalProducts}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
@@ -169,7 +172,7 @@ export default function StockManagement() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Low Stock</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.products.lowStock')}</p>
                             <p className="text-3xl font-bold text-orange-600 mt-2">{stats.lowStock}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center">

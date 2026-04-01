@@ -28,6 +28,17 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
+// Public app settings (used by public homepage too)
+Route::get('/app-settings', [SettingController::class, 'appSettings']);
+
+// Public marketplace routes
+Route::prefix('public')->group(function () {
+    Route::get('/products', [ProductController::class, 'publicIndex']);
+});
+
+// Seller registration
+Route::post('/seller/register', [VendorController::class, 'register']);
+
 // Webhook routes (public - no authentication required)
 Route::post('/webhooks/shopify/orders/create', [WebhookController::class, 'handleShopifyOrderCreate']);
 Route::post('/webhooks/bmdelivery/status-update', [WebhookController::class, 'handleBMDeliveryWebhook']);
@@ -124,6 +135,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/api-integrations/{apiIntegration}/statuses', [ApiIntegrationController::class, 'getStatuses']);
     Route::get('/api-integrations/{apiIntegration}/google-sheet/tabs', [ApiIntegrationController::class, 'listGoogleSheetTabs']);
     Route::post('/api-integrations/{apiIntegration}/google-sheet/preview', [ApiIntegrationController::class, 'previewGoogleSheet']);
+    Route::post('/api-integrations/custom-api/generate-key', [ApiIntegrationController::class, 'generateCustomApiKey']);
 
     // Users & Roles (Admin and SuperAdmin only)
     Route::middleware(['role:admin,superadmin'])->group(function () {
@@ -135,8 +147,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/confirmation-agents', [UserController::class, 'confirmationAgents']);
 
     // Shared app settings
-    Route::get('/app-settings', [SettingController::class, 'appSettings']);
-
     // Settings
     Route::middleware(['role:admin,superadmin'])->group(function () {
         Route::get('/settings', [SettingController::class, 'index']);

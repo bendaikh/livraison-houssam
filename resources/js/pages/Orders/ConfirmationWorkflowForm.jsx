@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { calculateUpsellProfit, getProductBasePrice } from '../../utils/profit';
 import SearchableSelect from '../../components/SearchableSelect';
+import { appPath } from '../../constants/appPaths';
 
 const getImageSrc = (imagePath) => {
     if (!imagePath) return null;
@@ -434,7 +435,7 @@ export default function ConfirmationWorkflowForm() {
         try {
             setSaving(true);
             await api.patch(`/orders/${id}/confirmation-workflow`, payload);
-            navigate('/orders');
+            navigate(appPath('/orders'));
         } catch (error) {
             if (error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
@@ -489,14 +490,14 @@ export default function ConfirmationWorkflowForm() {
                     <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
                         <button
                             type="button"
-                            onClick={() => navigate('/orders/create')}
+                            onClick={() => navigate(appPath('/orders/create'))}
                             className="w-full md:w-auto rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-400 transition-colors"
                         >
                             Create Order
                         </button>
                         <button
                             type="button"
-                            onClick={() => navigate('/orders')}
+                            onClick={() => navigate(appPath('/orders'))}
                             className="w-full md:w-auto rounded-xl border border-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors"
                         >
                             Back to Orders
@@ -1037,7 +1038,7 @@ export default function ConfirmationWorkflowForm() {
                 <div className="flex flex-col md:flex-row gap-3 justify-between items-center">
                     <button
                         type="button"
-                        onClick={() => navigate('/orders')}
+                        onClick={() => navigate(appPath('/orders'))}
                         className="w-full md:w-auto rounded-2xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                     >
                         Cancel

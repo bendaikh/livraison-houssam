@@ -1,10 +1,26 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Tajawal:wght@400;500;700&display=swap');
 
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-arabic: 'Cairo', 'Tajawal', 'Amiri', system-ui, -apple-system, sans-serif;
 }
 
 @layer base {
+    /* RTL Support */
+    [dir="rtl"] {
+        direction: rtl;
+    }
+
+    [dir="ltr"] {
+        direction: ltr;
+    }
+
+    /* Arabic Font */
+    .font-arabic {
+        font-family: var(--font-arabic);
+    }
+
     html.dark {
         color-scheme: dark;
     }

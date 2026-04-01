@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { CheckCircle, Clock, Package, Truck, XCircle, Wallet, CalendarDays, PhoneCall } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
+import { appPath } from '../../constants/appPaths';
 
 export default function ConfirmationAgentDashboard({ stats, period, setPeriod }) {
     const { formatCurrency } = useSettings();
@@ -104,7 +105,7 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
                             <h3 className="text-lg font-semibold text-slate-800">Today&apos;s Follow-Ups</h3>
                             <p className="text-sm text-slate-500 mt-1">Orders due today or overdue.</p>
                         </div>
-                        <Link to="/orders?todo=today" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
+                        <Link to={`${appPath('/orders')}?todo=today`} className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
                             Open orders
                         </Link>
                     </div>
@@ -127,7 +128,7 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
                                 </div>
                                 <div className="mt-3 flex items-center justify-between text-sm">
                                     <span className="text-slate-500">{order.city || order.client?.city || '-'}</span>
-                                    <Link to={`/orders/${order.id}/edit`} className="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-800">
+                                    <Link to={appPath(`/orders/${order.id}/edit`)} className="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-800">
                                         <PhoneCall size={14} />
                                         Open workflow
                                     </Link>

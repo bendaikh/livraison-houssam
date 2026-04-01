@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +10,7 @@ import DeliveryPersonDashboard from './DeliveryPersonDashboard';
 import { isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
 
 export default function Dashboard() {
+    const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const [period, setPeriod] = useState('daily');
@@ -47,7 +49,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-center h-96">
                 <div className="flex flex-col items-center space-y-4">
                     <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    <p className="text-slate-500 font-medium">Loading dashboard...</p>
+                    <p className="text-slate-500 font-medium">{t('admin.common.loading')}</p>
                 </div>
             </div>
         );
@@ -56,7 +58,7 @@ export default function Dashboard() {
     if (error) {
         return (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700">
-                <h1 className="text-xl font-semibold text-rose-900">Dashboard unavailable</h1>
+                <h1 className="text-xl font-semibold text-rose-900">{t('admin.dashboard.unavailable')}</h1>
                 <p className="mt-2 text-sm">
                     {error}
                 </p>
@@ -103,60 +105,60 @@ export default function Dashboard() {
     const statCards = isVendor
         ? [
             {
-                title: 'Total Revenue',
+                title: t('admin.dashboard.totalRevenue'),
                 value: formatCurrency(displayRevenue),
                 suffix: '',
                 icon: DollarSign,
                 gradient: 'from-emerald-500 to-teal-600',
                 bgGradient: 'from-emerald-50 to-teal-50',
                 iconBg: 'bg-emerald-500',
-                change: `${displayOrdersStats?.delivered || 0} delivered`,
+                change: `${displayOrdersStats?.delivered || 0} ${t('admin.menu.delivered').toLowerCase()}`,
                 changeType: 'neutral'
             },
             {
-                title: 'Total Orders',
+                title: t('admin.dashboard.totalOrders'),
                 value: displayOrdersStats?.total || 0,
                 icon: ShoppingCart,
                 gradient: 'from-blue-500 to-indigo-600',
                 bgGradient: 'from-blue-50 to-indigo-50',
                 iconBg: 'bg-blue-500',
-                change: 'Seller scoped',
+                change: t('admin.dashboard.sellerScoped'),
                 changeType: 'neutral'
             },
             {
-                title: 'Total Profit',
+                title: t('admin.dashboard.totalProfit'),
                 value: formatCurrency(displayProfit),
                 icon: TrendingUp,
                 gradient: 'from-violet-500 to-fuchsia-600',
                 bgGradient: 'from-violet-50 to-fuchsia-50',
                 iconBg: 'bg-violet-500',
-                change: 'Selling price minus company cost',
+                change: t('admin.dashboard.profitDesc'),
                 changeType: 'positive'
             },
             {
-                title: 'Pending Orders',
+                title: t('admin.dashboard.pendingOrders'),
                 value: displayOrdersStats?.pending || 0,
                 icon: Clock,
                 gradient: 'from-amber-500 to-orange-600',
                 bgGradient: 'from-amber-50 to-orange-50',
                 iconBg: 'bg-amber-500',
-                change: 'Seller scoped',
+                change: t('admin.dashboard.sellerScoped'),
                 changeType: 'neutral'
             },
             {
-                title: 'Delivered Orders',
+                title: t('admin.dashboard.deliveredOrders'),
                 value: displayOrdersStats?.delivered || 0,
                 icon: Package,
                 gradient: 'from-cyan-500 to-sky-600',
                 bgGradient: 'from-cyan-50 to-sky-50',
                 iconBg: 'bg-cyan-500',
-                change: 'Seller scoped',
+                change: t('admin.dashboard.sellerScoped'),
                 changeType: 'neutral'
             },
         ]
         : [
             {
-                title: 'Total Revenue',
+                title: t('admin.dashboard.totalRevenue'),
                 value: formatCurrency(displayRevenue),
                 suffix: '',
                 icon: DollarSign,
@@ -167,7 +169,7 @@ export default function Dashboard() {
                 changeType: 'positive'
             },
             {
-                title: 'Total Orders',
+                title: t('admin.dashboard.totalOrders'),
                 value: displayOrdersStats?.total || 0,
                 icon: ShoppingCart,
                 gradient: 'from-blue-500 to-indigo-600',
@@ -177,43 +179,43 @@ export default function Dashboard() {
                 changeType: 'positive'
             },
             {
-                title: 'Pending Orders',
+                title: t('admin.dashboard.pendingOrders'),
                 value: displayOrdersStats?.pending || 0,
                 icon: Clock,
                 gradient: 'from-amber-500 to-orange-600',
                 bgGradient: 'from-amber-50 to-orange-50',
                 iconBg: 'bg-amber-500',
-                change: '5 new',
+                change: t('admin.dashboard.newOrders'),
                 changeType: 'neutral'
             },
             {
-                title: 'Confirmation Rate',
+                title: t('admin.dashboard.confirmationRate'),
                 value: formatRate(stats?.orders?.confirmation_rate ?? 0),
                 icon: CheckCircle,
                 gradient: 'from-cyan-500 to-sky-600',
                 bgGradient: 'from-cyan-50 to-sky-50',
                 iconBg: 'bg-cyan-500',
-                change: 'Tracked',
+                change: t('admin.dashboard.tracked'),
                 changeType: 'neutral'
             },
             {
-                title: 'Delivery Rate',
+                title: t('admin.dashboard.deliveryRate'),
                 value: formatRate(stats?.orders?.delivery_rate ?? 0),
                 icon: Package,
                 gradient: 'from-emerald-500 to-lime-600',
                 bgGradient: 'from-emerald-50 to-lime-50',
                 iconBg: 'bg-emerald-500',
-                change: 'Tracked',
+                change: t('admin.dashboard.tracked'),
                 changeType: 'neutral'
             },
             {
-                title: 'Low Stock Items',
+                title: t('admin.dashboard.lowStockItems'),
                 value: stats?.low_stock_products?.length || 0,
                 icon: AlertTriangle,
                 gradient: 'from-rose-500 to-pink-600',
                 bgGradient: 'from-rose-50 to-pink-50',
                 iconBg: 'bg-rose-500',
-                change: 'Needs attention',
+                change: t('admin.dashboard.needsAttention'),
                 changeType: 'negative'
             }
         ];
@@ -239,8 +241,8 @@ export default function Dashboard() {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-                    <p className="text-slate-500 mt-1">Welcome back! Here's what's happening today.</p>
+                    <h1 className="text-3xl font-bold text-slate-800">{t('admin.menu.dashboard')}</h1>
+                    <p className="text-slate-500 mt-1">{t('admin.dashboard.welcome')}, {user?.name}!</p>
                 </div>
                 <div className="flex items-center bg-white rounded-2xl p-1.5 shadow-sm border border-slate-200/50">
                     {['daily', 'monthly', 'yearly'].map((p) => (

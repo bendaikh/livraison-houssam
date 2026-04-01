@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { isAdminRole, isDeliveryPersonRole } from '../../utils/roles';
@@ -463,7 +464,7 @@ export default function OrderDetail() {
             <div className="text-center py-12">
                 <p className="text-gray-500">Order not found</p>
                 <button
-                    onClick={() => navigate('/orders')}
+                    onClick={() => navigate(appPath('/orders'))}
                     className="mt-4 text-blue-600 hover:text-blue-800"
                 >
                     Back to Orders
@@ -478,7 +479,7 @@ export default function OrderDetail() {
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <button
-                        onClick={() => navigate('/orders')}
+                        onClick={() => navigate(appPath('/orders'))}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                         <ArrowLeft size={24} />
@@ -496,7 +497,7 @@ export default function OrderDetail() {
                 <div className="flex items-center space-x-3">
                     {!isDeliveryPersonUser && (
                         <Link
-                            to={`/orders/${order.id}/edit`}
+                            to={appPath(`/orders/${order.id}/edit`)}
                             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                             <Edit size={18} />

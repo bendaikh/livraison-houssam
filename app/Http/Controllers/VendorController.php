@@ -210,4 +210,35 @@ class VendorController extends Controller
             'orders' => $orders,
         ]);
     }
+
+    public function register(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:vendors,email|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
+            'phone' => 'required|string',
+            'company_name' => 'required|string',
+            'address' => 'required|string',
+            'city' => 'required|string',
+        ]);
+
+        $vendor = Vendor::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => bcrypt($validated['password']),
+            'phone' => $validated['phone'],
+            'company_name' => $validated['company_name'],
+            'address' => $validated['address'],
+            'city' => $validated['city'],
+            'is_active' => false,
+            'commission_rate' => 10,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Registration successful. Please wait for admin approval.',
+            'vendor' => $vendor
+        ], 201);
+    }
 }
