@@ -3,8 +3,8 @@
     "hero": {
       "title": "Plateforme E-commerce Leader",
       "subtitle": "Commencez votre commerce en ligne aujourd'hui et réalisez vos profits",
-      "description": "Rejoignez des milliers de vendeurs prospères et présentez vos produits à des millions de clients",
-      "startNow": "Commencer Maintenant",
+      "description": "Rejoignez des milliers de vendeurs prospères et présentez vos produits à des millions de clients. Lancez votre projet aujourd'hui sans capital et commencez à réaliser des profits dès la première commande. Rejoignez une communauté croissante de vendeurs prospères, choisissez vos produits facilement, commercialisez-les via les réseaux sociaux, et nous nous occupons du reste : confirmation des commandes, emballage et livraison jusqu'à la porte du client",
+      "startNow": "Commencer Gratuitement Maintenant 🚀",
       "learnMore": "En Savoir Plus"
     },
     "nav": {
@@ -16,23 +16,23 @@
       "signup": "S'inscrire comme Vendeur"
     },
     "features": {
-      "title": "Pourquoi Nous Choisir?",
-      "subtitle": "Nous vous offrons les meilleures solutions pour le succès de votre commerce en ligne",
+      "title": "Pourquoi Sommes-nous Votre Meilleur Choix pour Réussir?",
+      "subtitle": "Nous vous fournissons tout ce dont vous avez besoin pour construire un commerce en ligne prospère et réaliser des profits continus",
       "feature1": {
         "title": "Facilité d'Utilisation",
-        "description": "Une plateforme simple et facile à utiliser pour gérer votre boutique"
+        "description": "Une plateforme conçue pour être simple et fluide, vous permettant de gérer votre activité facilement sans expérience préalable"
       },
       "feature2": {
-        "title": "Support Technique Continu",
-        "description": "Une équipe de support disponible 24/7 pour vous aider"
+        "title": "Support Continu",
+        "description": "Une équipe de support professionnelle présente pour vous accompagner à chaque étape et répondre rapidement à toutes vos questions"
       },
       "feature3": {
-        "title": "Livraison Rapide",
-        "description": "Service de livraison rapide et fiable dans tout le Maroc"
+        "title": "Livraison Rapide et Fiable",
+        "description": "Nous garantissons la livraison de vos commandes rapidement et efficacement dans différentes villes du Maroc, avec une expérience de livraison professionnelle"
       },
       "feature4": {
         "title": "Paiement Sécurisé",
-        "description": "Système de paiement sécurisé et garanti pour toutes les transactions"
+        "description": "Un système de transactions fiable qui garantit la protection de votre argent et la facilité des opérations de retrait en toute sécurité"
       }
     },
     "products": {
@@ -50,42 +50,42 @@
       "cities": "Villes Marocaines"
     },
     "cta": {
-      "title": "Êtes-vous Prêt à Commencer Votre Voyage?",
-      "description": "Rejoignez-nous maintenant et commencez à vendre vos produits à des milliers de clients",
+      "title": "Êtes-vous Prêt à Commencer Votre Succès?",
+      "description": "Inscrivez-vous aujourd'hui et commencez à vendre vos produits, atteignez des milliers de clients et réalisez de vrais profits. Tout ce dont vous avez besoin pour vous lancer est à votre portée, commencez maintenant et faites de votre première commande une étape vers un revenu continu",
       "button": "Inscrivez-vous comme Vendeur Maintenant"
     },
     "howItWorks": {
-      "title": "Comment Fonctionne la Plateforme",
-      "subtitle": "Étapes simples pour réaliser des profits",
-      "description": "Seulement 6 étapes pour commencer avec nous et réaliser vos prochains profits",
+      "title": "Comment Commencer Votre Voyage avec Nous?",
+      "subtitle": "Étapes simples qui vous séparent de la réalisation de vos premiers profits",
+      "description": "En seulement 6 étapes faciles, vous pouvez lancer votre activité commerciale, choisir des produits, commencer le marketing et réaliser de vrais profits sans complications",
       "step1": {
         "title": "Inscription Gratuite",
-        "description": "Créez votre compte gratuitement avec des informations simples"
+        "description": "Créez votre compte en quelques minutes et commencez votre voyage sans frais ni complications"
       },
       "step2": {
-        "title": "Ajout des Produits",
-        "description": "Ajoutez vos produits, leurs images et descriptions sur la plateforme"
+        "title": "Sélection des Produits",
+        "description": "Parcourez une bibliothèque de produits prêts à vendre et choisissez ce qui convient à votre audience facilement"
       },
       "step3": {
-        "title": "Promotion et Vente",
-        "description": "Partagez les liens de vos produits et commencez à collecter des commandes"
+        "title": "Promouvoir et Commencer à Vendre",
+        "description": "Partagez les liens de vos produits via les réseaux sociaux et commencez à recevoir des commandes instantanément"
       },
       "step4": {
-        "title": "Suivi des Ventes",
-        "description": "Suivez les performances des ventes, les clients et les revenus"
+        "title": "Nous nous Occupons du Reste",
+        "description": "Nous confirmons les commandes, les préparons et les livrons à vos clients avec professionnalisme"
       },
       "step5": {
-        "title": "Confirmation des Commandes",
-        "description": "Nous confirmons les commandes par appel, suivi et livraison"
+        "title": "Suivre les Performances",
+        "description": "Surveillez vos ventes, profits et commandes depuis un tableau de bord simple et clair"
       },
       "step6": {
-        "title": "Retrait des Profits",
-        "description": "Retirez vos profits chaque semaine avec des méthodes de paiement faciles et sécurisées"
+        "title": "Retirer vos Profits",
+        "description": "Recevez vos profits hebdomadairement via des méthodes de paiement sécurisées et rapides"
       }
     },
     "categories": {
-      "title": "Parcourir les Produits par Catégories en Vedette",
-      "subtitle": "Naviguez entre différentes catégories dans toutes les classifications",
+      "title": "Parcourez Nos Produits par Catégories les Plus Demandées",
+      "subtitle": "Découvrez une variété de produits tendances et choisissez ce qui convient à votre audience facilement et rapidement. Nous vous proposons des catégories soigneusement sélectionnées pour vous aider à trouver des produits rentables et prêts à vendre en quelques minutes",
       "electronics": "Électronique",
       "fashion": "Mode et Accessoires",
       "home": "Maison et Nettoyage",
@@ -94,8 +94,8 @@
       "food": "Éducation et Livres"
     },
     "integrations": {
-      "title": "Intégration Complète avec les Plateformes Mondiales Célèbres",
-      "subtitle": "Intégration fluide avec toutes les plateformes e-commerce et outils marketing",
+      "title": "Intégration Intelligente avec les Plateformes Mondiales les Plus Puissantes",
+      "subtitle": "Connectez facilement votre entreprise aux plateformes e-commerce et outils marketing les plus célèbres pour obtenir les meilleurs résultats. Profitez d'une intégration fluide et rapide qui vous permet de gérer vos opérations et de commercialiser vos produits avec une grande efficacité sans aucune complication",
       "customApi": {
         "title": "API Personnalisée",
         "description": "Intégrez des logiciels personnalisés pour votre propre entreprise"
@@ -148,19 +148,37 @@
     "signup": {
       "title": "S'inscrire comme Vendeur",
       "subtitle": "Rejoignez notre plateforme et commencez à vendre vos produits",
+      "step1Title": "Informations de Base",
+      "step2Title": "Détails de la Boutique",
       "name": "Nom Complet",
       "email": "Email",
       "phone": "Numéro de Téléphone",
       "password": "Mot de Passe",
       "confirmPassword": "Confirmer le Mot de Passe",
-      "companyName": "Nom de la Société",
       "address": "Adresse",
       "city": "Ville",
+      "storeName": "Nom de la Boutique",
+      "storeNamePlaceholder": "Entrez le nom de votre boutique",
+      "sellerLevel": "Niveau du Vendeur",
+      "selectLevel": "Choisissez votre niveau",
+      "levelBeginner": "Débutant",
+      "levelIntermediate": "Intermédiaire",
+      "levelAdvanced": "Avancé",
+      "bankRIB": "Numéro de Compte Bancaire (RIB)",
+      "bankRIBPlaceholder": "Entrez votre numéro RIB bancaire",
       "agree": "J'accepte les",
       "terms": "Conditions Générales",
       "submit": "Créer un Compte",
+      "nextStep": "Étape Suivante",
+      "previousStep": "Précédent",
+      "submitting": "Envoi en cours...",
       "haveAccount": "Vous avez déjà un compte?",
-      "loginLink": "Se Connecter"
+      "loginLink": "Se Connecter",
+      "fillAllFields": "Veuillez remplir tous les champs obligatoires",
+      "passwordMismatch": "Les mots de passe ne correspondent pas",
+      "agreeToTerms": "Veuillez accepter les conditions générales",
+      "successMessage": "Inscription réussie ! Veuillez attendre l'approbation de l'administrateur.",
+      "errorMessage": "L'inscription a échoué. Veuillez réessayer."
     }
   },
   "admin": {

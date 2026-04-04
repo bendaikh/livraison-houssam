@@ -3,8 +3,8 @@
     "hero": {
       "title": "Leading E-commerce Platform",
       "subtitle": "Start your online business today and achieve your profits",
-      "description": "Join thousands of successful sellers and showcase your products to millions of customers",
-      "startNow": "Start Now",
+      "description": "Join thousands of successful sellers and showcase your products to millions of customers. Start your project today without capital and begin generating profits from your first order. Join a growing community of successful sellers, choose your products easily, market them through social media, and we take care of the rest: order confirmation, packaging, and delivery right to the customer's door",
+      "startNow": "Start Now For Free 🚀",
       "learnMore": "Learn More"
     },
     "nav": {
@@ -16,23 +16,23 @@
       "signup": "Sign Up as Seller"
     },
     "features": {
-      "title": "Why Choose Us?",
-      "subtitle": "We offer you the best solutions for your e-commerce success",
+      "title": "Why Are We Your Best Choice for Success?",
+      "subtitle": "We provide you with everything you need to build a successful e-commerce business and achieve continuous profits",
       "feature1": {
         "title": "Easy to Use",
-        "description": "Simple and easy-to-use platform to manage your store"
+        "description": "A platform designed to be simple and seamless, enabling you to manage your business easily without prior experience"
       },
       "feature2": {
-        "title": "24/7 Support",
-        "description": "Support team available around the clock to help you"
+        "title": "Continuous Support",
+        "description": "A professional support team available to accompany you every step and answer all your questions quickly"
       },
       "feature3": {
-        "title": "Fast Delivery",
-        "description": "Fast and reliable delivery service across Morocco"
+        "title": "Fast and Reliable Delivery",
+        "description": "We guarantee the delivery of your orders quickly and efficiently to various cities in Morocco, with a professional delivery experience"
       },
       "feature4": {
         "title": "Secure Payment",
-        "description": "Secure and guaranteed payment system for all transactions"
+        "description": "A reliable transaction system that ensures the protection of your money and smooth withdrawal operations with complete security"
       }
     },
     "products": {
@@ -50,42 +50,42 @@
       "cities": "Moroccan Cities"
     },
     "cta": {
-      "title": "Are You Ready to Start Your Journey?",
-      "description": "Join us now and start selling your products to thousands of customers",
+      "title": "Are You Ready to Start Your Success?",
+      "description": "Join today and start selling your products, reach thousands of customers, and achieve real profits. Everything you need to get started is at your fingertips, start now and make your first order a step towards continuous income",
       "button": "Sign Up as Seller Now"
     },
     "howItWorks": {
-      "title": "How the Platform Works",
-      "subtitle": "Simple steps to achieve profits",
-      "description": "Only 6 steps to get started with us and achieve your next profits",
+      "title": "How to Start Your Journey with Us?",
+      "subtitle": "Simple steps that separate you from achieving your first profits",
+      "description": "In just 6 easy steps, you can launch your business, select products, start marketing, and achieve real profits without complications",
       "step1": {
         "title": "Free Registration",
-        "description": "Create your account for free with simple information"
+        "description": "Create your account in minutes and start your journey without any fees or complications"
       },
       "step2": {
-        "title": "Add Products",
-        "description": "Add your products, images and descriptions to the platform"
+        "title": "Product Selection",
+        "description": "Browse a library of ready-to-sell products and choose what suits your audience easily"
       },
       "step3": {
-        "title": "Promote and Sell",
-        "description": "Share your product links and start collecting orders"
+        "title": "Promote and Start Selling",
+        "description": "Share your product links via social media and start receiving orders instantly"
       },
       "step4": {
-        "title": "Track Sales",
-        "description": "Monitor sales performance, customers, and revenue"
+        "title": "We Take Care of the Rest",
+        "description": "We confirm orders, prepare them, and deliver them to your customers with professionalism"
       },
       "step5": {
-        "title": "Confirm Orders",
-        "description": "We confirm orders through calls, follow-up and delivery"
+        "title": "Track Performance",
+        "description": "Monitor your sales, profits, and orders from a simple and clear dashboard"
       },
       "step6": {
-        "title": "Withdraw Profits",
-        "description": "Withdraw your profits weekly with easy and secure payment methods"
+        "title": "Withdraw Your Profits",
+        "description": "Receive your profits weekly through secure and fast payment methods"
       }
     },
     "categories": {
-      "title": "Browse Products by Featured Categories",
-      "subtitle": "Navigate between different categories in all classifications",
+      "title": "Browse Our Products by Most Demanded Categories",
+      "subtitle": "Discover a variety of trending products and choose what suits your audience easily and quickly. We provide you with carefully selected categories to help you find profitable and ready-to-sell products in minutes",
       "electronics": "Electronics",
       "fashion": "Fashion & Accessories",
       "home": "Home & Cleaning",
@@ -94,8 +94,8 @@
       "food": "Education & Books"
     },
     "integrations": {
-      "title": "Complete Integration with Famous Global Platforms",
-      "subtitle": "Seamless integration with all e-commerce platforms and marketing tools",
+      "title": "Smart Integration with the World's Most Powerful Platforms",
+      "subtitle": "Easily connect your business with the most famous e-commerce platforms and marketing tools to achieve the best results. Benefit from seamless and fast integration that allows you to manage your operations and market your products with high efficiency without any complications",
       "customApi": {
         "title": "Custom API",
         "description": "Integrate custom software for your own business"
@@ -148,19 +148,37 @@
     "signup": {
       "title": "Sign Up as Seller",
       "subtitle": "Join our platform and start selling your products",
+      "step1Title": "Basic Information",
+      "step2Title": "Store Details",
       "name": "Full Name",
       "email": "Email",
       "phone": "Phone Number",
       "password": "Password",
       "confirmPassword": "Confirm Password",
-      "companyName": "Company Name",
       "address": "Address",
       "city": "City",
+      "storeName": "Store Name",
+      "storeNamePlaceholder": "Enter your store name",
+      "sellerLevel": "Seller Level",
+      "selectLevel": "Select your level",
+      "levelBeginner": "Beginner",
+      "levelIntermediate": "Intermediate",
+      "levelAdvanced": "Advanced",
+      "bankRIB": "Bank Account Number (RIB)",
+      "bankRIBPlaceholder": "Enter your bank RIB number",
       "agree": "I agree to the",
       "terms": "Terms & Conditions",
       "submit": "Create Account",
+      "nextStep": "Next Step",
+      "previousStep": "Previous",
+      "submitting": "Submitting...",
       "haveAccount": "Already have an account?",
-      "loginLink": "Login"
+      "loginLink": "Login",
+      "fillAllFields": "Please fill in all required fields",
+      "passwordMismatch": "Passwords do not match",
+      "agreeToTerms": "Please agree to the terms and conditions",
+      "successMessage": "Registration successful! Please wait for admin approval.",
+      "errorMessage": "Registration failed. Please try again."
     }
   },
   "admin": {

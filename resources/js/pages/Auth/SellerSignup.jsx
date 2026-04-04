@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Globe, ArrowLeft } from 'lucide-react';
+import { Globe, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
 import axios from 'axios';
 
 export default function SellerSignup() {
@@ -10,16 +10,21 @@ export default function SellerSignup() {
     const isRTL = i18n.language === 'ar';
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState({
+        // Step 1 fields
         name: '',
         email: '',
         phone: '',
         password: '',
         password_confirmation: '',
-        company_name: '',
         address: '',
         city: '',
-        agree_terms: false
+        agree_terms: false,
+        // Step 2 fields
+        store_name: '',
+        seller_level: '',
+        bank_rib: ''
     });
 
     const changeLanguage = (lng) => {
@@ -34,17 +39,49 @@ export default function SellerSignup() {
         }));
     };
 
+    const validateStep1 = () => {
+        if (!formData.name || !formData.email || !formData.phone || !formData.password || !formData.password_confirmation) {
+            setError(t('auth.signup.fillAllFields'));
+            return false;
+        }
+
+        if (formData.password !== formData.password_confirmation) {
+            setError(t('auth.signup.passwordMismatch'));
+            return false;
+        }
+
+        if (!formData.agree_terms) {
+            setError(t('auth.signup.agreeToTerms'));
+            return false;
+        }
+
+        return true;
+    };
+
+    const handleNextStep = () => {
+        setError('');
+        if (validateStep1()) {
+            setCurrentStep(2);
+        }
+    };
+
+    const handlePrevStep = () => {
+        setError('');
+        setCurrentStep(1);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
-        if (!formData.agree_terms) {
-            setError('Please agree to the terms and conditions');
+        if (currentStep === 1) {
+            handleNextStep();
             return;
         }
 
-        if (formData.password !== formData.password_confirmation) {
-            setError('Passwords do not match');
+        // Step 2 validation
+        if (!formData.store_name || !formData.seller_level || !formData.bank_rib) {
+            setError(t('auth.signup.fillAllFields'));
             return;
         }
 
@@ -57,17 +94,19 @@ export default function SellerSignup() {
                 phone: formData.phone,
                 password: formData.password,
                 password_confirmation: formData.password_confirmation,
-                company_name: formData.company_name,
                 address: formData.address,
-                city: formData.city
+                city: formData.city,
+                store_name: formData.store_name,
+                seller_level: formData.seller_level,
+                bank_rib: formData.bank_rib
             });
 
             if (response.data.success) {
-                alert('Registration successful! Please wait for admin approval.');
+                alert(t('auth.signup.successMessage'));
                 navigate('/login');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Registration failed. Please try again.');
+            setError(err.response?.data?.message || t('auth.signup.errorMessage'));
         } finally {
             setLoading(false);
         }
@@ -112,6 +151,29 @@ export default function SellerSignup() {
                             </p>
                         </div>
 
+                        {/* Step Indicator */}
+                        <div className="mb-8">
+                            <div className="flex items-center justify-center gap-4">
+                                <div className="flex items-center">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${currentStep >= 1 ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                        {currentStep > 1 ? <CheckCircle className="w-6 h-6" /> : '1'}
+                                    </div>
+                                    <span className={`ms-2 text-sm font-medium ${currentStep >= 1 ? 'text-teal-600' : 'text-gray-500'}`}>
+                                        {t('auth.signup.step1Title')}
+                                    </span>
+                                </div>
+                                <div className={`w-16 h-1 ${currentStep >= 2 ? 'bg-teal-500' : 'bg-gray-200'}`}></div>
+                                <div className="flex items-center">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${currentStep >= 2 ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                        2
+                                    </div>
+                                    <span className={`ms-2 text-sm font-medium ${currentStep >= 2 ? 'text-teal-600' : 'text-gray-500'}`}>
+                                        {t('auth.signup.step2Title')}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
                         {error && (
                             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
                                 {error}
@@ -119,150 +181,215 @@ export default function SellerSignup() {
                         )}
 
                         <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Name */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.name')}
-                                </label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    required
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
-                            </div>
+                            {/* Step 1: Basic Information */}
+                            {currentStep === 1 && (
+                                <>
+                                    {/* Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.name')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="name"
+                                            required
+                                            value={formData.name}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        />
+                                    </div>
 
-                            {/* Email */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.email')}
-                                </label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    required
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
-                            </div>
+                                    {/* Email */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.email')}
+                                        </label>
+                                        <input
+                                            type="email"
+                                            name="email"
+                                            required
+                                            value={formData.email}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        />
+                                    </div>
 
-                            {/* Phone */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.phone')}
-                                </label>
-                                <input
-                                    type="tel"
-                                    name="phone"
-                                    required
-                                    value={formData.phone}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                    placeholder="+212 6XX-XXXXXX"
-                                />
-                            </div>
+                                    {/* Phone */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.phone')}
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            name="phone"
+                                            required
+                                            value={formData.phone}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                            placeholder="+212 6XX-XXXXXX"
+                                        />
+                                    </div>
 
-                            {/* Company Name */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.companyName')}
-                                </label>
-                                <input
-                                    type="text"
-                                    name="company_name"
-                                    required
-                                    value={formData.company_name}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
-                            </div>
+                                    {/* Address */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.address')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="address"
+                                            required
+                                            value={formData.address}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        />
+                                    </div>
 
-                            {/* Address */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.address')}
-                                </label>
-                                <input
-                                    type="text"
-                                    name="address"
-                                    required
-                                    value={formData.address}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
-                            </div>
+                                    {/* City */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.city')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="city"
+                                            required
+                                            value={formData.city}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        />
+                                    </div>
 
-                            {/* City */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.city')}
-                                </label>
-                                <input
-                                    type="text"
-                                    name="city"
-                                    required
-                                    value={formData.city}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
-                            </div>
+                                    {/* Password */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.password')}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            name="password"
+                                            required
+                                            value={formData.password}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        />
+                                    </div>
 
-                            {/* Password */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.password')}
-                                </label>
-                                <input
-                                    type="password"
-                                    name="password"
-                                    required
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
-                            </div>
+                                    {/* Confirm Password */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.confirmPassword')}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            name="password_confirmation"
+                                            required
+                                            value={formData.password_confirmation}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        />
+                                    </div>
 
-                            {/* Confirm Password */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {t('auth.signup.confirmPassword')}
-                                </label>
-                                <input
-                                    type="password"
-                                    name="password_confirmation"
-                                    required
-                                    value={formData.password_confirmation}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                                />
-                            </div>
+                                    {/* Terms */}
+                                    <div className="flex items-start gap-3">
+                                        <input
+                                            type="checkbox"
+                                            name="agree_terms"
+                                            id="agree_terms"
+                                            checked={formData.agree_terms}
+                                            onChange={handleChange}
+                                            className="mt-1 w-5 h-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                                        />
+                                        <label htmlFor="agree_terms" className="text-sm text-gray-700">
+                                            {t('auth.signup.agree')} <a href="#" className="text-teal-600 hover:underline">{t('auth.signup.terms')}</a>
+                                        </label>
+                                    </div>
 
-                            {/* Terms */}
-                            <div className="flex items-start gap-3">
-                                <input
-                                    type="checkbox"
-                                    name="agree_terms"
-                                    id="agree_terms"
-                                    checked={formData.agree_terms}
-                                    onChange={handleChange}
-                                    className="mt-1 w-5 h-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
-                                />
-                                <label htmlFor="agree_terms" className="text-sm text-gray-700">
-                                    {t('auth.signup.agree')} <a href="#" className="text-teal-600 hover:underline">{t('auth.signup.terms')}</a>
-                                </label>
-                            </div>
+                                    {/* Next Button */}
+                                    <button
+                                        type="submit"
+                                        className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-4 rounded-lg font-semibold hover:shadow-xl transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                                    >
+                                        {t('auth.signup.nextStep')}
+                                        <ArrowRight className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`} />
+                                    </button>
+                                </>
+                            )}
 
-                            {/* Submit Button */}
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-4 rounded-lg font-semibold hover:shadow-xl transition transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {loading ? 'Loading...' : t('auth.signup.submit')}
-                            </button>
+                            {/* Step 2: Store & Business Details */}
+                            {currentStep === 2 && (
+                                <>
+                                    {/* Store Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.storeName')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="store_name"
+                                            required
+                                            value={formData.store_name}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                            placeholder={t('auth.signup.storeNamePlaceholder')}
+                                        />
+                                    </div>
+
+                                    {/* Seller Level */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.sellerLevel')}
+                                        </label>
+                                        <select
+                                            name="seller_level"
+                                            required
+                                            value={formData.seller_level}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                        >
+                                            <option value="">{t('auth.signup.selectLevel')}</option>
+                                            <option value="beginner">{t('auth.signup.levelBeginner')}</option>
+                                            <option value="intermediate">{t('auth.signup.levelIntermediate')}</option>
+                                            <option value="advanced">{t('auth.signup.levelAdvanced')}</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Bank RIB */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t('auth.signup.bankRIB')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="bank_rib"
+                                            required
+                                            value={formData.bank_rib}
+                                            onChange={handleChange}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                            placeholder={t('auth.signup.bankRIBPlaceholder')}
+                                        />
+                                    </div>
+
+                                    {/* Navigation Buttons */}
+                                    <div className="flex gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={handlePrevStep}
+                                            className="flex-1 border-2 border-teal-500 text-teal-600 py-4 rounded-lg font-semibold hover:bg-teal-50 transition flex items-center justify-center gap-2"
+                                        >
+                                            <ArrowLeft className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`} />
+                                            {t('auth.signup.previousStep')}
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={loading}
+                                            className="flex-1 bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-4 rounded-lg font-semibold hover:shadow-xl transition transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {loading ? t('auth.signup.submitting') : t('auth.signup.submit')}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </form>
 
                         <div className="mt-6 text-center">
