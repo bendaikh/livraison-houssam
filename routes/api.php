@@ -22,6 +22,7 @@ use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConfirmationAgentBillingController;
 use App\Http\Controllers\DeliveryPersonBillingController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -45,6 +46,52 @@ Route::post('/webhooks/bmdelivery/status-update', [WebhookController::class, 'ha
 Route::post('/webhooks/tawsilex/status-update', [WebhookController::class, 'handleTawsilexWebhook']);
 Route::post('/webhooks/test', [WebhookController::class, 'testWebhook']);
 
+// External API routes (authenticated with custom API keys)
+Route::middleware('auth.custom_api')->prefix('external')->group(function () {
+    // Orders - external API access
+    Route::post('/orders', [OrderController::class, 'store']);
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::patch('/orders/{order}', [OrderController::class, 'update']);
+    Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+    
+    // Products - external API access
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{product}', [ProductController::class, 'show']);
+    
+    // Clients - external API access
+    Route::get('/clients', [ClientController::class, 'index']);
+    Route::post('/clients', [ClientController::class, 'store']);
+    Route::get('/clients/{client}', [ClientController::class, 'show']);
+});
+
+// Test authentication endpoint
+Route::middleware('auth.custom_api')->get('/test-auth', function (Request $request) {
+    $integration = $request->attributes->get('api_integration');
+    
+    return response()->json([
+        'message' => 'Authentication successful!',
+        'integration' => [
+            'id' => $integration->id,
+            'name' => $integration->name,
+            'type' => $integration->type,
+            'provider' => $integration->provider,
+            'vendor_id' => $integration->vendor_id,
+        ],
+        'authenticated_user' => auth()->check() ? [
+            'id' => auth()->user()->id,
+            'name' => auth()->user()->name,
+            'email' => auth()->user()->email,
+            'role' => auth()->user()->role->name ?? null,
+        ] : null,
+        'headers_received' => [
+            'Authorization' => $request->header('Authorization') ? 'Bearer capi_***' : 'Not provided',
+            'Content-Type' => $request->header('Content-Type'),
+            'Accept' => $request->header('Accept'),
+        ],
+    ]);
+});
+
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     // Auth routes
@@ -60,31 +107,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Categories
     Route::apiResource('categories', CategoryController::class);
-
-    // Orders
-    Route::get('/orders/delivery-companies/available', [OrderController::class, 'getAvailableDeliveryCompanies']);
-    Route::get('/orders/delivery-companies/{integration}/cities', [OrderController::class, 'getDeliveryCities']);
-    Route::apiResource('orders', OrderController::class);
-    Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
-    Route::patch('/orders/{order}/delivery-workflow', [OrderController::class, 'updateDeliveryWorkflow']);
-    Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);
-    Route::post('/orders/{order}/assign-to-me', [OrderController::class, 'assignToMe']);
-    Route::patch('/orders/{order}/confirmation-workflow', [OrderController::class, 'updateConfirmationWorkflow']);
-    Route::patch('/orders/{order}/confirmation-assignment', [OrderController::class, 'updateConfirmationAssignment']);
-    Route::post('/orders/{order}/sync-delivery-status', [OrderController::class, 'syncDeliveryStatus']);
-
-    // Unified billing
-    Route::get('/billing', [BillingController::class, 'index']);
-    Route::post('/billing/generate', [BillingController::class, 'generate']);
-    Route::patch('/billing/{role}/{billingId}/mark-paid', [BillingController::class, 'markPaid']);
-
-    // Confirmation billing
-    Route::get('/confirmation-billings', [ConfirmationAgentBillingController::class, 'index']);
-    Route::post('/confirmation-billings/generate', [ConfirmationAgentBillingController::class, 'generate']);
-    Route::patch('/confirmation-billings/{confirmationAgentBilling}/mark-paid', [ConfirmationAgentBillingController::class, 'markPaid']);
-    Route::get('/delivery-billings', [DeliveryPersonBillingController::class, 'index']);
-    Route::post('/delivery-billings/generate', [DeliveryPersonBillingController::class, 'generate']);
-    Route::patch('/delivery-billings/{deliveryPersonBilling}/mark-paid', [DeliveryPersonBillingController::class, 'markPaid']);
 
     // Clients
     Route::apiResource('clients', ClientController::class);
@@ -164,4 +186,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
+});
+
+// Orders - accessible via both Sanctum and Custom API authentication
+Route::middleware(['auth.api_or_sanctum'])->group(function () {
+    Route::get('/orders/delivery-companies/available', [OrderController::class, 'getAvailableDeliveryCompanies']);
+    Route::get('/orders/delivery-companies/{integration}/cities', [OrderController::class, 'getDeliveryCities']);
+    Route::apiResource('orders', OrderController::class);
+    Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+    Route::patch('/orders/{order}/delivery-workflow', [OrderController::class, 'updateDeliveryWorkflow']);
+    Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);
+    Route::post('/orders/{order}/assign-to-me', [OrderController::class, 'assignToMe']);
+    Route::patch('/orders/{order}/confirmation-workflow', [OrderController::class, 'updateConfirmationWorkflow']);
+    Route::patch('/orders/{order}/confirmation-assignment', [OrderController::class, 'updateConfirmationAssignment']);
+    Route::post('/orders/{order}/sync-delivery-status', [OrderController::class, 'syncDeliveryStatus']);
+
+    // Unified billing
+    Route::get('/billing', [BillingController::class, 'index']);
+    Route::post('/billing/generate', [BillingController::class, 'generate']);
+    Route::patch('/billing/{role}/{billingId}/mark-paid', [BillingController::class, 'markPaid']);
+
+    // Confirmation billing
+    Route::get('/confirmation-billings', [ConfirmationAgentBillingController::class, 'index']);
+    Route::post('/confirmation-billings/generate', [ConfirmationAgentBillingController::class, 'generate']);
+    Route::patch('/confirmation-billings/{confirmationAgentBilling}/mark-paid', [ConfirmationAgentBillingController::class, 'markPaid']);
+    Route::get('/delivery-billings', [DeliveryPersonBillingController::class, 'index']);
+    Route::post('/delivery-billings/generate', [DeliveryPersonBillingController::class, 'generate']);
+    Route::patch('/delivery-billings/{deliveryPersonBilling}/mark-paid', [DeliveryPersonBillingController::class, 'markPaid']);
 });

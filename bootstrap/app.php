@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'permission' => \App\Http\Middleware\CheckPermission::class,
+            'auth.custom_api' => \App\Http\Middleware\AuthenticateCustomApi::class,
+            'auth.sanctum_or_custom_api' => \App\Http\Middleware\AuthenticateSanctumOrCustomApi::class,
+            'optional.custom_api' => \App\Http\Middleware\OptionalCustomApiAuth::class,
+            'auth.api_or_sanctum' => \App\Http\Middleware\AuthenticateApiOrSanctum::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

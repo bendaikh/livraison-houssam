@@ -150,6 +150,18 @@ class OrderController extends Controller
 
     public function store(Request $request)
     {
+        // Debug: Log incoming request data
+        \Log::info('Order creation request received', [
+            'all_data' => $request->all(),
+            'has_client_name' => $request->has('client_name'),
+            'has_client_phone' => $request->has('client_phone'),
+            'has_source' => $request->has('source'),
+            'has_items' => $request->has('items'),
+            'source_value' => $request->input('source'),
+            'auth_method' => $request->attributes->get('auth_method'),
+            'user_id' => $request->user()?->id,
+        ]);
+        
         $this->normalizeLegacyItemProductKeys($request);
 
         if ($request->user()?->isDeliveryPerson()) {
@@ -170,7 +182,9 @@ class OrderController extends Controller
             'status' => 'nullable|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.product_name' => 'nullable|string|max:255',
+            'items.*.sku' => 'nullable|string|max:255',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric|min:0',
             'items.*.is_upsell' => 'nullable|boolean',
@@ -197,6 +211,10 @@ class OrderController extends Controller
             $validated['confirmation_agent_id'] = $request->user()->id;
         }
         $validated['created_by_user_id'] = $request->user()?->id;
+        
+        // Resolve product IDs for items that don't have product_id but have product_name or sku
+        $validated['items'] = $this->resolveProductsForItems($validated['items'] ?? []);
+        
         $this->ensureProductsAllowedForSeller($validated['items'] ?? [], $validated['vendor_id'] ?? null);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated);
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated);
@@ -1500,4 +1518,65 @@ class OrderController extends Controller
         return in_array($roleSlug, ['admin', 'superadmin'], true)
             && in_array($source, ['manual', 'marketplace'], true);
     }
+
+    /**
+     * Resolve product IDs for items that don't have product_id but have product_name or sku.
+     * This allows external apps to send product info without knowing internal product IDs.
+     */
+    private function resolveProductsForItems(array $items): array
+    {
+        return array_map(function ($item) {
+            // If product_id already exists, no need to resolve
+            if (!empty($item['product_id'])) {
+                return $item;
+            }
+
+            // Try to find product by SKU first (most specific)
+            if (!empty($item['sku'])) {
+                $product = Product::where('sku', $item['sku'])->first();
+                if ($product) {
+                    $item['product_id'] = $product->id;
+                    // Store original product_name if provided for reference
+                    if (empty($item['product_name'])) {
+                        $item['product_name'] = $product->name;
+                    }
+                    return $item;
+                }
+            }
+
+            // Try to find product by name
+            if (!empty($item['product_name'])) {
+                $product = Product::where('name', 'LIKE', '%' . $item['product_name'] . '%')->first();
+                if ($product) {
+                    $item['product_id'] = $product->id;
+                    return $item;
+                }
+            }
+
+            // If we still don't have a product_id, create/use a generic "Unknown Product"
+            if (empty($item['product_id'])) {
+                $unknownProduct = Product::firstOrCreate(
+                    ['sku' => 'UNKNOWN'],
+                    [
+                        'name' => 'Unknown Product (External)',
+                        'sku' => 'UNKNOWN',
+                        'price' => 0,
+                        'company_price' => 0,
+                        'vendor_price' => 0,
+                        'stock_quantity' => 999999,
+                        'is_active' => true,
+                    ]
+                );
+                $item['product_id'] = $unknownProduct->id;
+                
+                // Store the original product name in product_name field
+                if (empty($item['product_name'])) {
+                    $item['product_name'] = 'Unknown Product';
+                }
+            }
+
+            return $item;
+        }, $items);
+    }
 }
+
