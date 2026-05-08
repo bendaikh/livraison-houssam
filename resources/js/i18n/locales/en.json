@@ -178,7 +178,21 @@
       "passwordMismatch": "Passwords do not match",
       "agreeToTerms": "Please agree to the terms and conditions",
       "successMessage": "Registration successful! Please wait for admin approval.",
-      "errorMessage": "Registration failed. Please try again."
+      "errorMessage": "Registration failed. Please try again.",
+      "successTitle": "Registration Successful!",
+      "pendingApproval": "Your seller account has been created successfully.",
+      "awaitingApproval": "Awaiting Admin Approval",
+      "approvalMessage": "Our team will review your application and approve your account within 24-48 hours. You will receive an email notification once your account is activated.",
+      "checkEmail": "Check Your Email",
+      "emailSentTo": "A confirmation email has been sent to:",
+      "needHelp": "Need Help?",
+      "contactSupport": "If you have any questions or need assistance, please contact our support team.",
+      "nextSteps": "What happens next?",
+      "step1Review": "Our admin team will review your application and verify your information.",
+      "step2Approval": "Once approved, you will receive an email notification with login instructions.",
+      "step3Login": "You can then log in and start managing your products and orders.",
+      "returnHome": "Return to Home",
+      "goToLogin": "Go to Login"
     }
   },
   "admin": {

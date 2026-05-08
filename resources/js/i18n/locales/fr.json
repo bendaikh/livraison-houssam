@@ -178,7 +178,21 @@
       "passwordMismatch": "Les mots de passe ne correspondent pas",
       "agreeToTerms": "Veuillez accepter les conditions générales",
       "successMessage": "Inscription réussie ! Veuillez attendre l'approbation de l'administrateur.",
-      "errorMessage": "L'inscription a échoué. Veuillez réessayer."
+      "errorMessage": "L'inscription a échoué. Veuillez réessayer.",
+      "successTitle": "Inscription Réussie !",
+      "pendingApproval": "Votre compte vendeur a été créé avec succès.",
+      "awaitingApproval": "En Attente d'Approbation",
+      "approvalMessage": "Notre équipe examinera votre demande et approuvera votre compte dans les 24 à 48 heures. Vous recevrez une notification par email une fois votre compte activé.",
+      "checkEmail": "Vérifiez Votre Email",
+      "emailSentTo": "Un email de confirmation a été envoyé à :",
+      "needHelp": "Besoin d'Aide ?",
+      "contactSupport": "Si vous avez des questions ou besoin d'assistance, veuillez contacter notre équipe de support.",
+      "nextSteps": "Que se passe-t-il ensuite ?",
+      "step1Review": "Notre équipe d'administration examinera votre demande et vérifiera vos informations.",
+      "step2Approval": "Une fois approuvé, vous recevrez une notification par email avec les instructions de connexion.",
+      "step3Login": "Vous pourrez ensuite vous connecter et commencer à gérer vos produits et commandes.",
+      "returnHome": "Retour à l'Accueil",
+      "goToLogin": "Aller à la Connexion"
     }
   },
   "admin": {

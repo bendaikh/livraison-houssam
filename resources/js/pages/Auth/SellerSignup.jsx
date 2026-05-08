@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Globe, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import { Globe, ArrowLeft, ArrowRight, CheckCircle, Clock, Mail, Phone } from 'lucide-react';
 import axios from 'axios';
 
 export default function SellerSignup() {
@@ -11,6 +11,8 @@ export default function SellerSignup() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [currentStep, setCurrentStep] = useState(1);
+    const [registrationSuccess, setRegistrationSuccess] = useState(false);
+    const [registeredEmail, setRegisteredEmail] = useState('');
     const [formData, setFormData] = useState({
         // Step 1 fields
         name: '',
@@ -22,7 +24,7 @@ export default function SellerSignup() {
         city: '',
         agree_terms: false,
         // Step 2 fields
-        store_name: '',
+        company_name: '',
         seller_level: '',
         bank_rib: ''
     });
@@ -80,7 +82,7 @@ export default function SellerSignup() {
         }
 
         // Step 2 validation
-        if (!formData.store_name || !formData.seller_level || !formData.bank_rib) {
+        if (!formData.company_name || !formData.seller_level || !formData.bank_rib) {
             setError(t('auth.signup.fillAllFields'));
             return;
         }
@@ -96,14 +98,14 @@ export default function SellerSignup() {
                 password_confirmation: formData.password_confirmation,
                 address: formData.address,
                 city: formData.city,
-                store_name: formData.store_name,
+                company_name: formData.company_name,
                 seller_level: formData.seller_level,
                 bank_rib: formData.bank_rib
             });
 
             if (response.data.success) {
-                alert(t('auth.signup.successMessage'));
-                navigate('/login');
+                setRegisteredEmail(formData.email);
+                setRegistrationSuccess(true);
             }
         } catch (err) {
             setError(err.response?.data?.message || t('auth.signup.errorMessage'));
@@ -138,7 +140,113 @@ export default function SellerSignup() {
                 </div>
             </div>
 
-            {/* Registration Form */}
+            {/* Success Page */}
+            {registrationSuccess ? (
+                <div className="py-12 px-4">
+                    <div className="max-w-2xl mx-auto">
+                        <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12">
+                            {/* Success Icon */}
+                            <div className="text-center mb-8">
+                                <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+                                    <CheckCircle className="w-12 h-12 text-green-500" />
+                                </div>
+                                <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                                    {t('auth.signup.successTitle') || 'Registration Successful!'}
+                                </h1>
+                                <p className="text-lg text-gray-600 mb-8">
+                                    {t('auth.signup.pendingApproval') || 'Your seller account has been created successfully.'}
+                                </p>
+                            </div>
+
+                            {/* Information Cards */}
+                            <div className="space-y-4 mb-8">
+                                {/* Pending Approval Card */}
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex-shrink-0">
+                                            <Clock className="w-8 h-8 text-amber-600" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-amber-900 mb-2">
+                                                {t('auth.signup.awaitingApproval') || 'Awaiting Admin Approval'}
+                                            </h3>
+                                            <p className="text-sm text-amber-800">
+                                                {t('auth.signup.approvalMessage') || 'Our team will review your application and approve your account within 24-48 hours. You will receive an email notification once your account is activated.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Email Confirmation Card */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex-shrink-0">
+                                            <Mail className="w-8 h-8 text-blue-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-blue-900 mb-2">
+                                                {t('auth.signup.checkEmail') || 'Check Your Email'}
+                                            </h3>
+                                            <p className="text-sm text-blue-800 mb-2">
+                                                {t('auth.signup.emailSentTo') || 'A confirmation email has been sent to:'}
+                                            </p>
+                                            <p className="text-sm font-semibold text-blue-900">
+                                                {registeredEmail}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Contact Support Card */}
+                                <div className="bg-teal-50 border border-teal-200 rounded-lg p-6">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex-shrink-0">
+                                            <Phone className="w-8 h-8 text-teal-600" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-teal-900 mb-2">
+                                                {t('auth.signup.needHelp') || 'Need Help?'}
+                                            </h3>
+                                            <p className="text-sm text-teal-800">
+                                                {t('auth.signup.contactSupport') || 'If you have any questions or need assistance, please contact our support team.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Next Steps */}
+                            <div className="bg-gray-50 rounded-lg p-6 mb-8">
+                                <h3 className="font-semibold text-gray-900 mb-4">
+                                    {t('auth.signup.nextSteps') || 'What happens next?'}
+                                </h3>
+                                <ol className={`space-y-3 ${isRTL ? 'pr-5' : 'pl-5'} list-decimal text-sm text-gray-700`}>
+                                    <li>{t('auth.signup.step1Review') || 'Our admin team will review your application and verify your information.'}</li>
+                                    <li>{t('auth.signup.step2Approval') || 'Once approved, you will receive an email notification with login instructions.'}</li>
+                                    <li>{t('auth.signup.step3Login') || 'You can then log in and start managing your products and orders.'}</li>
+                                </ol>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <Link
+                                    to="/"
+                                    className="flex-1 text-center px-6 py-3 bg-white border-2 border-teal-500 text-teal-600 rounded-lg font-semibold hover:bg-teal-50 transition"
+                                >
+                                    {t('auth.signup.returnHome') || 'Return to Home'}
+                                </Link>
+                                <Link
+                                    to="/login"
+                                    className="flex-1 text-center px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-lg font-semibold hover:shadow-xl transition transform hover:-translate-y-0.5"
+                                >
+                                    {t('auth.signup.goToLogin') || 'Go to Login'}
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                /* Registration Form */
             <div className="py-12 px-4">
                 <div className="max-w-2xl mx-auto">
                     <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12">
@@ -319,16 +427,16 @@ export default function SellerSignup() {
                             {/* Step 2: Store & Business Details */}
                             {currentStep === 2 && (
                                 <>
-                                    {/* Store Name */}
+                                    {/* Company Name */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             {t('auth.signup.storeName')}
                                         </label>
                                         <input
                                             type="text"
-                                            name="store_name"
+                                            name="company_name"
                                             required
-                                            value={formData.store_name}
+                                            value={formData.company_name}
                                             onChange={handleChange}
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                                             placeholder={t('auth.signup.storeNamePlaceholder')}
@@ -403,6 +511,7 @@ export default function SellerSignup() {
                     </div>
                 </div>
             </div>
+            )}
         </div>
     );
 }
