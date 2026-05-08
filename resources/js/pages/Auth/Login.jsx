@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { appPath } from '../../constants/appPaths';
-import { Lock, Mail, AlertCircle, Eye, EyeOff, ArrowRight, Sparkles, Globe } from 'lucide-react';
+import { Lock, Mail, AlertCircle, Eye, EyeOff, ArrowRight, Globe } from 'lucide-react';
 
 export default function Login() {
     const { t, i18n } = useTranslation();
@@ -34,12 +34,6 @@ export default function Login() {
         } finally {
             setLoading(false);
         }
-    };
-
-    const fillSuperAdminCredentials = () => {
-        setEmail('superadmin@ecommerce.com');
-        setPassword('SuperAdmin@2026');
-        setError('');
     };
 
     return (
@@ -141,40 +135,6 @@ export default function Login() {
                     )}
                 </button>
             </form>
-
-            <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-gradient-to-br from-slate-50 via-white to-blue-50 text-slate-500">{t('admin.login.demoAccess')}</span>
-                </div>
-            </div>
-
-            <button
-                type="button"
-                onClick={fillSuperAdminCredentials}
-                className="w-full bg-gradient-to-r from-slate-50 to-blue-50 hover:from-blue-50 hover:to-indigo-50 border-2 border-blue-200 hover:border-blue-300 rounded-xl p-5 text-start transition-all duration-200 hover:shadow-lg group"
-            >
-                <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
-                            <Sparkles className="text-white" size={22} />
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="font-bold text-slate-800">{t('admin.login.superAdmin')}</span>
-                                <span className="text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2.5 py-0.5 rounded-full font-medium">{t('admin.login.fullAccess')}</span>
-                            </div>
-                            <p className="text-sm text-slate-500">superadmin@ecommerce.com</p>
-                        </div>
-                    </div>
-                    <div className="text-blue-500 group-hover:translate-x-1 transition-transform rtl:rotate-180 rtl:group-hover:-translate-x-1">
-                        <ArrowRight size={20} />
-                    </div>
-                </div>
-                <p className="text-xs text-slate-400 mt-3 ps-16">{t('admin.login.demoHint')}</p>
-            </button>
         </div>
     );
 }

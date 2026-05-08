@@ -3,16 +3,32 @@ import { useTranslation } from 'react-i18next';
 import { 
     Save, Building2, Globe, DollarSign, ShoppingCart, 
     Bell, Percent, AlertCircle, CheckCircle2, Loader2,
-    Settings as SettingsIcon, Mail, Phone, MapPin, FileText, MapPinned, Plus, Trash2, Edit2, RefreshCw, Search
+    Settings as SettingsIcon, Mail, Phone, MapPin, FileText, MapPinned, Plus, Trash2, Edit2, RefreshCw, Search,
+    User, Key, Eye, EyeOff
 } from 'lucide-react';
 import api from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Settings() {
     const { t } = useTranslation();
+    const { user, updateUser } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
-    const [activeTab, setActiveTab] = useState('general');
+    const [activeTab, setActiveTab] = useState('profile');
+    
+    // Profile state
+    const [profileForm, setProfileForm] = useState({
+        email: '',
+        name: '',
+        current_password: '',
+        new_password: '',
+        new_password_confirmation: '',
+    });
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     
     // Cities management state
     const [cities, setCities] = useState([]);
@@ -74,6 +90,16 @@ export default function Settings() {
         fetchSettings();
         fetchCities({ syncSources: true });
     }, []);
+
+    useEffect(() => {
+        if (user) {
+            setProfileForm(prev => ({
+                ...prev,
+                email: user.email || '',
+                name: user.name || '',
+            }));
+        }
+    }, [user]);
 
     const fetchSettings = async () => {
         try {
@@ -191,6 +217,36 @@ export default function Settings() {
         setSettings(prev => ({ ...prev, [key]: value }));
     };
 
+    const handleProfileChange = (key, value) => {
+        setProfileForm(prev => ({ ...prev, [key]: value }));
+    };
+
+    const handleProfileSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            setSavingProfile(true);
+            const response = await api.put('/profile', profileForm);
+            updateUser(response.data.user);
+            setMessage({ type: 'success', text: t('admin.settings.profileUpdated') || 'Profile updated successfully!' });
+            setProfileForm(prev => ({
+                ...prev,
+                current_password: '',
+                new_password: '',
+                new_password_confirmation: '',
+            }));
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            const errorMessage = error.response?.data?.message || 
+                                 error.response?.data?.errors?.current_password?.[0] ||
+                                 error.response?.data?.errors?.email?.[0] ||
+                                 t('admin.settings.profileUpdateFailed') || 'Failed to update profile';
+            setMessage({ type: 'error', text: errorMessage });
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
@@ -207,6 +263,7 @@ export default function Settings() {
     };
 
     const tabs = [
+        { id: 'profile', label: t('admin.settings.profile') || 'Profile', icon: User },
         { id: 'general', label: t('admin.settings.general'), icon: Globe },
         { id: 'currency', label: t('admin.settings.currency'), icon: DollarSign },
         { id: 'company', label: t('admin.settings.company'), icon: Building2 },
@@ -231,23 +288,25 @@ export default function Settings() {
                     <h1 className="text-3xl font-bold text-gray-900">{t('admin.settings.title')}</h1>
                     <p className="text-gray-600 mt-1">{t('admin.settings.subtitle')}</p>
                 </div>
-                <button
-                    onClick={handleSubmit}
-                    disabled={saving}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {saving ? (
-                        <>
-                            <Loader2 size={20} className="animate-spin" />
-                            <span>{t('admin.common.saving')}</span>
-                        </>
-                    ) : (
-                        <>
-                            <Save size={20} />
-                            <span>{t('admin.settings.save')}</span>
-                        </>
-                    )}
-                </button>
+                {activeTab !== 'profile' && (
+                    <button
+                        onClick={handleSubmit}
+                        disabled={saving}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {saving ? (
+                            <>
+                                <Loader2 size={20} className="animate-spin" />
+                                <span>{t('admin.common.saving')}</span>
+                            </>
+                        ) : (
+                            <>
+                                <Save size={20} />
+                                <span>{t('admin.settings.save')}</span>
+                            </>
+                        )}
+                    </button>
+                )}
             </div>
 
             {message && (
@@ -288,7 +347,158 @@ export default function Settings() {
 
                 {/* Content */}
                 <div className="lg:col-span-4">
-                    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm p-8">
+                    <form onSubmit={activeTab === 'profile' ? handleProfileSubmit : handleSubmit} className="bg-white rounded-xl shadow-sm p-8">
+                        {/* Profile Settings */}
+                        {activeTab === 'profile' && (
+                            <div className="space-y-6">
+                                <div className="flex items-center space-x-3 pb-4 border-b border-gray-200">
+                                    <div className="p-3 bg-indigo-100 rounded-xl">
+                                        <User className="text-indigo-600" size={24} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-gray-900">{t('admin.settings.profileSettings') || 'Profile Settings'}</h2>
+                                        <p className="text-sm text-gray-600">{t('admin.settings.profileDescription') || 'Update your email address and password'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            {t('admin.settings.name') || 'Name'}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={profileForm.name}
+                                            onChange={(e) => handleProfileChange('name', e.target.value)}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                            placeholder={t('admin.settings.namePlaceholder') || 'Your name'}
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center space-x-2">
+                                            <Mail size={16} />
+                                            <span>{t('auth.login.email') || 'Email Address'}</span>
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={profileForm.email}
+                                            onChange={(e) => handleProfileChange('email', e.target.value)}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                            placeholder={t('admin.settings.emailPlaceholder') || 'your@email.com'}
+                                            required
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">{t('admin.settings.emailHint') || 'This is used for login and notifications'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="pt-6 border-t border-gray-200">
+                                    <div className="flex items-center space-x-3 mb-6">
+                                        <div className="p-2 bg-amber-100 rounded-lg">
+                                            <Key className="text-amber-600" size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-gray-900">{t('admin.settings.changePassword') || 'Change Password'}</h3>
+                                            <p className="text-sm text-gray-500">{t('admin.settings.changePasswordHint') || 'Leave blank to keep current password'}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                {t('admin.settings.currentPassword') || 'Current Password'}
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showCurrentPassword ? 'text' : 'password'}
+                                                    value={profileForm.current_password}
+                                                    onChange={(e) => handleProfileChange('current_password', e.target.value)}
+                                                    className="w-full px-4 py-2.5 pe-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                    placeholder="••••••••"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                                    className="absolute inset-y-0 end-0 pe-4 flex items-center text-gray-400 hover:text-gray-600"
+                                                >
+                                                    {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                    {t('admin.settings.newPassword') || 'New Password'}
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type={showNewPassword ? 'text' : 'password'}
+                                                        value={profileForm.new_password}
+                                                        onChange={(e) => handleProfileChange('new_password', e.target.value)}
+                                                        className="w-full px-4 py-2.5 pe-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                        placeholder="••••••••"
+                                                        minLength={8}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                                        className="absolute inset-y-0 end-0 pe-4 flex items-center text-gray-400 hover:text-gray-600"
+                                                    >
+                                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1">{t('admin.settings.passwordMinLength') || 'Minimum 8 characters'}</p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                    {t('admin.settings.confirmPassword') || 'Confirm New Password'}
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type={showConfirmPassword ? 'text' : 'password'}
+                                                        value={profileForm.new_password_confirmation}
+                                                        onChange={(e) => handleProfileChange('new_password_confirmation', e.target.value)}
+                                                        className="w-full px-4 py-2.5 pe-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                        placeholder="••••••••"
+                                                        minLength={8}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                        className="absolute inset-y-0 end-0 pe-4 flex items-center text-gray-400 hover:text-gray-600"
+                                                    >
+                                                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-6 border-t border-gray-200 flex justify-end">
+                                    <button
+                                        type="submit"
+                                        disabled={savingProfile}
+                                        className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {savingProfile ? (
+                                            <>
+                                                <Loader2 size={20} className="animate-spin" />
+                                                <span>{t('admin.common.saving') || 'Saving...'}</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save size={20} />
+                                                <span>{t('admin.settings.updateProfile') || 'Update Profile'}</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* General Settings */}
                         {activeTab === 'general' && (
                             <div className="space-y-6">
