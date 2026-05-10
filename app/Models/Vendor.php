@@ -13,8 +13,10 @@ class Vendor extends Model
         'user_id',
         'name',
         'email',
+        'password',
         'phone',
         'address',
+        'city',
         'company_name',
         'tax_id',
         'bank_name',
@@ -24,6 +26,10 @@ class Vendor extends Model
         'is_active',
         'total_sales',
         'total_commission',
+    ];
+
+    protected $hidden = [
+        'password',
     ];
 
     protected $casts = [

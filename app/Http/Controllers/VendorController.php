@@ -158,14 +158,66 @@ class VendorController extends Controller
                 }
 
                 $vendor->user->update($userData);
+            } else {
+                // Create user account for self-registered vendor being activated
+                $isBeingActivated = isset($validated['is_active']) && $validated['is_active'] === true;
+                
+                if ($isBeingActivated) {
+                    // Use the password provided during update, or the original password from registration
+                    if (!empty($validated['password'])) {
+                        $passwordHash = \Hash::make($validated['password']);
+                    } elseif (!empty($vendor->password)) {
+                        // Use the password hash stored during self-registration
+                        $passwordHash = $vendor->password;
+                    } else {
+                        // Fallback: generate a temporary password
+                        $tempPassword = \Str::random(12);
+                        $passwordHash = \Hash::make($tempPassword);
+                    }
+                    
+                    $user = \App\Models\User::create([
+                        'name' => $validated['name'] ?? $vendor->name,
+                        'email' => $validated['email'] ?? $vendor->email,
+                        'password' => $passwordHash,
+                        'is_active' => true,
+                    ]);
+
+                    // Assign vendor role
+                    $vendorRole = \App\Models\Role::where('slug', 'vendor')->first();
+                    if ($vendorRole) {
+                        $user->role()->associate($vendorRole);
+                        $user->save();
+                    }
+
+                    // Link user to vendor and clear the temporary password
+                    $vendor->user_id = $user->id;
+                    $vendor->password = null;
+                    $vendor->save();
+
+                    \Log::info('Created user account for self-registered vendor', [
+                        'vendor_id' => $vendor->id,
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                    ]);
+                }
             }
 
             \DB::commit();
 
-            return response()->json([
-                'vendor' => $vendor->load('user'),
+            $response = [
+                'vendor' => $vendor->fresh()->load('user'),
                 'message' => 'Vendor updated successfully.'
-            ]);
+            ];
+
+            // If a temp password was generated (fallback case), include it in the response
+            if (isset($tempPassword)) {
+                $response['temporary_password'] = $tempPassword;
+                $response['message'] = 'Vendor activated successfully. No password was found, a temporary password has been generated. Please share it with the vendor.';
+            } elseif (isset($user)) {
+                $response['message'] = 'Vendor activated successfully. They can now login with their original registration credentials.';
+            }
+
+            return response()->json($response);
         } catch (\Exception $e) {
             \DB::rollBack();
             \Log::error('Failed to update vendor', [
