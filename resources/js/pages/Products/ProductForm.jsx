@@ -728,7 +728,7 @@ export default function ProductForm() {
                             <input
                                 type="file"
                                 multiple
-                                accept="image/*"
+                                accept="image/*,image/avif"
                                 onChange={handleImageChange}
                                 className="hidden"
                                 id="image-upload"
@@ -741,7 +741,7 @@ export default function ProductForm() {
                                         </svg>
                                     </div>
                                     <p className="text-sm font-medium text-slate-700">Click to upload images</p>
-                                    <p className="text-xs text-slate-500 mt-1">PNG, JPG, GIF up to 10MB</p>
+                                    <p className="text-xs text-slate-500 mt-1">PNG, JPG, GIF, AVIF, WebP up to 10MB</p>
                                 </div>
                             </label>
                         </div>

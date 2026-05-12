@@ -1,11 +1,13 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { CheckCircle, Clock, Package, Truck, XCircle, Wallet, CalendarDays, PhoneCall } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { appPath } from '../../constants/appPaths';
 
 export default function ConfirmationAgentDashboard({ stats, period, setPeriod }) {
+    const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const daily = stats?.confirmation_agent?.today || {};
     const commission = stats?.confirmation_agent?.commission || {};
@@ -13,33 +15,33 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
     const latestInvoice = stats?.confirmation_agent?.latest_invoice;
 
     const cards = [
-        { label: 'Confirmed', value: stats?.orders?.confirmed || 0, icon: CheckCircle, tone: 'text-cyan-700 bg-cyan-50 border-cyan-100' },
-        { label: 'In Progress', value: stats?.orders?.in_progress || 0, icon: Clock, tone: 'text-amber-700 bg-amber-50 border-amber-100' },
-        { label: 'Shipped', value: stats?.orders?.shipped || 0, icon: Truck, tone: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
-        { label: 'Delivered', value: stats?.orders?.delivered || 0, icon: Package, tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
-        { label: 'Cancelled', value: stats?.orders?.cancelled || 0, icon: XCircle, tone: 'text-rose-700 bg-rose-50 border-rose-100' },
-        { label: 'Refused', value: stats?.orders?.refused || 0, icon: XCircle, tone: 'text-orange-700 bg-orange-50 border-orange-100' },
+        { label: t('admin.dashboard.confirmed'), value: stats?.orders?.confirmed || 0, icon: CheckCircle, tone: 'text-cyan-700 bg-cyan-50 border-cyan-100' },
+        { label: t('admin.dashboard.inProgress'), value: stats?.orders?.in_progress || 0, icon: Clock, tone: 'text-amber-700 bg-amber-50 border-amber-100' },
+        { label: t('admin.dashboard.shipped'), value: stats?.orders?.shipped || 0, icon: Truck, tone: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
+        { label: t('admin.dashboard.delivered'), value: stats?.orders?.delivered || 0, icon: Package, tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
+        { label: t('admin.dashboard.cancelled'), value: stats?.orders?.cancelled || 0, icon: XCircle, tone: 'text-rose-700 bg-rose-50 border-rose-100' },
+        { label: t('admin.dashboard.refused'), value: stats?.orders?.refused || 0, icon: XCircle, tone: 'text-orange-700 bg-orange-50 border-orange-100' },
     ];
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Confirmation Dashboard</h1>
-                    <p className="text-slate-500 mt-1">Your assigned orders, callbacks, and earnings.</p>
+                    <h1 className="text-3xl font-bold text-slate-800">{t('admin.dashboard.confirmationDashboard')}</h1>
+                    <p className="text-slate-500 mt-1">{t('admin.dashboard.confirmationDashboardDesc')}</p>
                 </div>
                 <div className="flex items-center bg-white rounded-2xl p-1.5 shadow-sm border border-slate-200/50">
                     {['daily', 'monthly', 'yearly'].map((value) => (
                         <button
                             key={value}
                             onClick={() => setPeriod(value)}
-                            className={`px-5 py-2.5 rounded-xl font-medium capitalize text-sm transition-all duration-200 ${
+                            className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
                                 period === value
                                     ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25'
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                             }`}
                         >
-                            {value}
+                            {t(`admin.dashboard.${value}`)}
                         </button>
                     ))}
                 </div>
@@ -47,21 +49,21 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                    <p className="text-sm text-slate-500">Delivered Today</p>
+                    <p className="text-sm text-slate-500">{t('admin.dashboard.deliveredToday')}</p>
                     <p className="text-3xl font-bold text-slate-900 mt-2">{daily.delivered || 0}</p>
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                    <p className="text-sm text-slate-500">Earnings Today</p>
+                    <p className="text-sm text-slate-500">{t('admin.dashboard.earningsToday')}</p>
                     <p className="text-3xl font-bold text-emerald-700 mt-2">{formatCurrency(daily.earnings || 0)}</p>
                 </div>
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                    <p className="text-sm text-slate-500">Current Month Commission</p>
+                    <p className="text-sm text-slate-500">{t('admin.dashboard.currentMonthCommission')}</p>
                     <p className="text-3xl font-bold text-slate-900 mt-2">{formatCurrency(commission.current_month_total || 0)}</p>
                     <p className="text-xs text-slate-500 mt-2">
-                        {commission.current_month_delivered || 0} delivered x {formatCurrency(commission.per_order || 0)}
+                        {commission.current_month_delivered || 0} {t('admin.dashboard.delivered')} x {formatCurrency(commission.per_order || 0)}
                     </p>
                     <p className="text-xs text-amber-700 mt-1">
-                        Unpaid: {formatCurrency(commission.current_month_unpaid_total || 0)}
+                        {t('admin.dashboard.unpaid')}: {formatCurrency(commission.current_month_unpaid_total || 0)}
                     </p>
                 </div>
             </div>
@@ -82,8 +84,8 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Performance Trend</h3>
-                            <p className="text-sm text-slate-500 mt-1">Assigned orders, delivered orders, and callbacks.</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.performanceTrend')}</h3>
+                            <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.performanceTrendDesc')}</p>
                         </div>
                     </div>
                     <ResponsiveContainer width="100%" height={280}>
@@ -102,35 +104,35 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Today&apos;s Follow-Ups</h3>
-                            <p className="text-sm text-slate-500 mt-1">Orders due today or overdue.</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.todaysFollowUps')}</h3>
+                            <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.todaysFollowUpsDesc')}</p>
                         </div>
                         <Link to={`${appPath('/orders')}?todo=today`} className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
-                            Open orders
+                            {t('admin.dashboard.openOrders')}
                         </Link>
                     </div>
                     <div className="mt-5 space-y-3">
                         {todoToday.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
-                                No follow-up calls due today.
+                                {t('admin.dashboard.noFollowUpCalls')}
                             </div>
                         ) : todoToday.map((order) => (
                             <div key={order.id} className="rounded-xl border border-slate-200 p-4">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
                                         <p className="font-semibold text-slate-800">{order.order_number}</p>
-                                        <p className="text-sm text-slate-500">{order.client?.name || 'Client'} • {order.client?.phone || '-'}</p>
+                                        <p className="text-sm text-slate-500">{order.client?.name || t('admin.dashboard.client')} • {order.client?.phone || '-'}</p>
                                     </div>
                                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
                                         <CalendarDays size={14} />
-                                        {order.callback_date ? new Date(order.callback_date).toLocaleDateString() : 'Today'}
+                                        {order.callback_date ? new Date(order.callback_date).toLocaleDateString() : t('admin.dashboard.today')}
                                     </span>
                                 </div>
                                 <div className="mt-3 flex items-center justify-between text-sm">
                                     <span className="text-slate-500">{order.city || order.client?.city || '-'}</span>
                                     <Link to={appPath(`/orders/${order.id}/edit`)} className="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-800">
                                         <PhoneCall size={14} />
-                                        Open workflow
+                                        {t('admin.dashboard.openWorkflow')}
                                     </Link>
                                 </div>
                             </div>
@@ -146,29 +148,29 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
                             <Wallet size={22} />
                         </div>
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Invoice Snapshot</h3>
-                            <p className="text-sm text-slate-500">Latest generated monthly billing report.</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.invoiceSnapshot')}</h3>
+                            <p className="text-sm text-slate-500">{t('admin.dashboard.invoiceSnapshotDesc')}</p>
                         </div>
                     </div>
 
                     {latestInvoice ? (
                         <div className="mt-5 rounded-2xl bg-slate-50 border border-slate-200 p-5 space-y-3">
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-500">Period</span>
+                                <span className="text-sm text-slate-500">{t('admin.dashboard.period')}</span>
                                 <span className="font-semibold text-slate-800">
                                     {new Date(latestInvoice.period_start).toLocaleDateString()} - {new Date(latestInvoice.period_end).toLocaleDateString()}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-500">Delivered</span>
+                                <span className="text-sm text-slate-500">{t('admin.dashboard.delivered')}</span>
                                 <span className="font-semibold text-slate-800">{latestInvoice.delivered_orders_count}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-500">Commission / order</span>
+                                <span className="text-sm text-slate-500">{t('admin.dashboard.commissionPerOrder')}</span>
                                 <span className="font-semibold text-slate-800">{formatCurrency(latestInvoice.commission_per_order)}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-500">Total</span>
+                                <span className="text-sm text-slate-500">{t('admin.dashboard.total')}</span>
                                 <span className="text-lg font-bold text-emerald-700">{formatCurrency(latestInvoice.total_amount)}</span>
                             </div>
                             <div className="pt-2">
@@ -177,24 +179,24 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
                                         ? 'bg-emerald-100 text-emerald-700'
                                         : 'bg-amber-100 text-amber-700'
                                 }`}>
-                                    {latestInvoice.paid_at ? 'Paid' : 'Pending payment'}
+                                    {latestInvoice.paid_at ? t('admin.dashboard.paid') : t('admin.dashboard.pendingPayment')}
                                 </span>
                             </div>
                         </div>
                     ) : (
                         <div className="mt-5 rounded-xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
-                            No invoice has been generated yet for your account.
+                            {t('admin.dashboard.noInvoiceGenerated')}
                         </div>
                     )}
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
-                    <h3 className="text-lg font-semibold text-slate-800">Order Sources</h3>
-                    <p className="text-sm text-slate-500 mt-1">Assigned order mix for the selected period.</p>
+                    <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.orderSources')}</h3>
+                    <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.orderSourcesDesc')}</p>
                     <div className="mt-5 space-y-3">
                         {(stats?.orders?.by_source || []).length === 0 ? (
                             <div className="rounded-xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
-                                No source data in this period.
+                                {t('admin.dashboard.noSourceData')}
                             </div>
                         ) : (stats.orders.by_source || []).map((row) => (
                             <div key={row.source} className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">

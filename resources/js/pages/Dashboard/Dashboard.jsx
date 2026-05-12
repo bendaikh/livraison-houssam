@@ -249,13 +249,13 @@ export default function Dashboard() {
                         <button
                             key={p}
                             onClick={() => setPeriod(p)}
-                            className={`px-5 py-2.5 rounded-xl font-medium capitalize text-sm transition-all duration-200 ${
+                            className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
                                 period === p
                                     ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
                                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                             }`}
                         >
-                            {p}
+                            {t(`admin.dashboard.${p}`)}
                         </button>
                     ))}
                 </div>
@@ -300,69 +300,69 @@ export default function Dashboard() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
                         <div>
-                            <h2 className="text-2xl font-bold text-slate-800">Commission Billing</h2>
-                            <p className="text-slate-500 mt-1">A clear view of what you will receive after platform commission.</p>
+                            <h2 className="text-2xl font-bold text-slate-800">{t('admin.dashboard.commissionBilling')}</h2>
+                            <p className="text-slate-500 mt-1">{t('admin.dashboard.commissionBillingDesc')}</p>
                         </div>
                         <div className="inline-flex items-center px-4 py-2 rounded-xl bg-orange-50 text-orange-700 border border-orange-200 font-semibold">
-                            Billing cadence: {sellerBilling.billing_frequency_label}
+                            {t('admin.dashboard.billingCadence')}: {sellerBilling.billing_frequency_label}
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
                         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold text-emerald-700">What You Will Get</p>
+                                <p className="text-sm font-semibold text-emerald-700">{t('admin.dashboard.whatYouWillGet')}</p>
                                 <DollarSign className="text-emerald-600" size={20} />
                             </div>
                             <p className="text-3xl font-bold text-emerald-900 mt-3">{formatCurrency(sellerBilling.estimated_payout || 0)}</p>
-                            <p className="text-xs text-emerald-700 mt-2">{sellerBilling.unpaid_orders_count || 0} delivered unpaid order(s)</p>
+                            <p className="text-xs text-emerald-700 mt-2">{sellerBilling.unpaid_orders_count || 0} {t('admin.dashboard.deliveredUnpaidOrders')}</p>
                         </div>
 
                         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold text-blue-700">Delivered Sales</p>
+                                <p className="text-sm font-semibold text-blue-700">{t('admin.dashboard.deliveredSales')}</p>
                                 <ShoppingCart className="text-blue-600" size={20} />
                             </div>
                             <p className="text-3xl font-bold text-blue-900 mt-3">{formatCurrency(sellerBilling.gross_sales || 0)}</p>
-                            <p className="text-xs text-blue-700 mt-2">Gross delivered sales waiting for payout</p>
+                            <p className="text-xs text-blue-700 mt-2">{t('admin.dashboard.grossDeliveredSales')}</p>
                         </div>
 
                         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold text-amber-700">Platform Commission</p>
+                                <p className="text-sm font-semibold text-amber-700">{t('admin.dashboard.platformCommission')}</p>
                                 <TrendingDown className="text-amber-600" size={20} />
                             </div>
                             <p className="text-3xl font-bold text-amber-900 mt-3">{formatCurrency(sellerBilling.commission_amount || 0)}</p>
-                            <p className="text-xs text-amber-700 mt-2">Rate: {formatRate(sellerBilling.commission_rate || 0)}</p>
+                            <p className="text-xs text-amber-700 mt-2">{t('admin.dashboard.rate')}: {formatRate(sellerBilling.commission_rate || 0)}</p>
                         </div>
 
                         <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold text-purple-700">Open Billing Reports</p>
+                                <p className="text-sm font-semibold text-purple-700">{t('admin.dashboard.openBillingReports')}</p>
                                 <FileText className="text-purple-600" size={20} />
                             </div>
                             <p className="text-3xl font-bold text-purple-900 mt-3">{sellerBilling.open_invoices || 0}</p>
-                            <p className="text-xs text-purple-700 mt-2">Generated reports not paid yet</p>
+                            <p className="text-xs text-purple-700 mt-2">{t('admin.dashboard.generatedReportsNotPaid')}</p>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-slate-800">How It Is Calculated</h3>
+                                <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.howItIsCalculated')}</h3>
                                 <Store className="text-slate-500" size={20} />
                             </div>
                             <div className="space-y-3 text-sm">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-slate-600">Delivered sales</span>
+                                    <span className="text-slate-600">{t('admin.dashboard.deliveredSales')}</span>
                                     <span className="font-semibold text-slate-900">{formatCurrency(sellerBilling.gross_sales || 0)}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-slate-600">Platform commission</span>
+                                    <span className="text-slate-600">{t('admin.dashboard.platformCommission')}</span>
                                     <span className="font-semibold text-amber-700">-{formatCurrency(sellerBilling.commission_amount || 0)}</span>
                                 </div>
                                 <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
-                                    <span className="font-semibold text-slate-900">Estimated payout</span>
+                                    <span className="font-semibold text-slate-900">{t('admin.dashboard.estimatedPayout')}</span>
                                     <span className="text-xl font-bold text-emerald-700">{formatCurrency(sellerBilling.estimated_payout || 0)}</span>
                                 </div>
                             </div>
@@ -370,50 +370,50 @@ export default function Dashboard() {
 
                         <div className="rounded-2xl border border-slate-200 bg-white p-5">
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-slate-800">Latest Billing Report</h3>
+                                <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.latestBillingReport')}</h3>
                                 <CheckCircle className={latestSellerInvoice?.status === 'paid' ? 'text-emerald-500' : 'text-amber-500'} size={20} />
                             </div>
 
                             {latestSellerInvoice ? (
                                 <div className="space-y-3 text-sm">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-slate-600">Period</span>
+                                        <span className="text-slate-600">{t('admin.dashboard.period')}</span>
                                         <span className="font-semibold text-slate-900">
                                             {formatShortDate(latestSellerInvoice.period_start)} - {formatShortDate(latestSellerInvoice.period_end)}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-slate-600">Orders</span>
+                                        <span className="text-slate-600">{t('admin.dashboard.orders')}</span>
                                         <span className="font-semibold text-slate-900">{latestSellerInvoice.orders_count || 0}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-slate-600">Payout</span>
+                                        <span className="text-slate-600">{t('admin.dashboard.payout')}</span>
                                         <span className="font-semibold text-emerald-700">{formatCurrency(latestSellerInvoice.settlement_amount || 0)}</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-slate-600">Status</span>
+                                        <span className="text-slate-600">{t('admin.dashboard.status')}</span>
                                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
                                             latestSellerInvoice.status === 'paid'
                                                 ? 'bg-emerald-100 text-emerald-700'
                                                 : 'bg-amber-100 text-amber-700'
                                         }`}>
-                                            {latestSellerInvoice.status === 'paid' ? 'Paid' : 'Unpaid'}
+                                            {latestSellerInvoice.status === 'paid' ? t('admin.dashboard.paid') : t('admin.dashboard.unpaid')}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-slate-600">Generated</span>
+                                        <span className="text-slate-600">{t('admin.dashboard.generated')}</span>
                                         <span className="font-semibold text-slate-900">{formatShortDate(latestSellerInvoice.generated_at)}</span>
                                     </div>
                                     {latestSellerInvoice.paid_at && (
                                         <div className="flex items-center justify-between">
-                                            <span className="text-slate-600">Paid on</span>
+                                            <span className="text-slate-600">{t('admin.dashboard.paidOn')}</span>
                                             <span className="font-semibold text-slate-900">{formatShortDate(latestSellerInvoice.paid_at)}</span>
                                         </div>
                                     )}
                                 </div>
                             ) : (
                                 <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 p-4 text-sm text-slate-600">
-                                    No billing report has been generated yet for this seller.
+                                    {t('admin.dashboard.noBillingReport')}
                                 </div>
                             )}
                         </div>
@@ -429,7 +429,7 @@ export default function Dashboard() {
                     <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
                         <div className="text-center">
                             <Package className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-                            <p className="text-emerald-600 text-sm font-semibold">All Products</p>
+                            <p className="text-emerald-600 text-sm font-semibold">{t('admin.dashboard.allProducts')}</p>
                             <p className="text-2xl font-bold text-emerald-900 mt-1">{stats?.products?.total || 0}</p>
                         </div>
                     </div>
@@ -438,7 +438,7 @@ export default function Dashboard() {
                 <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
                     <div className="text-center">
                         <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                        <p className="text-blue-600 text-sm font-semibold">New</p>
+                        <p className="text-blue-600 text-sm font-semibold">{t('admin.dashboard.new')}</p>
                             <p className="text-2xl font-bold text-blue-900 mt-1">{displayOrdersStats?.pending || 0}</p>
                     </div>
                 </div>
@@ -446,7 +446,7 @@ export default function Dashboard() {
                 <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
                     <div className="text-center">
                         <Package className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-                        <p className="text-emerald-600 text-sm font-semibold">Delivered</p>
+                        <p className="text-emerald-600 text-sm font-semibold">{t('admin.dashboard.delivered')}</p>
                         <p className="text-2xl font-bold text-emerald-900 mt-1">{displayOrdersStats?.delivered || 0}</p>
                     </div>
                 </div>
@@ -454,7 +454,7 @@ export default function Dashboard() {
                 <div className="bg-cyan-50 rounded-xl p-4 border border-cyan-100">
                     <div className="text-center">
                         <CheckCircle className="w-8 h-8 text-cyan-600 mx-auto mb-2" />
-                        <p className="text-cyan-600 text-sm font-semibold">Confirmed</p>
+                        <p className="text-cyan-600 text-sm font-semibold">{t('admin.dashboard.confirmed')}</p>
                         <p className="text-2xl font-bold text-cyan-900 mt-1">{displayOrdersStats?.confirmed || 0}</p>
                     </div>
                 </div>
@@ -462,7 +462,7 @@ export default function Dashboard() {
                 <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                     <div className="text-center">
                         <Package className="w-8 h-8 text-indigo-600 mx-auto mb-2" />
-                        <p className="text-indigo-600 text-sm font-semibold">In Delivery</p>
+                        <p className="text-indigo-600 text-sm font-semibold">{t('admin.dashboard.inDelivery')}</p>
                         <p className="text-2xl font-bold text-indigo-900 mt-1">{displayOrdersStats?.shipped || 0}</p>
                     </div>
                 </div>
@@ -470,7 +470,7 @@ export default function Dashboard() {
                 <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
                     <div className="text-center">
                         <ArrowDownRight className="w-8 h-8 text-orange-600 mx-auto mb-2" />
-                        <p className="text-orange-600 text-sm font-semibold">Returned</p>
+                        <p className="text-orange-600 text-sm font-semibold">{t('admin.dashboard.returned')}</p>
                         <p className="text-2xl font-bold text-orange-900 mt-1">{displayOrdersStats?.returned || 0}</p>
                     </div>
                 </div>
@@ -478,7 +478,7 @@ export default function Dashboard() {
                 <div className="bg-red-50 rounded-xl p-4 border border-red-100">
                     <div className="text-center">
                         <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
-                        <p className="text-red-600 text-sm font-semibold">Refused</p>
+                        <p className="text-red-600 text-sm font-semibold">{t('admin.dashboard.refused')}</p>
                         <p className="text-2xl font-bold text-red-900 mt-1">{displayOrdersStats?.refused || 0}</p>
                     </div>
                 </div>
@@ -486,7 +486,7 @@ export default function Dashboard() {
                 <div className="bg-rose-50 rounded-xl p-4 border border-rose-100">
                     <div className="text-center">
                         <X className="w-8 h-8 text-rose-600 mx-auto mb-2" />
-                        <p className="text-rose-600 text-sm font-semibold">Cancelled</p>
+                        <p className="text-rose-600 text-sm font-semibold">{t('admin.dashboard.cancelled')}</p>
                         <p className="text-2xl font-bold text-rose-900 mt-1">{displayOrdersStats?.cancelled || 0}</p>
                     </div>
                 </div>
@@ -494,7 +494,7 @@ export default function Dashboard() {
                 <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                     <div className="text-center">
                         <Clock className="w-8 h-8 text-amber-600 mx-auto mb-2" />
-                        <p className="text-amber-600 text-sm font-semibold">Waiting</p>
+                        <p className="text-amber-600 text-sm font-semibold">{t('admin.dashboard.waiting')}</p>
                         <p className="text-2xl font-bold text-amber-900 mt-1">0</p>
                     </div>
                 </div>
@@ -502,7 +502,7 @@ export default function Dashboard() {
                 <div className="bg-pink-50 rounded-xl p-4 border border-pink-100">
                     <div className="text-center">
                         <X className="w-8 h-8 text-pink-600 mx-auto mb-2" />
-                        <p className="text-pink-600 text-sm font-semibold">Cancelled Shipping</p>
+                        <p className="text-pink-600 text-sm font-semibold">{t('admin.dashboard.cancelledShipping')}</p>
                         <p className="text-2xl font-bold text-pink-900 mt-1">0</p>
                     </div>
                 </div>
@@ -514,13 +514,13 @@ export default function Dashboard() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6 hover:shadow-lg transition-shadow">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Sales Overview</h3>
-                            <p className="text-sm text-slate-500 mt-1">Revenue trends over time</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.salesOverview')}</h3>
+                            <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.revenueTrends')}</p>
                         </div>
                         <div className="flex items-center space-x-2 text-sm">
                             <span className="flex items-center space-x-1.5">
                                 <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-                                <span className="text-slate-600">Sales</span>
+                                <span className="text-slate-600">{t('admin.dashboard.sales')}</span>
                             </span>
                         </div>
                     </div>
@@ -545,13 +545,13 @@ export default function Dashboard() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6 hover:shadow-lg transition-shadow">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Orders Overview</h3>
-                            <p className="text-sm text-slate-500 mt-1">Order volume analysis</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.ordersOverview')}</h3>
+                            <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.orderVolume')}</p>
                         </div>
                         <div className="flex items-center space-x-2 text-sm">
                             <span className="flex items-center space-x-1.5">
                                 <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                                <span className="text-slate-600">Orders</span>
+                                <span className="text-slate-600">{t('admin.dashboard.orders')}</span>
                             </span>
                         </div>
                     </div>
@@ -576,17 +576,17 @@ export default function Dashboard() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6 hover:shadow-lg transition-shadow">
                     <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Confirmation Rate</h3>
-                            <p className="text-sm text-slate-500 mt-1">Percent of orders that reached a confirmed status for the selected period.</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.confirmationRateChart')}</h3>
+                            <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.confirmationRateDesc')}</p>
                         </div>
                         <div className="flex items-center space-x-4 text-right">
                             <div>
                                 <p className="text-lg font-semibold text-slate-800">{formatRate(confirmationRate)}</p>
-                                <p className="text-xs uppercase tracking-wide text-slate-400">Current</p>
+                                <p className="text-xs uppercase tracking-wide text-slate-400">{t('admin.dashboard.current')}</p>
                             </div>
                             <span className="flex items-center space-x-1.5 text-sm text-slate-600">
                                 <span className="w-3 h-3 rounded-full bg-cyan-500"></span>
-                                <span>Confirmation</span>
+                                <span>{t('admin.dashboard.confirmation')}</span>
                             </span>
                         </div>
                     </div>
@@ -605,17 +605,17 @@ export default function Dashboard() {
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6 hover:shadow-lg transition-shadow">
                     <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Delivery Rate</h3>
-                            <p className="text-sm text-slate-500 mt-1">Percentage of orders successfully delivered during the chosen timeline.</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.deliveryRateChart')}</h3>
+                            <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.deliveryRateDesc')}</p>
                         </div>
                         <div className="flex items-center space-x-4 text-right">
                             <div>
                                 <p className="text-lg font-semibold text-slate-800">{formatRate(deliveryRate)}</p>
-                                <p className="text-xs uppercase tracking-wide text-slate-400">Current</p>
+                                <p className="text-xs uppercase tracking-wide text-slate-400">{t('admin.dashboard.current')}</p>
                             </div>
                             <span className="flex items-center space-x-1.5 text-sm text-slate-600">
                                 <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                                <span>Delivery</span>
+                                <span>{t('admin.dashboard.delivery')}</span>
                             </span>
                         </div>
                     </div>
@@ -639,18 +639,18 @@ export default function Dashboard() {
                             <AlertTriangle className="text-white" size={24} />
                         </div>
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Low Stock Alerts</h3>
-                            <p className="text-sm text-slate-500">{stats.low_stock_products.length} products need restocking</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.lowStockAlerts')}</h3>
+                            <p className="text-sm text-slate-500">{stats.low_stock_products.length} {t('admin.dashboard.productsNeedRestocking')}</p>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl overflow-hidden border border-rose-100">
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">Product</th>
-                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">SKU</th>
-                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">Current Stock</th>
-                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">Min Stock</th>
+                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">{t('admin.dashboard.product')}</th>
+                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">{t('admin.dashboard.sku')}</th>
+                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">{t('admin.dashboard.currentStock')}</th>
+                                    <th className="text-left py-4 px-5 text-sm font-semibold text-slate-600">{t('admin.dashboard.minStock')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -678,7 +678,7 @@ export default function Dashboard() {
                 {!isVendor && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-slate-800">Top Sellers</h3>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.topSellers')}</h3>
                             <Store className="text-orange-500" size={24} />
                         </div>
                         <div className="space-y-3">
@@ -691,7 +691,7 @@ export default function Dashboard() {
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-slate-800 text-sm">{vendor.name}</p>
-                                                <p className="text-xs text-slate-500">{vendor.products_count || 0} products</p>
+                                                <p className="text-xs text-slate-500">{vendor.products_count || 0} {t('admin.dashboard.products')}</p>
                                             </div>
                                         </div>
                                         <div className="text-right">
@@ -700,7 +700,7 @@ export default function Dashboard() {
                                     </div>
                                 ))
                             ) : (
-                                <p className="text-center text-slate-500 py-4 text-sm">No seller data available</p>
+                                <p className="text-center text-slate-500 py-4 text-sm">{t('admin.dashboard.noSellerData')}</p>
                             )}
                         </div>
                     </div>
@@ -710,20 +710,20 @@ export default function Dashboard() {
                 {!isVendor && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-slate-800">Sellers</h3>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.sellers')}</h3>
                             <Store className="text-purple-500" size={24} />
                         </div>
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-600">Total Sellers</span>
+                                <span className="text-sm text-slate-600">{t('admin.dashboard.totalSellers')}</span>
                                 <span className="text-lg font-bold text-slate-800">{stats?.vendors?.total || 0}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-600">Active Sellers</span>
+                                <span className="text-sm text-slate-600">{t('admin.dashboard.activeSellers')}</span>
                                 <span className="text-lg font-bold text-emerald-600">{stats?.vendors?.active || 0}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-600">Total Commission</span>
+                                <span className="text-sm text-slate-600">{t('admin.dashboard.totalCommission')}</span>
                                 <span className="text-lg font-bold text-purple-600">{formatCurrency(parseFloat(stats?.vendors?.total_commission) || 0)}</span>
                             </div>
                         </div>
@@ -733,20 +733,20 @@ export default function Dashboard() {
                 {/* Products Stats */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-slate-800">Products</h3>
+                        <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.products')}</h3>
                         <Package className="text-indigo-500" size={24} />
                     </div>
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Total Products</span>
+                            <span className="text-sm text-slate-600">{t('admin.dashboard.totalProducts')}</span>
                             <span className="text-lg font-bold text-slate-800">{stats?.products?.total || 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Active Products</span>
+                            <span className="text-sm text-slate-600">{t('admin.dashboard.activeProducts')}</span>
                             <span className="text-lg font-bold text-emerald-600">{stats?.products?.active || 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-sm text-slate-600">Out of Stock</span>
+                            <span className="text-sm text-slate-600">{t('admin.dashboard.outOfStock')}</span>
                             <span className="text-lg font-bold text-rose-600">{stats?.products?.out_of_stock || 0}</span>
                         </div>
                     </div>
@@ -760,8 +760,8 @@ export default function Dashboard() {
                     <div className="p-6 border-b border-slate-100">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-lg font-semibold text-slate-800">Top Selling Products</h3>
-                                <p className="text-sm text-slate-500 mt-1">Best performers this period</p>
+                                <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.topSellingProducts')}</h3>
+                                <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.bestPerformers')}</p>
                             </div>
                             <TrendingUp className="text-emerald-500" size={24} />
                         </div>
@@ -782,13 +782,13 @@ export default function Dashboard() {
                                         </div>
                                         <div className="text-right">
                                             <p className="font-bold text-slate-800">{product.total_sold}</p>
-                                            <p className="text-xs text-slate-500">units sold</p>
+                                            <p className="text-xs text-slate-500">{t('admin.dashboard.unitsSold')}</p>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-center text-slate-500 py-8">No sales data available</p>
+                            <p className="text-center text-slate-500 py-8">{t('admin.dashboard.noSalesData')}</p>
                         )}
                     </div>
                 </div>
@@ -799,8 +799,8 @@ export default function Dashboard() {
                         <div className="p-6 border-b border-slate-100">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h3 className="text-lg font-semibold text-slate-800">Top Clients</h3>
-                                    <p className="text-sm text-slate-500 mt-1">Highest spending customers</p>
+                                    <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.topClients')}</h3>
+                                    <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.highestSpending')}</p>
                                 </div>
                                 <Users className="text-blue-500" size={24} />
                             </div>
@@ -816,7 +816,7 @@ export default function Dashboard() {
                                                 </div>
                                                 <div>
                                                     <p className="font-semibold text-slate-800">{client.name}</p>
-                                                    <p className="text-sm text-slate-500">{client.order_count} orders</p>
+                                                    <p className="text-sm text-slate-500">{client.order_count} {t('admin.dashboard.orders')}</p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
@@ -826,7 +826,7 @@ export default function Dashboard() {
                                     ))}
                                 </div>
                             ) : (
-                                <p className="text-center text-slate-500 py-8">No client data available</p>
+                                <p className="text-center text-slate-500 py-8">{t('admin.dashboard.noClientData')}</p>
                             )}
                         </div>
                     </div>
@@ -838,11 +838,11 @@ export default function Dashboard() {
                 <div className="p-6 border-b border-slate-100">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-800">Recent Orders</h3>
-                            <p className="text-sm text-slate-500 mt-1">Latest customer orders</p>
+                            <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.recentOrders')}</h3>
+                            <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.latestOrders')}</p>
                         </div>
                         <button className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center space-x-1">
-                            <span>View All</span>
+                            <span>{t('admin.dashboard.viewAll')}</span>
                             <ArrowUpRight size={16} />
                         </button>
                     </div>
@@ -851,12 +851,12 @@ export default function Dashboard() {
                     <table className="w-full">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-100">
-                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">Order #</th>
-                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">Client</th>
-                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">Total</th>
-                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">Status</th>
-                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">Date</th>
-                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">Action</th>
+                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">{t('admin.dashboard.orderNumber')}</th>
+                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">{t('admin.dashboard.client')}</th>
+                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">{t('admin.dashboard.total')}</th>
+                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">{t('admin.dashboard.status')}</th>
+                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">{t('admin.dashboard.date')}</th>
+                                <th className="text-left py-4 px-6 text-sm font-semibold text-slate-600">{t('admin.dashboard.action')}</th>
                             </tr>
                         </thead>
                         <tbody>

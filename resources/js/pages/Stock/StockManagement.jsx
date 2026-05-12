@@ -184,7 +184,7 @@ export default function StockManagement() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Out of Stock</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.stockManagement.outOfStock')}</p>
                             <p className="text-3xl font-bold text-red-600 mt-2">{stats.outOfStock}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
@@ -196,7 +196,7 @@ export default function StockManagement() {
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-slate-600">Stock Value</p>
+                            <p className="text-sm font-medium text-slate-600">{t('admin.stockManagement.stockValue')}</p>
                             <p className="text-3xl font-bold text-emerald-600 mt-2">{formatCurrency(stats.totalValue)}</p>
                         </div>
                         <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
@@ -215,7 +215,7 @@ export default function StockManagement() {
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                             <input
                                 type="text"
-                                placeholder="Search products..."
+                                placeholder={t('admin.stockManagement.searchProducts')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
@@ -233,7 +233,7 @@ export default function StockManagement() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            All
+                            {t('admin.stockManagement.all')}
                         </button>
                         <button
                             onClick={() => setFilterStatus('low')}
@@ -243,7 +243,7 @@ export default function StockManagement() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            Low Stock
+                            {t('admin.stockManagement.lowStock')}
                         </button>
                         <button
                             onClick={() => setFilterStatus('out')}
@@ -253,7 +253,7 @@ export default function StockManagement() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            Out of Stock
+                            {t('admin.stockManagement.outOfStock')}
                         </button>
                     </div>
                 </div>
@@ -263,15 +263,15 @@ export default function StockManagement() {
             {loading && products.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="text-slate-600 mt-4">Loading products...</p>
+                    <p className="text-slate-600 mt-4">{t('admin.stockManagement.loadingProducts')}</p>
                 </div>
             ) : products.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Box size={40} className="text-indigo-600" />
                     </div>
-                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No products found</h3>
-                    <p className="text-slate-500">Try adjusting your search or filters</p>
+                    <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('admin.stockManagement.noProductsFound')}</h3>
+                    <p className="text-slate-500">{t('admin.stockManagement.tryDifferentSearch')}</p>
                 </div>
             ) : (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 overflow-hidden">
@@ -279,13 +279,13 @@ export default function StockManagement() {
                         <table className="w-full">
                             <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
                                 <tr>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Product</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">SKU</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Current Stock</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Min Stock</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Status</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Value</th>
-                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Actions</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.stockManagement.product')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.stockManagement.sku')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.stockManagement.currentStock')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.stockManagement.minStock')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.stockManagement.status')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.stockManagement.value')}</th>
+                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.stockManagement.actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
@@ -337,27 +337,27 @@ export default function StockManagement() {
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center justify-center space-x-2">
-                                                    <button
-                                                        onClick={() => handleStockAction(product, 'add')}
-                                                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                                                        title="Add Stock"
-                                                    >
-                                                        <ArrowUpCircle size={20} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleStockAction(product, 'remove')}
-                                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                        title="Remove Stock"
-                                                    >
-                                                        <ArrowDownCircle size={20} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleStockAction(product, 'adjust')}
-                                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                        title="Adjust Stock"
-                                                    >
-                                                        <RefreshCw size={20} />
-                                                    </button>
+                                    <button
+                                        onClick={() => handleStockAction(product, 'add')}
+                                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                                        title={t('admin.stockManagement.addStock')}
+                                    >
+                                        <ArrowUpCircle size={20} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleStockAction(product, 'remove')}
+                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                        title={t('admin.stockManagement.removeStock')}
+                                    >
+                                        <ArrowDownCircle size={20} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleStockAction(product, 'adjust')}
+                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                        title={t('admin.stockManagement.adjustStock')}
+                                    >
+                                        <RefreshCw size={20} />
+                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -387,9 +387,9 @@ export default function StockManagement() {
                                 </div>
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-800">
-                                        {modalType === 'add' ? 'Add Stock' :
-                                         modalType === 'remove' ? 'Remove Stock' :
-                                         'Adjust Stock'}
+                                        {modalType === 'add' ? t('admin.stockManagement.addStock') :
+                                         modalType === 'remove' ? t('admin.stockManagement.removeStock') :
+                                         t('admin.stockManagement.adjustStock')}
                                     </h2>
                                     <p className="text-sm text-slate-600">{selectedProduct.name}</p>
                                 </div>
@@ -408,11 +408,11 @@ export default function StockManagement() {
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-xs text-slate-500">Current Stock</p>
+                                        <p className="text-xs text-slate-500">{t('admin.stockManagement.currentStock')}</p>
                                         <p className="text-2xl font-bold text-slate-800">{selectedProduct.stock_quantity}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs text-slate-500">Min Stock</p>
+                                        <p className="text-xs text-slate-500">{t('admin.stockManagement.minStock')}</p>
                                         <p className="text-2xl font-bold text-slate-600">{selectedProduct.min_stock_quantity}</p>
                                     </div>
                                 </div>
@@ -421,7 +421,7 @@ export default function StockManagement() {
                             {modalType === 'adjust' ? (
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        New Quantity *
+                                        {t('admin.stockManagement.newQuantity')} *
                                     </label>
                                     <input
                                         type="number"
@@ -429,7 +429,7 @@ export default function StockManagement() {
                                         value={formData.new_quantity}
                                         onChange={(e) => setFormData({ ...formData, new_quantity: e.target.value })}
                                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                                        placeholder="Enter new quantity"
+                                        placeholder={t('admin.stockManagement.enterNewQuantity')}
                                         required
                                     />
                                     {errors.new_quantity && (
@@ -440,7 +440,7 @@ export default function StockManagement() {
                                 <>
                                     <div>
                                         <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                            Quantity *
+                                            {t('admin.stockManagement.quantity')} *
                                         </label>
                                         <input
                                             type="number"
@@ -448,7 +448,7 @@ export default function StockManagement() {
                                             value={formData.quantity}
                                             onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                                            placeholder="Enter quantity"
+                                            placeholder={t('admin.stockManagement.enterQuantity')}
                                             required
                                         />
                                         {errors.quantity && (
@@ -459,7 +459,7 @@ export default function StockManagement() {
                                     {modalType === 'add' && (
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                                Unit Cost
+                                                {t('admin.stockManagement.unitCost')}
                                             </label>
                                             <input
                                                 type="number"
@@ -475,14 +475,14 @@ export default function StockManagement() {
 
                                     <div>
                                         <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                            Reference
+                                            {t('admin.stockManagement.reference')}
                                         </label>
                                         <input
                                             type="text"
                                             value={formData.reference}
                                             onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
                                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                                            placeholder="PO#, Invoice#, etc."
+                                            placeholder={t('admin.stockManagement.referenceExample')}
                                         />
                                     </div>
                                 </>
@@ -490,14 +490,14 @@ export default function StockManagement() {
 
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Note
+                                    {t('admin.stockManagement.note')}
                                 </label>
                                 <textarea
                                     value={formData.note}
                                     onChange={(e) => setFormData({ ...formData, note: e.target.value })}
                                     rows="3"
                                     className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none"
-                                    placeholder="Add a note about this stock movement..."
+                                    placeholder={t('admin.stockManagement.addNoteAboutMovement')}
                                 />
                             </div>
 
@@ -508,7 +508,7 @@ export default function StockManagement() {
                                     onClick={handleCloseModal}
                                     className="px-6 py-2.5 border-2 border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 font-medium transition-all"
                                 >
-                                    Cancel
+                                    {t('admin.stockManagement.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -525,12 +525,12 @@ export default function StockManagement() {
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                             </svg>
-                                            <span>Processing...</span>
+                                            <span>{t('admin.stockManagement.processing')}</span>
                                         </>
                                     ) : (
                                         <>
                                             <Check size={20} />
-                                            <span>Confirm</span>
+                                            <span>{t('admin.stockManagement.confirm')}</span>
                                         </>
                                     )}
                                 </button>

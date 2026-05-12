@@ -641,7 +641,7 @@ export default function OrderForm() {
     if (isConfirmationAgentUser && isEditing && currentOrderCreatedByUserId === undefined) {
         return (
             <div className="flex h-80 items-center justify-center">
-                <div className="text-slate-500">Loading order...</div>
+                <div className="text-slate-500">{t('admin.orderForm.loadingOrder')}</div>
             </div>
         );
     }
@@ -656,19 +656,19 @@ export default function OrderForm() {
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-                            {isEditing ? 'Order Update' : 'New Order'}
+                            {isEditing ? t('admin.orderForm.orderUpdate') : t('admin.orderForm.newOrder')}
                         </p>
-                        <h1 className="mt-2 text-3xl font-bold">{isEditing ? 'Edit Order' : 'Create Order'}</h1>
+                        <h1 className="mt-2 text-3xl font-bold">{isEditing ? t('admin.orderForm.editOrder') : t('admin.orderForm.createOrder')}</h1>
                         <p className="mt-1 text-sm text-slate-300">
-                            Update customer details, shipping notes, and delivery assignment from one screen.
+                            {t('admin.orderForm.updateDetails')}
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
                         <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1">
-                            {formData.city || 'No city selected'}
+                            {formData.city || t('admin.orderForm.noCitySelected')}
                         </span>
                         <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1">
-                            Shipping {formatCurrency(shippingCost)}
+                            {t('admin.orderForm.shipping')} {formatCurrency(shippingCost)}
                         </span>
                     </div>
                 </div>
@@ -679,7 +679,7 @@ export default function OrderForm() {
                     onClick={() => navigate(appPath('/orders'))}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                 >
-                    Back to Orders
+                    {t('admin.orderForm.backToOrders')}
                 </button>
             </div>
 
@@ -688,8 +688,8 @@ export default function OrderForm() {
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                     <div className="mb-5 flex items-start justify-between gap-4">
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900">Customer & Shipping</h2>
-                            <p className="mt-1 text-sm text-slate-500">Edit phone, city, shipping address, and order notes here.</p>
+                            <h2 className="text-lg font-semibold text-gray-900">{t('admin.orderForm.customerShipping')}</h2>
+                            <p className="mt-1 text-sm text-slate-500">{t('admin.orderForm.editPhoneCityAddress')}</p>
                         </div>
                         {isEditing && (
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -700,7 +700,7 @@ export default function OrderForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Client Name <span className="text-red-500">*</span>
+                                {t('admin.orderForm.clientName')} <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
@@ -708,14 +708,14 @@ export default function OrderForm() {
                                 onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 required
-                                placeholder="Enter client name"
+                                placeholder={t('admin.orderForm.enterClientName')}
                             />
                             {errors.client_name && <p className="text-red-500 text-xs mt-1">{errors.client_name[0]}</p>}
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Client Phone <span className="text-red-500">*</span>
+                                {t('admin.orderForm.clientPhone')} <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
@@ -723,19 +723,19 @@ export default function OrderForm() {
                                 onChange={(e) => setFormData({ ...formData, client_phone: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 required
-                                placeholder="Enter client phone"
+                                placeholder={t('admin.orderForm.enterClientPhone')}
                             />
                             {errors.client_phone && <p className="text-red-500 text-xs mt-1">{errors.client_phone[0]}</p>}
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.orderForm.whatsapp')}</label>
                             <input
                                 type="text"
                                 value={formData.whatsapp}
                                 onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter WhatsApp number"
+                                placeholder={t('admin.orderForm.enterWhatsApp')}
                             />
                         </div>
 
@@ -1130,7 +1130,7 @@ export default function OrderForm() {
                     </div>
 
                     <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.orderForm.notes')}</label>
                         <textarea
                             value={formData.notes}
                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
@@ -1143,19 +1143,19 @@ export default function OrderForm() {
                 {/* Order Items */}
                 <div className="bg-white rounded-xl shadow-sm p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-semibold text-gray-900">Products</h2>
+                        <h2 className="text-lg font-semibold text-gray-900">{t('admin.orderForm.products')}</h2>
                         <button
                             type="button"
                             onClick={addOrderItem}
                             className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
                         >
-                            + Add Product
+                            {t('admin.orderForm.addProduct')}
                         </button>
                     </div>
 
                     {formData.vendor_id && (
                         <p className="mb-4 text-sm text-slate-500">
-                            Showing only products allowed for the selected seller.
+                            {t('admin.orderForm.showingOnlyAllowedProducts')}
                         </p>
                     )}
 
@@ -1167,7 +1167,7 @@ export default function OrderForm() {
                             return (
                             <div key={index} className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-12 md:items-end">
                                 <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.orderForm.image')}</label>
                                     <div className="flex h-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
                                         {productImage ? (
                                             <img
@@ -1176,14 +1176,14 @@ export default function OrderForm() {
                                                 className="h-full w-full object-cover"
                                             />
                                         ) : (
-                                            <span className="px-3 text-center text-xs text-slate-400">No image</span>
+                                            <span className="px-3 text-center text-xs text-slate-400">{t('admin.orderForm.noImage')}</span>
                                         )}
                                     </div>
                                 </div>
 
                                 <div className="md:col-span-4">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Product <span className="text-red-500">*</span>
+                                        {t('admin.orderForm.product')} <span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         value={item.product_id}
@@ -1191,7 +1191,7 @@ export default function OrderForm() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         required
                                     >
-                                        <option value="">Select Product</option>
+                                        <option value="">{t('admin.orderForm.selectProduct')}</option>
                                         {availableProducts.map(product => (
                                             <option key={product.id} value={product.id}>
                                                 {product.name} - {product.sku}
@@ -1208,7 +1208,7 @@ export default function OrderForm() {
 
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Quantity <span className="text-red-500">*</span>
+                                        {t('admin.orderForm.quantity')} <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="number"
@@ -1222,7 +1222,7 @@ export default function OrderForm() {
 
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Price <span className="text-red-500">*</span>
+                                        {t('admin.orderForm.price')} <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="number"
@@ -1235,7 +1235,7 @@ export default function OrderForm() {
                                 </div>
 
                                 <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.orderForm.total')}</label>
                                     <input
                                         type="text"
                                         value={formatCurrency(item.price * item.quantity)}
@@ -1263,7 +1263,7 @@ export default function OrderForm() {
 
                 {/* Pricing Summary */}
                 <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Pricing & Profit</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.orderForm.pricingProfit')}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <div>
@@ -1348,14 +1348,14 @@ export default function OrderForm() {
                         onClick={() => navigate(appPath('/orders'))}
                         className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                     >
-                        Cancel
+                        {t('admin.orderForm.cancel')}
                     </button>
                     <button
                         type="submit"
                         disabled={loading}
                         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
                     >
-                        {loading ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Order' : 'Create Order')}
+                                    {loading ? (isEditing ? t('admin.orderForm.updating') : t('admin.orderForm.creating')) : (isEditing ? t('admin.orderForm.updateOrder') : t('admin.orderForm.createOrder'))}
                     </button>
                 </div>
             </form>

@@ -611,7 +611,7 @@ export default function OrderList({ status = '' }) {
             ));
         } catch (error) {
             console.error('Error updating order status:', error);
-            alert(error.response?.data?.message || 'Failed to update order status');
+            alert(error.response?.data?.message || t('admin.orderList.statusUpdateFailed'));
         } finally {
             setUpdatingStatus(null);
         }
@@ -627,24 +627,24 @@ export default function OrderList({ status = '' }) {
         const errors = {};
         if (mode === 'status') {
             if (!nextStatus) {
-                errors.nextStatus = 'Select a status.';
+                errors.nextStatus = t('admin.orderList.selectStatus');
             }
             if (motifRequiredStatuses.includes(nextStatus) && !String(note).trim()) {
-                errors.note = 'Motif is required for this status.';
+                errors.note = t('admin.orderList.motifRequired');
             }
             if (nextStatus === 'delivered' && (collectedAmount === '' || Number(collectedAmount) <= 0)) {
-                errors.collectedAmount = 'Collected amount is required.';
+                errors.collectedAmount = t('admin.orderList.collectedAmountRequired');
             }
         }
 
         if (mode === 'report') {
             if (!callbackDate) {
-                errors.callbackDate = 'Callback date is required.';
+                errors.callbackDate = t('admin.orderList.callbackDateRequired');
             }
         }
 
         if (mode === 'return' && !String(note).trim()) {
-            errors.note = 'Reason is required.';
+            errors.note = t('admin.orderList.reasonRequired');
         }
 
         if (Object.keys(errors).length > 0) {
@@ -704,7 +704,7 @@ export default function OrderList({ status = '' }) {
                 return;
             }
 
-            alert(error.response?.data?.message || 'Failed to update delivery workflow.');
+            alert(error.response?.data?.message || t('admin.orderList.failedUpdateWorkflow'));
             setDeliveryWorkflowModal((prev) => ({ ...prev, saving: false }));
         }
     };
@@ -740,7 +740,7 @@ export default function OrderList({ status = '' }) {
     };
 
     const handleDeleteOrder = async (orderId, orderNumber) => {
-        if (!window.confirm(`Delete order ${orderNumber}? This action cannot be undone.`)) {
+        if (!window.confirm(t('admin.orderList.deleteConfirmMessage', { orderNumber }))) {
             return;
         }
 
@@ -1407,14 +1407,14 @@ export default function OrderList({ status = '' }) {
                                             </p>
                                         ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
-                                                Not assigned
+                                                {t('admin.orderList.unassigned')}
                                             </span>
                                         )}
                                     </div>
 
                                     <div className="min-w-0 space-y-0.5 flex flex-col items-start">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isConfirmationAgentUser ? 'Assignment' : isDeliveryPersonUser ? 'Actions' : 'Delivery'}
+                                            {isConfirmationAgentUser ? t('admin.orderList.assignment') : isDeliveryPersonUser ? t('admin.orderList.actions') : t('admin.orderList.delivery')}
                                         </p>
                                         {isConfirmationAgentUser ? (
                                             assignmentScope === 'available' && !order.confirmation_agent_id ? (
@@ -1422,7 +1422,7 @@ export default function OrderList({ status = '' }) {
                                                     onClick={() => handleAssignToMe(order.id)}
                                                     className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 hover:bg-emerald-100"
                                                 >
-                                                    Assign to me
+                                                    {t('admin.orderList.assignToMe')}
                                                 </button>
                                             ) : canWorkOnOrder ? (
                                                 <button
@@ -1442,14 +1442,14 @@ export default function OrderList({ status = '' }) {
                                         ) : isDeliveryPersonUser ? (
                                             <>
                                                 <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-                                                    {order.delivery_person?.name || 'Assigned'}
+                                                    {order.delivery_person?.name || t('admin.orderList.assigned')}
                                                 </span>
                                                 {!deliveryWorkflowIsLocked && canWorkOnOrder && (
                                                     <button
                                                         onClick={() => openDeliveryWorkflowModal(order, { mode: 'report', nextStatus: order.status })}
                                                         className="mt-2 inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-200 hover:bg-amber-100"
                                                     >
-                                                        Report / Callback
+                                                        {t('admin.orderList.reportCallback')}
                                                     </button>
                                                 )}
                                                 {!deliveryWorkflowIsLocked && canWorkOnOrder && (
@@ -1457,7 +1457,7 @@ export default function OrderList({ status = '' }) {
                                                         onClick={() => openDeliveryWorkflowModal(order, { mode: 'return', nextStatus: 'returned' })}
                                                         className="mt-2 inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-cyan-50 text-cyan-700 text-xs font-semibold border border-cyan-200 hover:bg-cyan-100"
                                                     >
-                                                        Send Back to Confirmation
+                                                        {t('admin.orderList.sendBackToConfirmation')}
                                                     </button>
                                                 )}
                                             </>
@@ -1482,7 +1482,7 @@ export default function OrderList({ status = '' }) {
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors flex-shrink-0"
-                                                title="Send WhatsApp"
+                                                title={t('admin.orderList.sendWhatsApp')}
                                             >
                                                 <MessageCircle size={15} />
                                             </a>
@@ -1490,7 +1490,7 @@ export default function OrderList({ status = '' }) {
                                         <button
                                             onClick={() => fetchOrders()}
                                             className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
-                                            title="Refresh"
+                                            title={t('admin.orderList.refresh')}
                                         >
                                             <RefreshCw size={15} />
                                         </button>
@@ -1507,7 +1507,7 @@ export default function OrderList({ status = '' }) {
                                             <Link
                                                 to={appPath(`/orders/${order.id}/edit`)}
                                                 className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors flex-shrink-0"
-                                                title="Edit Order"
+                                                title={t('admin.orderList.editOrder')}
                                             >
                                                 <Edit size={15} />
                                             </Link>
@@ -1517,7 +1517,7 @@ export default function OrderList({ status = '' }) {
                                                 onClick={() => handleDeleteOrder(order.id, order.order_number)}
                                                 disabled={deletingOrderId === order.id}
                                                 className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 flex-shrink-0"
-                                                title="Delete Order"
+                                                title={t('admin.orderList.deleteOrder')}
                                             >
                                                 <Trash2 size={15} />
                                             </button>

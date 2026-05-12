@@ -431,7 +431,7 @@ export default function OrderDetail() {
     };
 
     const handleResetConfirmationAssignment = async () => {
-        if (!window.confirm('Remove the confirmation agent and reset this order to pending?')) {
+        if (!window.confirm(t('admin.orderDetail.removeConfirmationAssignment'))) {
             return;
         }
 
@@ -440,7 +440,7 @@ export default function OrderDetail() {
             await api.patch(`/orders/${id}/confirmation-assignment`, {
                 confirmation_agent_id: null,
                 reset_to_pending: true,
-                note: 'Admin removed confirmation assignment and reset order to pending.',
+                note: t('admin.orderDetail.adminRemovedNote'),
             });
             await fetchOrder();
         } catch (error) {
@@ -462,12 +462,12 @@ export default function OrderDetail() {
     if (!order) {
         return (
             <div className="text-center py-12">
-                <p className="text-gray-500">Order not found</p>
+                <p className="text-gray-500">{t('admin.orderDetail.orderNotFound')}</p>
                 <button
                     onClick={() => navigate(appPath('/orders'))}
                     className="mt-4 text-blue-600 hover:text-blue-800"
                 >
-                    Back to Orders
+                    {t('admin.orderDetail.backToOrders')}
                 </button>
             </div>
         );
@@ -485,11 +485,11 @@ export default function OrderDetail() {
                         <ArrowLeft size={24} />
                     </button>
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Order Details</h1>
-                        <p className="text-gray-500 mt-1">Order #{order.order_number}</p>
+                        <h1 className="text-3xl font-bold text-gray-900">{t('admin.orderDetail.orderDetails')}</h1>
+                        <p className="text-gray-500 mt-1">{t('admin.orderDetail.orderNumber')} #{order.order_number}</p>
                         {order.is_blacklisted && (
                             <span className="mt-2 inline-flex items-center rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white">
-                                {order.blacklist_badge || 'Banned / Blacklisted'}
+                                {order.blacklist_badge || t('admin.orderDetail.bannedBlacklisted')}
                             </span>
                         )}
                     </div>
@@ -501,7 +501,7 @@ export default function OrderDetail() {
                             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                             <Edit size={18} />
-                            <span>Edit Order</span>
+                            <span>{t('admin.orderDetail.editOrder')}</span>
                         </Link>
                     )}
                     <button
@@ -509,7 +509,7 @@ export default function OrderDetail() {
                         className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                         <Printer size={18} />
-                        <span>Print</span>
+                        <span>{t('admin.orderDetail.print')}</span>
                     </button>
                     {isAdminUser && order.confirmation_agent && (
                         <button
@@ -518,7 +518,7 @@ export default function OrderDetail() {
                             className="flex items-center space-x-2 px-4 py-2 bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 transition-colors disabled:opacity-50"
                         >
                             <RefreshCw size={18} className={resettingAssignment ? 'animate-spin' : ''} />
-                            <span>{resettingAssignment ? 'Resetting...' : 'Unassign & Reset'}</span>
+                            <span>{resettingAssignment ? t('admin.orderDetail.resetting') : t('admin.orderDetail.unassignReset')}</span>
                         </button>
                     )}
                 </div>
@@ -529,12 +529,12 @@ export default function OrderDetail() {
                 <div className="flex items-center space-x-3">
                     {getStatusIcon(order.status)}
                     <div>
-                        <p className="text-sm font-medium">Order Status</p>
+                        <p className="text-sm font-medium">{t('admin.orderDetail.orderStatus')}</p>
                         <p className="text-2xl font-bold capitalize">{formatOrderStatus(order.status)}</p>
                     </div>
                 </div>
                 <div className="text-right">
-                    <p className="text-sm font-medium">Order Date</p>
+                    <p className="text-sm font-medium">{t('admin.orderDetail.orderDate')}</p>
                     <p className="text-lg">{formatDate(order.created_at)}</p>
                 </div>
             </div>
@@ -547,7 +547,7 @@ export default function OrderDetail() {
                         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                             <h2 className="text-lg font-semibold text-gray-900 flex items-center">
                                 <Package className="mr-2" size={20} />
-                                Order Items
+                                {t('admin.orderDetail.orderItems')}
                             </h2>
                         </div>
                         <div className="p-6">
@@ -556,14 +556,14 @@ export default function OrderDetail() {
                                     <div key={item.id} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2">
-                                                <h3 className="font-semibold text-gray-900">{item.product?.name || item.product_name || 'Unknown Product'}</h3>
+                                                <h3 className="font-semibold text-gray-900">{item.product?.name || item.product_name || t('admin.orderDetail.unknownProduct')}</h3>
                                                 {item.is_upsell && (
                                                     <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-                                                        Upsell
+                                                        {t('admin.orderDetail.upsell')}
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-sm text-gray-500">SKU: {item.product?.sku || item.sku || 'N/A'}</p>
+                                            <p className="text-sm text-gray-500">{t('admin.orderDetail.sku')}: {item.product?.sku || item.sku || 'N/A'}</p>
                                             <p className="text-sm text-gray-600 mt-1">
                                                 {formatCurrency(item.price)} × {item.quantity}
                                             </p>
@@ -580,29 +580,29 @@ export default function OrderDetail() {
                             {/* Order Summary */}
                             <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
                                 <div className="flex justify-between text-gray-600">
-                                    <span>Subtotal</span>
+                                    <span>{t('admin.orderDetail.subtotal')}</span>
                                     <span>{formatCurrency(order.subtotal || order.total)}</span>
                                 </div>
                                 {order.shipping_cost > 0 && (
                                     <div className="flex justify-between text-gray-600">
-                                        <span>{order.shipping_included_in_price ? 'Shipping (included in price)' : 'Shipping'}</span>
+                                        <span>{order.shipping_included_in_price ? t('admin.orderDetail.shippingIncludedInPrice') : t('admin.orderDetail.shipping')}</span>
                                         <span>{formatCurrency(order.shipping_cost)}</span>
                                     </div>
                                 )}
                                 {order.tax > 0 && (
                                     <div className="flex justify-between text-gray-600">
-                                        <span>Tax</span>
+                                        <span>{t('admin.orderDetail.tax')}</span>
                                         <span>{formatCurrency(order.tax)}</span>
                                     </div>
                                 )}
                                 {order.discount > 0 && (
                                     <div className="flex justify-between text-red-600">
-                                        <span>Discount</span>
+                                        <span>{t('admin.orderDetail.discount')}</span>
                                         <span>-{formatCurrency(order.discount)}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between text-xl font-bold text-gray-900 pt-3 border-t border-gray-300">
-                                    <span>Total</span>
+                                    <span>{t('admin.orderDetail.total')}</span>
                                     <span>{formatCurrency(order.total)}</span>
                                 </div>
                             </div>
@@ -612,13 +612,13 @@ export default function OrderDetail() {
                     {/* Notes */}
                     {(order.notes || order.delivery_status_note) && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-3">Order Notes</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('admin.orderDetail.orderNotes')}</h2>
                             {order.notes && (
                                 <p className="text-gray-600 whitespace-pre-wrap">{order.notes}</p>
                             )}
                             {order.delivery_status_note && (
                                 <div className={order.notes ? 'mt-4 pt-4 border-t border-gray-100' : ''}>
-                                    <p className="text-sm text-gray-500">Delivery motif</p>
+                                    <p className="text-sm text-gray-500">{t('admin.orderDetail.deliveryMotif')}</p>
                                     <p className="text-rose-700 whitespace-pre-wrap">{order.delivery_status_note}</p>
                                 </div>
                             )}
@@ -632,29 +632,29 @@ export default function OrderDetail() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                             <User className="mr-2" size={20} />
-                            Client Information
+                            {t('admin.orderDetail.clientInformation')}
                         </h2>
                         <div className="space-y-3">
                             <div>
-                                <p className="text-sm text-gray-500">Name</p>
+                                <p className="text-sm text-gray-500">{t('admin.orderDetail.name')}</p>
                                 <p className="font-semibold text-gray-900">{order.client?.name || 'N/A'}</p>
                             </div>
                             <div className="flex items-center space-x-2">
                                 <Phone size={16} className="text-gray-400" />
                                 <div className="flex-1">
-                                    <p className="text-sm text-gray-500">Phone</p>
+                                    <p className="text-sm text-gray-500">{t('admin.orderDetail.phone')}</p>
                                     <p className="font-medium text-gray-900">{order.client?.phone || 'N/A'}</p>
                                 </div>
                             </div>
                             {order.client?.email && (
                                 <div>
-                                    <p className="text-sm text-gray-500">Email</p>
+                                    <p className="text-sm text-gray-500">{t('admin.orderDetail.email')}</p>
                                     <p className="font-medium text-gray-900">{order.client.email}</p>
                                 </div>
                             )}
                             {order.blacklist_entry?.reason && (
                                 <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
-                                    <p className="text-sm font-medium text-rose-700">Blacklist reason</p>
+                                    <p className="text-sm font-medium text-rose-700">{t('admin.orderDetail.blacklistReason')}</p>
                                     <p className="mt-1 text-sm text-rose-900">{order.blacklist_entry.reason}</p>
                                     <p className="mt-1 text-xs uppercase tracking-wide text-rose-600">
                                         {String(order.blacklist_entry.cancellation_timing || '').replace(/_/g, ' ')}
@@ -663,7 +663,7 @@ export default function OrderDetail() {
                             )}
                             {order.whatsapp && (
                                 <div>
-                                    <p className="text-sm text-gray-500">WhatsApp</p>
+                                    <p className="text-sm text-gray-500">{t('admin.orderDetail.whatsapp')}</p>
                                     <a
                                         href={`https://wa.me/${order.whatsapp.replace(/[^0-9]/g, '')}`}
                                         target="_blank"
@@ -681,18 +681,18 @@ export default function OrderDetail() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                             <MapPin className="mr-2" size={20} />
-                            Shipping Information
+                            {t('admin.orderDetail.shippingInformation')}
                         </h2>
                         <div className="space-y-3">
                             <div>
-                                <p className="text-sm text-gray-500">Shipping Address</p>
+                                <p className="text-sm text-gray-500">{t('admin.orderDetail.shippingAddress')}</p>
                                 <p className="font-medium text-gray-900">
                                     {order.shipping_address || order.client?.address || 'N/A'}
                                 </p>
                             </div>
                             {order.client?.city && (
                                 <div>
-                                    <p className="text-sm text-gray-500">City</p>
+                                        <p className="text-sm text-gray-500">{t('admin.orderDetail.city')}</p>
                                     <p className="font-medium text-gray-900">{order.client.city}</p>
                                 </div>
                             )}
@@ -704,7 +704,7 @@ export default function OrderDetail() {
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                                 <UserCheck className="mr-2" size={20} />
-                                Agents & Delivery
+                                {t('admin.orderDetail.agentsDelivery')}
                             </h2>
                             <div className="space-y-3">
                                 {order.delivery_agent && (
@@ -747,7 +747,7 @@ export default function OrderDetail() {
 
                     {/* Source */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-3">Order Source</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('admin.orderDetail.orderSource')}</h2>
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
                             {order.source || 'Manual'}
                         </span>
@@ -789,7 +789,7 @@ export default function OrderDetail() {
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-gray-900 flex items-center">
                                     <Truck className="mr-2" size={20} />
-                                    Delivery Tracking
+                                    {t('admin.orderDetail.deliveryTracking')}
                                 </h2>
                                 {order.delivery_tracking_code.toLowerCase() !== 'ko' && (
                                     <button
@@ -799,26 +799,26 @@ export default function OrderDetail() {
                                         title="Sync status from delivery company"
                                     >
                                         <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-                                        <span>{syncing ? 'Syncing...' : 'Sync Status'}</span>
+                                        <span>{syncing ? t('admin.orderDetail.syncing') : t('admin.orderDetail.syncStatus')}</span>
                                     </button>
                                 )}
                             </div>
                             <div className="space-y-3">
                                 <div>
-                                    <p className="text-sm text-gray-500">Delivery Company</p>
+                                    <p className="text-sm text-gray-500">{t('admin.orderDetail.deliveryCompany')}</p>
                                     <p className="font-semibold text-gray-900 capitalize">
                                         {order.delivery_integration?.name || 'N/A'}
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-gray-500">Tracking Code</p>
+                                    <p className="text-sm text-gray-500">{t('admin.orderDetail.trackingCode')}</p>
                                     {order.delivery_tracking_code.toLowerCase() === 'ko' ? (
                                         <div className="mt-1">
                                             <span className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-200">
-                                                ⚠️ Invalid Tracking Code
+                                                {t('admin.orderDetail.invalidTrackingCode')}
                                             </span>
                                             <p className="text-xs text-red-600 mt-2">
-                                                This order was not successfully sent to BMDelivery. Please try sending it again.
+                                                {t('admin.orderDetail.orderNotSent')}
                                             </p>
                                         </div>
                                     ) : (
@@ -829,7 +829,7 @@ export default function OrderDetail() {
                                 </div>
                                 {order.delivery_status && (
                                     <div>
-                                        <p className="text-sm text-gray-500">Delivery Status</p>
+                                        <p className="text-sm text-gray-500">{t('admin.orderDetail.deliveryStatus')}</p>
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 capitalize mt-1">
                                             {formatDeliveryStatus(order.delivery_status)}
                                         </span>
@@ -837,7 +837,7 @@ export default function OrderDetail() {
                                 )}
                                 {order.sent_to_delivery_at && (
                                     <div>
-                                        <p className="text-sm text-gray-500">Sent to Delivery</p>
+                                        <p className="text-sm text-gray-500">{t('admin.orderDetail.sentToDelivery')}</p>
                                         <p className="text-sm text-gray-900">
                                             {formatDate(order.sent_to_delivery_at)}
                                         </p>

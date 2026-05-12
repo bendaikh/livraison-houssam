@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -112,6 +113,7 @@ const printStyles = `
 `;
 
 export default function ProfitDashboard() {
+    const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -236,8 +238,8 @@ export default function ProfitDashboard() {
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
                     <ShoppingBag size={48} className="mx-auto text-slate-400 mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-800">Not Available</h2>
-                    <p className="text-slate-600 mt-2">Profit dashboard is only available for admin users.</p>
+                    <h2 className="text-2xl font-bold text-slate-800">{t('admin.profitDashboard.notAvailable')}</h2>
+                    <p className="text-slate-600 mt-2">{t('admin.profitDashboard.adminOnlyMessage')}</p>
                 </div>
             </div>
         );
@@ -248,7 +250,7 @@ export default function ProfitDashboard() {
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-slate-600">Loading profit data...</p>
+                    <p className="text-slate-600">{t('admin.profitDashboard.loadingProfit')}</p>
                 </div>
             </div>
         );
@@ -259,10 +261,10 @@ export default function ProfitDashboard() {
             {/* Header */}
             <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-                    Profit Dashboard
+                    {t('admin.profitDashboard.title')}
                 </h1>
                 <p className="text-slate-600 mt-2">
-                    Profit = Selling Price - Cost Price, Multiplied by Sold Units
+                    {t('admin.profitDashboard.subtitle')}
                 </p>
             </div>
 
@@ -276,12 +278,12 @@ export default function ProfitDashboard() {
                         </div>
                         <TrendingUp size={20} className="text-emerald-600" />
                     </div>
-                    <p className="text-sm font-medium text-emerald-700 mb-1">Total Profit</p>
+                    <p className="text-sm font-medium text-emerald-700 mb-1">{t('admin.profitDashboard.totalProfit')}</p>
                     <p className="text-3xl font-bold text-emerald-900">
                         {formatCurrency(profitSummary?.totalProfit || 0)}
                     </p>
                     <p className="text-xs text-emerald-600 mt-2">
-                        {profitSummary?.profitMargin.toFixed(1)}% margin on sales
+                        {profitSummary?.profitMargin.toFixed(1)}% {t('admin.profitDashboard.marginOnSales')}
                     </p>
                 </div>
 
@@ -293,12 +295,12 @@ export default function ProfitDashboard() {
                         </div>
                         <Zap size={20} className="text-blue-600" />
                     </div>
-                    <p className="text-sm font-medium text-blue-700 mb-1">Units Sold</p>
+                    <p className="text-sm font-medium text-blue-700 mb-1">{t('admin.profitDashboard.unitsSold')}</p>
                     <p className="text-3xl font-bold text-blue-900">
                         {profitSummary?.totalSoldUnits || 0}
                     </p>
                     <p className="text-xs text-blue-600 mt-2">
-                        {profitSummary?.totalSoldUnits > 0 ? `Avg ${formatCurrency(profitSummary.averageProfitPerUnit)}/unit` : 'No sales yet'}
+                        {profitSummary?.totalSoldUnits > 0 ? `${t('admin.profitDashboard.avgPerUnit')} ${formatCurrency(profitSummary.averageProfitPerUnit)}` : t('admin.profitDashboard.noSalesYet')}
                     </p>
                 </div>
 
@@ -310,12 +312,12 @@ export default function ProfitDashboard() {
                         </div>
                         <BarChart3 size={20} className="text-violet-600" />
                     </div>
-                    <p className="text-sm font-medium text-violet-700 mb-1">Avg Profit/Unit</p>
+                    <p className="text-sm font-medium text-violet-700 mb-1">{t('admin.profitDashboard.avgProfitPerUnit')}</p>
                     <p className="text-3xl font-bold text-violet-900">
                         {formatCurrency(profitSummary?.averageProfitPerUnit || 0)}
                     </p>
                     <p className="text-xs text-violet-600 mt-2">
-                        Per unit sold
+                        {t('admin.profitDashboard.perUnitSold')}
                     </p>
                 </div>
 
@@ -327,14 +329,14 @@ export default function ProfitDashboard() {
                         </div>
                         <TrendingUp size={20} className="text-amber-600" />
                     </div>
-                    <p className="text-sm font-medium text-amber-700 mb-1">Top Performer</p>
+                    <p className="text-sm font-medium text-amber-700 mb-1">{t('admin.profitDashboard.topPerformer')}</p>
                     <p className="text-2xl font-bold text-amber-900">
                         {profitSummary?.bestProduct?.sku || '--'}
                     </p>
                     <p className="text-xs text-amber-600 mt-2">
                         {profitSummary?.bestProduct
-                            ? formatCurrency(profitSummary.bestProduct.totalProfit) + ' profit'
-                            : 'No data available'}
+                            ? `${formatCurrency(profitSummary.bestProduct.totalProfit)} ${t('admin.profitDashboard.profit')}`
+                            : t('admin.profitDashboard.noDataAvailable')}
                     </p>
                 </div>
             </div>
@@ -351,7 +353,7 @@ export default function ProfitDashboard() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            Sort by Profit
+                            {t('admin.profitDashboard.sortByProfit')}
                         </button>
                         <button
                             onClick={() => setSortBy('units')}
@@ -361,7 +363,7 @@ export default function ProfitDashboard() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            Sort by Units
+                            {t('admin.profitDashboard.sortByUnits')}
                         </button>
                         <button
                             onClick={() => setSortBy('margin')}
@@ -371,7 +373,7 @@ export default function ProfitDashboard() {
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                         >
-                            Sort by Margin
+                            {t('admin.profitDashboard.sortByMargin')}
                         </button>
                     </div>
                 </div>
@@ -381,8 +383,8 @@ export default function ProfitDashboard() {
             {profitProducts.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-12 text-center">
                     <ShoppingBag size={48} className="mx-auto text-slate-400 mb-4" />
-                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No Sales Data</h3>
-                    <p className="text-slate-600">No products with confirmed sales found. Sales data will appear here once orders are confirmed and shipped.</p>
+                    <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('admin.profitDashboard.noSalesData')}</h3>
+                    <p className="text-slate-600">{t('admin.profitDashboard.noSalesDataDesc')}</p>
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-2xl shadow-lg border border-slate-200/50">
@@ -390,12 +392,12 @@ export default function ProfitDashboard() {
                         <table className="w-full">
                             <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
                                 <tr>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">SKU</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Product Name</th>
-                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Units Sold</th>
-                                    <th className="text-right py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Unit Profit</th>
-                                    <th className="text-right py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Profit Margin</th>
-                                    <th className="text-right py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Total Profit</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.profitDashboard.sku')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.profitDashboard.productName')}</th>
+                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.profitDashboard.unitsSold')}</th>
+                                    <th className="text-right py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.profitDashboard.unitProfit')}</th>
+                                    <th className="text-right py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.profitDashboard.profitMargin')}</th>
+                                    <th className="text-right py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.profitDashboard.totalProfit')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -465,29 +467,29 @@ export default function ProfitDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Total Revenue */}
                     <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl shadow-lg border border-slate-200/50 p-6">
-                        <p className="text-sm font-medium text-slate-600 mb-2">Total Revenue</p>
+                        <p className="text-sm font-medium text-slate-600 mb-2">{t('admin.profitDashboard.totalRevenue')}</p>
                         <p className="text-3xl font-bold text-slate-800">
                             {formatCurrency(profitSummary?.totalRevenue || 0)}
                         </p>
-                        <p className="text-xs text-slate-600 mt-2">From all sold units</p>
+                        <p className="text-xs text-slate-600 mt-2">{t('admin.profitDashboard.fromAllSoldUnits')}</p>
                     </div>
 
                     {/* Total Cost */}
                     <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl shadow-lg border border-red-200/50 p-6">
-                        <p className="text-sm font-medium text-red-600 mb-2">Total Cost</p>
+                        <p className="text-sm font-medium text-red-600 mb-2">{t('admin.profitDashboard.totalCost')}</p>
                         <p className="text-3xl font-bold text-red-900">
                             {formatCurrency((profitSummary?.totalRevenue || 0) - (profitSummary?.totalProfit || 0))}
                         </p>
-                        <p className="text-xs text-red-600 mt-2">Cost of goods sold</p>
+                        <p className="text-xs text-red-600 mt-2">{t('admin.profitDashboard.costOfGoodsSold')}</p>
                     </div>
 
                     {/* Profit Summary */}
                     <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl shadow-lg border border-emerald-200/50 p-6">
-                        <p className="text-sm font-medium text-emerald-600 mb-2">Net Profit</p>
+                        <p className="text-sm font-medium text-emerald-600 mb-2">{t('admin.profitDashboard.netProfit')}</p>
                         <p className="text-3xl font-bold text-emerald-900">
                             {formatCurrency(profitSummary?.totalProfit || 0)}
                         </p>
-                        <p className="text-xs text-emerald-600 mt-2">Revenue - Cost</p>
+                        <p className="text-xs text-emerald-600 mt-2">{t('admin.profitDashboard.revenueMinusCost')}</p>
                     </div>
                 </div>
             )}
