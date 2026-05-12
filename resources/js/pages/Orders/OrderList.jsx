@@ -777,13 +777,13 @@ export default function OrderList({ status = '' }) {
     };
 
     const getPageTitle = () => {
-        if (isConfirmationAgentUser && assignmentScope === 'available') return 'Available Orders';
-        if (isConfirmationAgentUser && assignmentScope === 'todo') return 'Today Follow-Ups';
-        if (isConfirmationAgentUser) return 'My Orders';
-        if (isDeliveryPersonUser && assignmentScope === 'todo') return 'Today Callbacks';
-        if (isDeliveryPersonUser) return 'My Delivery Orders';
-        if (!status) return 'Orders';
-        return `${status.charAt(0).toUpperCase() + status.slice(1)} Orders`;
+        if (isConfirmationAgentUser && assignmentScope === 'available') return t('admin.orderList.availableQueue');
+        if (isConfirmationAgentUser && assignmentScope === 'todo') return t('admin.orderList.todayFollowUps');
+        if (isConfirmationAgentUser) return t('admin.orderList.myOrders');
+        if (isDeliveryPersonUser && assignmentScope === 'todo') return t('admin.orderList.todayCallbacks');
+        if (isDeliveryPersonUser) return t('admin.orderList.myDeliveryOrders');
+        if (!status) return t('admin.orderList.orders');
+        return t(`admin.orderStatuses.${status}`) + ' ' + t('admin.orderList.orders');
     };
 
     if (isDeliveryPersonUser) {
@@ -801,9 +801,9 @@ export default function OrderList({ status = '' }) {
                 <div className="max-w-5xl mx-auto space-y-5">
                     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${isDarkMode ? 'text-sky-300/70' : 'text-slate-500'}`}>Delivery workflow</p>
+                            <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${isDarkMode ? 'text-sky-300/70' : 'text-slate-500'}`}>{t('admin.orderList.deliveryWorkflow')}</p>
                             <h1 className={`mt-1 text-3xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{getPageTitle()}</h1>
-                            <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Fast action cards with only the information needed in the field.</p>
+                            <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t('admin.orderList.fastActionCardsDescription')}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <button
@@ -819,7 +819,7 @@ export default function OrderList({ status = '' }) {
                                             : 'bg-white text-slate-700 border border-slate-300'
                                 }`}
                             >
-                                Assigned Orders
+                                {t('admin.orderList.assignedOrders')}
                             </button>
                             <button
                                 onClick={() => {
@@ -834,7 +834,7 @@ export default function OrderList({ status = '' }) {
                                             : 'bg-white text-slate-700 border border-slate-300'
                                 }`}
                             >
-                                Today Callbacks
+                                {t('admin.orderList.todayCallbacks')}
                             </button>
                         </div>
                     </div>
@@ -853,18 +853,18 @@ export default function OrderList({ status = '' }) {
                                 onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value, page: 1 }))}
                                 className={`px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100 focus:ring-slate-700' : 'border-slate-300 focus:ring-slate-300'}`}
                             >
-                                <option value="">All statuses</option>
-                                <option value="delivered">Delivered</option>
-                                <option value="reported">Reporte</option>
-                                <option value="refused">Refused</option>
-                                <option value="no_response">No Answer</option>
-                                <option value="cancelled">Cancelled</option>
+                                <option value="">{t('admin.orderList.allStatuses')}</option>
+                                <option value="delivered">{t('admin.orderStatuses.delivered')}</option>
+                                <option value="reported">{t('admin.orderStatuses.reported')}</option>
+                                <option value="refused">{t('admin.orderStatuses.refused')}</option>
+                                <option value="no_response">{t('admin.orderStatuses.no_response')}</option>
+                                <option value="cancelled">{t('admin.orderStatuses.cancelled')}</option>
                             </select>
                             <button
                                 onClick={() => setFilters((prev) => ({ ...prev, search: '', status: '', page: 1 }))}
                                 className={`px-4 py-3 rounded-2xl text-sm font-semibold ${isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                             >
-                                Clear
+                                {t('admin.orderList.clear')}
                             </button>
                         </div>
                     </div>
@@ -876,7 +876,7 @@ export default function OrderList({ status = '' }) {
                         </div>
                     ) : orders.length === 0 ? (
                         <div className={`rounded-[28px] border p-12 text-center ${isDarkMode ? 'border-slate-800 bg-slate-900 text-slate-400' : 'border-slate-200 bg-white text-slate-500'}`}>
-                            <p className="text-base font-medium">No assigned orders match the current filters.</p>
+                            <p className="text-base font-medium">{t('admin.orderList.noAssignedOrdersMatch')}</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -911,7 +911,7 @@ export default function OrderList({ status = '' }) {
 
                     {!loading && orders.length > 0 && (
                         <div className={`flex items-center justify-between rounded-[28px] border p-4 ${isDarkMode ? 'border-slate-800 bg-slate-900 shadow-lg shadow-black/20' : 'border-slate-200 bg-white shadow-sm'}`}>
-                            <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Showing {pagination.from}-{pagination.to} of {pagination.total} orders</span>
+                            <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('admin.orderList.showingOrders', { from: pagination.from, to: pagination.to, total: pagination.total })}</span>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page - 1 }))}
@@ -922,7 +922,7 @@ export default function OrderList({ status = '' }) {
                                             : (isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300')
                                     }`}
                                 >
-                                    ◀ Previous
+                                    ◀ {t('admin.orderList.previous')}
                                 </button>
                                 <button
                                     onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page + 1 }))}
@@ -933,7 +933,7 @@ export default function OrderList({ status = '' }) {
                                             : (isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300')
                                     }`}
                                 >
-                                    Next ▶
+                                    {t('admin.orderList.next')} ▶
                                 </button>
                             </div>
                         </div>
@@ -967,7 +967,7 @@ export default function OrderList({ status = '' }) {
                         onClick={() => navigate(appPath('/orders/create'))}
                         className="px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
                     >
-                        + Create Order
+                        + {t('admin.orderList.createOrder')}
                     </button>
                 )}
             </div>
@@ -983,7 +983,7 @@ export default function OrderList({ status = '' }) {
                             assignmentScope === 'my' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
                         }`}
                     >
-                        {isDeliveryPersonUser ? 'Assigned Orders' : 'My Orders'}
+                        {isDeliveryPersonUser ? t('admin.orderList.assignedOrders') : t('admin.orderList.myOrders')}
                     </button>
                     {isConfirmationAgentUser && (
                         <button
@@ -995,7 +995,7 @@ export default function OrderList({ status = '' }) {
                                 assignmentScope === 'available' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
                             }`}
                         >
-                            Available Queue
+                            {t('admin.orderList.availableQueue')}
                         </button>
                     )}
                     <button
@@ -1009,7 +1009,7 @@ export default function OrderList({ status = '' }) {
                                 : 'bg-white text-slate-700 border border-slate-200'
                         }`}
                     >
-                        {isDeliveryPersonUser ? 'Today Callbacks' : 'Today Follow-Ups'}
+                        {isDeliveryPersonUser ? t('admin.orderList.todayCallbacks') : t('admin.orderList.todayFollowUps')}
                     </button>
                 </div>
             )}
@@ -1021,7 +1021,7 @@ export default function OrderList({ status = '' }) {
                         <svg className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <p className="text-green-700 font-semibold">{isWebhookOnly ? '✓ Shopify Active' : 'Connect Shopify'}</p>
+                        <p className="text-green-700 font-semibold">{isWebhookOnly ? t('admin.orderList.shopifyActive') : t('admin.orderList.connectShopify')}</p>
                     </div>
                 </div>
             )}
@@ -1032,49 +1032,49 @@ export default function OrderList({ status = '' }) {
                     onClick={() => setFilters({ ...filters, source: '', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-gray-400"
                 >
-                    <p className="text-[10px] text-gray-600 mb-0.5 font-medium uppercase">Total</p>
+                    <p className="text-[10px] text-gray-600 mb-0.5 font-medium uppercase">{t('admin.orderList.totalLabel')}</p>
                     <p className="text-base font-bold text-gray-900">{stats.total}</p>
                 </div>
                 <div 
                     onClick={() => setFilters({ ...filters, source: 'manual', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-gray-400"
                 >
-                    <p className="text-[10px] text-gray-600 mb-0.5 font-medium uppercase">Manual</p>
+                    <p className="text-[10px] text-gray-600 mb-0.5 font-medium uppercase">{t('admin.orderList.manualLabel')}</p>
                     <p className="text-base font-bold text-gray-900">{stats.manual}</p>
                 </div>
                 <div 
                     onClick={() => setFilters({ ...filters, source: 'shopify', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-green-500"
                 >
-                    <p className="text-[10px] text-green-600 mb-0.5 font-medium uppercase">Shopify</p>
+                    <p className="text-[10px] text-green-600 mb-0.5 font-medium uppercase">{t('admin.orderSources.shopify')}</p>
                     <p className="text-base font-bold text-green-900">{stats.shopify}</p>
                 </div>
                 <div 
                     onClick={() => setFilters({ ...filters, source: 'google_sheet', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-emerald-500"
                 >
-                    <p className="text-[10px] text-emerald-600 mb-0.5 font-medium uppercase">Sheets</p>
+                    <p className="text-[10px] text-emerald-600 mb-0.5 font-medium uppercase">{t('admin.orderList.sheetsLabel')}</p>
                     <p className="text-base font-bold text-emerald-900">{stats.google_sheet}</p>
                 </div>
                 <div 
                     onClick={() => setFilters({ ...filters, source: 'delivery_company', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-blue-500"
                 >
-                    <p className="text-[10px] text-blue-600 mb-0.5 font-medium uppercase">Delivery</p>
+                    <p className="text-[10px] text-blue-600 mb-0.5 font-medium uppercase">{t('admin.orderList.deliveryLabel')}</p>
                     <p className="text-base font-bold text-blue-900">{stats.delivery_company}</p>
                 </div>
                 <div 
                     onClick={() => setFilters({ ...filters, source: 'marketplace', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-purple-500"
                 >
-                    <p className="text-[10px] text-purple-600 mb-0.5 font-medium uppercase">Market</p>
+                    <p className="text-[10px] text-purple-600 mb-0.5 font-medium uppercase">{t('admin.orderList.marketLabel')}</p>
                     <p className="text-base font-bold text-purple-900">{stats.marketplace}</p>
                 </div>
                 <div 
                     onClick={() => setFilters({ ...filters, source: 'whatsapp', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-emerald-500"
                 >
-                    <p className="text-[10px] text-emerald-600 mb-0.5 font-medium uppercase">WhatsApp</p>
+                    <p className="text-[10px] text-emerald-600 mb-0.5 font-medium uppercase">{t('admin.orderSources.whatsapp')}</p>
                     <p className="text-base font-bold text-emerald-900">{stats.whatsapp}</p>
                 </div>
             </div>
@@ -1084,7 +1084,7 @@ export default function OrderList({ status = '' }) {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
                     <input
                         type="text"
-                        placeholder="Search..."
+                        placeholder={t('admin.orderList.search')}
                         value={filters.search}
                         onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -1094,29 +1094,29 @@ export default function OrderList({ status = '' }) {
                         onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
-                        <option value="">Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="reported">Reporte</option>
-                        <option value="shipped">Shipped</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="cancelled">Cancelled</option>
-                        <option value="no_response">No Response</option>
-                        <option value="refused">Refused</option>
-                        <option value="returned">Returned</option>
+                        <option value="">{t('admin.orderList.status')}</option>
+                        <option value="pending">{t('admin.orderStatuses.pending')}</option>
+                        <option value="confirmed">{t('admin.orderStatuses.confirmed')}</option>
+                        <option value="reported">{t('admin.orderStatuses.reported')}</option>
+                        <option value="shipped">{t('admin.orderStatuses.shipped')}</option>
+                        <option value="delivered">{t('admin.orderStatuses.delivered')}</option>
+                        <option value="cancelled">{t('admin.orderStatuses.cancelled')}</option>
+                        <option value="no_response">{t('admin.orderStatuses.no_response')}</option>
+                        <option value="refused">{t('admin.orderStatuses.refused')}</option>
+                        <option value="returned">{t('admin.orderStatuses.returned')}</option>
                     </select>
                     <select
                         value={filters.source}
                         onChange={(e) => setFilters({ ...filters, source: e.target.value, page: 1 })}
                         className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
-                        <option value="">Source</option>
-                        <option value="manual">Manual</option>
-                        <option value="shopify">Shopify</option>
-                        <option value="google_sheet">Google Sheet</option>
-                        <option value="delivery_company">Delivery</option>
-                        <option value="marketplace">Marketplace</option>
-                        <option value="whatsapp">WhatsApp</option>
+                        <option value="">{t('admin.orderList.source')}</option>
+                        <option value="manual">{t('admin.orderSources.manual')}</option>
+                        <option value="shopify">{t('admin.orderSources.shopify')}</option>
+                        <option value="google_sheet">{t('admin.orderSources.google_sheet')}</option>
+                        <option value="delivery_company">{t('admin.orderSources.delivery_company')}</option>
+                        <option value="marketplace">{t('admin.orderSources.marketplace')}</option>
+                        <option value="whatsapp">{t('admin.orderSources.whatsapp')}</option>
                     </select>
                     {!isDeliveryPersonUser && !isVendorUser && (
                         <select
@@ -1124,7 +1124,7 @@ export default function OrderList({ status = '' }) {
                             onChange={(e) => setFilters({ ...filters, vendor_id: e.target.value, page: 1 })}
                             className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                         >
-                            <option value="">Seller</option>
+                            <option value="">{t('admin.orderList.seller')}</option>
                             {vendors.map((vendor) => (
                                 <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
                             ))}
@@ -1150,17 +1150,17 @@ export default function OrderList({ status = '' }) {
                 {loading ? (
                     <div className="bg-white rounded-lg p-12 text-center text-gray-500">
                         <div className="inline-block animate-spin h-8 w-8 border-4 border-blue-200 border-t-blue-600 rounded-full mb-3"></div>
-                        <p className="text-base font-medium">{t('admin.orders.loadingOrders')}</p>
+                        <p className="text-base font-medium">{t('admin.orderList.loadingOrders')}</p>
                     </div>
                 ) : orders.length === 0 ? (
                     <div className="bg-white rounded-lg p-12 text-center text-gray-500">
-                        <p className="text-base font-medium">{t('admin.orders.noOrdersFound')}</p>
+                        <p className="text-base font-medium">{t('admin.orderList.noOrdersFound')}</p>
                         <p className="text-sm mt-1">
                             {isConfirmationAgentUser
-                                ? 'Try another queue or wait for new assignments.'
+                                ? t('admin.orderList.tryAnotherQueue')
                                 : isDeliveryPersonUser
-                                    ? 'No assigned orders match the selected filters.'
-                                : 'Try adjusting your filters or create a new order'}
+                                    ? t('admin.orderList.noAssignedOrdersFilters')
+                                : t('admin.orderList.tryAdjustingFilters')}
                         </p>
                     </div>
                 ) : (
@@ -1194,7 +1194,7 @@ export default function OrderList({ status = '' }) {
                             : adminStatusLocked
                                 ? getAdminStatusLockMessage(order)
                                 : '';
-                        const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || '+ Assign';
+                                        const assignmentPrimaryLabel = companyLabel || deliveryAgentLabel || t('admin.orderList.assign');
                         const interactiveDeliveryTone = companyLabel
                             ? getDeliveryCompanyTone(order, { interactive: true })
                             : deliveryAgentLabel
@@ -1240,13 +1240,13 @@ export default function OrderList({ status = '' }) {
                                         </span>
                                         {isBlacklisted && (
                                             <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 bg-rose-600 text-white">
-                                                {order.blacklist_badge || 'Banned / Blacklisted'}
+                                                {order.blacklist_badge || t('admin.orderList.bannedBlacklisted')}
                                             </span>
                                         )}
                                         <span className="text-[10px] text-gray-600 flex-shrink-0">{formatDate(order.created_at)}</span>
                                         {order.callback_date && (
                                             <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-800 flex-shrink-0">
-                                                Callback {formatDate(order.callback_date)}
+                                                {t('admin.orderList.callback')} {formatDate(order.callback_date)}
                                             </span>
                                         )}
                                     </div>
@@ -1256,7 +1256,7 @@ export default function OrderList({ status = '' }) {
                                                 {formatStatusLabel(order.status)}
                                             </span>
                                             <span className="text-[9px] font-medium text-slate-500">
-                                                {deliveryWorkflowIsLocked || (adminStatusLocked && isDeliveryWorkflowLocked(order)) ? 'Invoice locked' : 'Delivery controlled'}
+                                                {deliveryWorkflowIsLocked || (adminStatusLocked && isDeliveryWorkflowLocked(order)) ? t('admin.orderList.invoiceLocked') : t('admin.orderList.deliveryControlled')}
                                             </span>
                                         </div>
                                     ) : (
@@ -1283,16 +1283,16 @@ export default function OrderList({ status = '' }) {
                                     
                                     {/* CLIENT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Client</p>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.client')}</p>
                                         <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.client?.name || '-'}</p>
                                         <p className="text-gray-600 text-[10px] leading-tight truncate">{order.client?.phone || '-'}</p>
                                         <p className="text-gray-500 text-[10px] leading-tight truncate">{order.city || order.client?.city || '-'}</p>
                                         {order.callback_date && (
-                                            <p className="text-amber-700 text-[10px] leading-tight truncate">Follow-up: {formatDate(order.callback_date)}</p>
+                                            <p className="text-amber-700 text-[10px] leading-tight truncate">{t('admin.orderList.followUp')}: {formatDate(order.callback_date)}</p>
                                         )}
                                         {isBlacklisted && order.blacklist_entry?.reason && (
                                             <p className="text-rose-700 text-[10px] leading-tight">
-                                                Blacklist: {order.blacklist_entry.reason}
+                                                {t('admin.orderList.blacklist')}: {order.blacklist_entry.reason}
                                             </p>
                                         )}
                                         {order.shipping_address && (
@@ -1300,28 +1300,28 @@ export default function OrderList({ status = '' }) {
                                         )}
                                         {order.delivery_status_note && (
                                             <p className="text-rose-700 text-[10px] leading-tight">
-                                                Motif: {order.delivery_status_note}
+                                                {t('admin.orderList.motif')}: {order.delivery_status_note}
                                             </p>
                                         )}
                                     </div>
 
                                     {/* SELLER COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Seller</p>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.seller')}</p>
                                         {sellerLabel ? (
                                             <>
                                                 <p className="font-bold text-gray-900 text-sm leading-tight truncate">{sellerLabel}</p>
                                             </>
                                         ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
-                                                Direct
+                                                {t('admin.orderList.direct')}
                                             </span>
                                         )}
                                     </div>
 
                                     {/* CONFIRMATION COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Confirmation</p>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.confirmation')}</p>
                                         {confirmationAgentLabel ? (
                                             <>
                                                 <p className="font-bold text-gray-900 text-sm leading-tight truncate">
@@ -1332,24 +1332,24 @@ export default function OrderList({ status = '' }) {
                                                         ? 'bg-emerald-50 text-emerald-700'
                                                         : 'bg-slate-100 text-slate-600'
                                                 }`}>
-                                                    {isResponsibleConfirmationAgent ? 'Responsible' : 'Assigned'}
+                                                    {isResponsibleConfirmationAgent ? t('admin.orderList.responsible') : t('admin.orderList.assigned')}
                                                 </span>
                                                 {order.returned_to_confirmation_at && (
                                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-cyan-50 text-cyan-700">
-                                                        Back from delivery
+                                                        {t('admin.orderList.backFromDelivery')}
                                                     </span>
                                                 )}
                                             </>
                                         ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
-                                                Unassigned
+                                                {t('admin.orderList.unassigned')}
                                             </span>
                                         )}
                                     </div>
 
                                     {/* ITEMS COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Items</p>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.items')}</p>
                                         <div className="space-y-0.25">
                                             {primaryItems.slice(0, 2).map((item, idx) => (
                                                 <div key={idx} className="text-[11px] text-gray-800 leading-snug truncate">
@@ -1358,11 +1358,11 @@ export default function OrderList({ status = '' }) {
                                                 </div>
                                             ))}
                                             {primaryItems.length > 2 && (
-                                                <p className="text-[11px] text-blue-600 font-semibold leading-snug">+{primaryItems.length - 2} more</p>
+                                                <p className="text-[11px] text-blue-600 font-semibold leading-snug">{t('admin.orderList.moreItems', { count: primaryItems.length - 2 })}</p>
                                             )}
                                             {upsellItems.length > 0 && (
                                                 <p className="text-[11px] text-emerald-700 font-semibold leading-snug">
-                                                    Upsell: {upsellItems.map((item) => item.product?.name || item.product_name || 'Product').join(', ')}
+                                                    {t('admin.orderList.upsell')}: {upsellItems.map((item) => item.product?.name || item.product_name || 'Product').join(', ')}
                                                 </p>
                                             )}
                                         </div>
@@ -1371,7 +1371,7 @@ export default function OrderList({ status = '' }) {
                                     {/* AMOUNT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isDeliveryPersonUser ? 'Collected' : 'Amount'}
+                                            {isDeliveryPersonUser ? t('admin.orderList.collected') : t('admin.orderList.amount')}
                                         </p>
                                         <p className="font-bold text-gray-900 text-sm leading-tight">
                                             {formatCurrency(isDeliveryPersonUser ? (order.collected_amount || 0) : orderAmount)}
@@ -1381,7 +1381,7 @@ export default function OrderList({ status = '' }) {
                                     {/* BENEFIT COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isDeliveryPersonUser ? 'Commission' : 'Profit'}
+                                            {isDeliveryPersonUser ? t('admin.orderList.commission') : t('admin.orderList.profit')}
                                         </p>
                                         <p className={`font-bold text-sm leading-tight ${
                                             isDeliveryPersonUser
@@ -1395,7 +1395,7 @@ export default function OrderList({ status = '' }) {
                                     {/* TRACKING COLUMN */}
                                     <div className="min-w-0 space-y-0.5">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isDeliveryPersonUser ? 'Due Admin' : 'Tracking'}
+                                            {isDeliveryPersonUser ? t('admin.orderList.dueAdmin') : t('admin.orderList.tracking')}
                                         </p>
                                         {isDeliveryPersonUser ? (
                                             <p className="text-amber-700 font-semibold text-[11px] leading-snug">
@@ -1532,14 +1532,14 @@ export default function OrderList({ status = '' }) {
                 {/* Pagination */}
                 {!loading && orders.length > 0 && (
                     <div className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-between border border-gray-100">
-                        <span className="text-sm text-gray-600 font-medium">Showing {pagination.from}-{pagination.to} of {pagination.total} orders</span>
+                        <span className="text-sm text-gray-600 font-medium">{t('admin.orderList.showingOrders', { from: pagination.from, to: pagination.to, total: pagination.total })}</span>
                         <div className="flex gap-2">
                             <button
                                 onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
                                 disabled={pagination.current_page === 1}
                                 className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                             >
-                                ◀ Previous
+                                ◀ {t('admin.orderList.previous')}
                             </button>
                             {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
                                 .filter(page => page === 1 || page === pagination.last_page || (page >= pagination.current_page - 1 && page <= pagination.current_page + 1))
@@ -1559,7 +1559,7 @@ export default function OrderList({ status = '' }) {
                                 disabled={pagination.current_page === pagination.last_page}
                                 className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === pagination.last_page ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                             >
-                                Next ▶
+                                {t('admin.orderList.next')} ▶
                             </button>
                         </div>
                     </div>

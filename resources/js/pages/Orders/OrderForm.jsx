@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -59,6 +60,7 @@ const wasOrderCreatedByCurrentConfirmationAgent = (order, userId) => {
 };
 
 export default function OrderForm() {
+    const { t } = useTranslation();
     const { formatCurrency, settings } = useSettings();
     const { user } = useAuth();
     const roleSlug = user?.role?.slug;

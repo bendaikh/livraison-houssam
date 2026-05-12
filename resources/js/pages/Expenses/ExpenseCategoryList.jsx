@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { Plus, Edit2, Trash2, X, Check, Tag, AlertCircle } from 'lucide-react';
 
 export default function ExpenseCategoryList() {
+    const { t } = useTranslation();
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -63,14 +65,14 @@ export default function ExpenseCategoryList() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this category?')) return;
+        if (!window.confirm(t('admin.expenseCategories.deleteConfirm'))) return;
 
         try {
             await api.delete(`/expense-categories/${id}`);
             fetchCategories();
         } catch (error) {
             console.error('Error deleting category:', error);
-            alert('Failed to delete category. It may have associated expenses.');
+            alert(t('admin.expenseCategories.deleteFailed'));
         }
     };
 
@@ -94,16 +96,16 @@ export default function ExpenseCategoryList() {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">
-                        Expense Categories
+                        {t('admin.expenseCategories.title')}
                     </h1>
-                    <p className="text-slate-600 mt-1">Organize your expenses by category</p>
+                    <p className="text-slate-600 mt-1">{t('admin.expenseCategories.subtitle')}</p>
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
                     className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 font-semibold shadow-lg shadow-red-500/30 transition-all flex items-center space-x-2"
                 >
                     <Plus size={20} />
-                    <span>Add Category</span>
+                    <span>{t('admin.expenseCategories.addCategory')}</span>
                 </button>
             </div>
 
@@ -111,7 +113,7 @@ export default function ExpenseCategoryList() {
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-6">
                 <input
                     type="text"
-                    placeholder="Search categories..."
+                    placeholder={t('admin.expenseCategories.searchPlaceholder')}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
@@ -123,16 +125,16 @@ export default function ExpenseCategoryList() {
                 {loading && categories.length === 0 ? (
                     <div className="col-span-full text-center py-12">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
-                        <p className="text-slate-600 mt-4">Loading categories...</p>
+                        <p className="text-slate-600 mt-4">{t('admin.expenseCategories.loadingCategories')}</p>
                     </div>
                 ) : filteredCategories.length === 0 ? (
                     <div className="col-span-full text-center py-12 bg-white rounded-2xl shadow-xl border border-slate-200/50">
                         <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Tag size={40} className="text-red-600" />
                         </div>
-                        <h3 className="text-xl font-semibold text-slate-700 mb-2">No categories found</h3>
+                        <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('admin.expenseCategories.noCategoriesFound')}</h3>
                         <p className="text-slate-500 mb-4">
-                            {searchTerm ? 'Try a different search term' : 'Get started by creating your first category'}
+                            {searchTerm ? t('admin.expenseCategories.tryDifferentSearch') : t('admin.expenseCategories.getStarted')}
                         </p>
                         {!searchTerm && (
                             <button
@@ -140,7 +142,7 @@ export default function ExpenseCategoryList() {
                                 className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 font-medium transition-all inline-flex items-center space-x-2"
                             >
                                 <Plus size={18} />
-                                <span>Create Category</span>
+                                <span>{t('admin.expenseCategories.createCategory')}</span>
                             </button>
                         )}
                     </div>
@@ -169,20 +171,20 @@ export default function ExpenseCategoryList() {
 
                             <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                 <div className="text-xs text-slate-500">
-                                    {category.expenses_count || 0} expenses
+                                    {category.expenses_count || 0} {t('admin.expenseCategories.expenses')}
                                 </div>
                                 <div className="flex space-x-2">
                                     <button
                                         onClick={() => handleEdit(category)}
                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                        title="Edit"
+                                        title={t('admin.expenseCategories.edit')}
                                     >
                                         <Edit2 size={16} />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(category.id)}
                                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                        title="Delete"
+                                        title={t('admin.expenseCategories.delete')}
                                     >
                                         <Trash2 size={16} />
                                     </button>
@@ -204,7 +206,7 @@ export default function ExpenseCategoryList() {
                                     <Tag size={20} className="text-white" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">
-                                    {editingCategory ? 'Edit Category' : 'Create New Category'}
+                                    {editingCategory ? t('admin.expenseCategories.editCategory') : t('admin.expenseCategories.createNewCategory')}
                                 </h2>
                             </div>
                             <button
@@ -223,7 +225,7 @@ export default function ExpenseCategoryList() {
                                     <div className="flex items-start">
                                         <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
                                         <div className="ml-3">
-                                            <h3 className="text-sm font-semibold text-red-800">Validation Errors</h3>
+                                            <h3 className="text-sm font-semibold text-red-800">{t('admin.expenseCategories.validationErrors')}</h3>
                                             <ul className="mt-2 text-sm text-red-700 list-disc list-inside space-y-1">
                                                 {Object.entries(errors).map(([field, messages]) => (
                                                     <li key={field}>
@@ -238,14 +240,14 @@ export default function ExpenseCategoryList() {
 
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Category Name *
+                                    {t('admin.expenseCategories.categoryName')} *
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
-                                    placeholder="e.g., Office Supplies, Travel, Utilities"
+                                    placeholder={t('admin.expenseCategories.categoryNamePlaceholder')}
                                     required
                                 />
                                 {errors.name && (
@@ -257,14 +259,14 @@ export default function ExpenseCategoryList() {
 
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Description
+                                    {t('admin.expenseCategories.description')}
                                 </label>
                                 <textarea
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     rows="3"
                                     className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
-                                    placeholder="Describe this expense category..."
+                                    placeholder={t('admin.expenseCategories.descriptionPlaceholder')}
                                 />
                             </div>
 
@@ -275,7 +277,7 @@ export default function ExpenseCategoryList() {
                                     onClick={handleCloseModal}
                                     className="px-6 py-2.5 border-2 border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 font-medium transition-all"
                                 >
-                                    Cancel
+                                    {t('admin.expenseCategories.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -288,12 +290,12 @@ export default function ExpenseCategoryList() {
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                             </svg>
-                                            <span>Saving...</span>
+                                            <span>{t('admin.expenseCategories.saving')}</span>
                                         </>
                                     ) : (
                                         <>
                                             <Check size={20} />
-                                            <span>{editingCategory ? 'Update Category' : 'Create Category'}</span>
+                                            <span>{editingCategory ? t('admin.expenseCategories.updateCategory') : t('admin.expenseCategories.createCategory')}</span>
                                         </>
                                     )}
                                 </button>

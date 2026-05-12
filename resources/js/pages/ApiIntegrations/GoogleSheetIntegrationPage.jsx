@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,6 +31,7 @@ const extractSheetId = (urlOrId = '') => {
 const hashKey = (values) => values.join('|').toLowerCase();
 
 export default function GoogleSheetIntegrationPage() {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
     const [integration, setIntegration] = useState(null);
@@ -139,7 +141,7 @@ export default function GoogleSheetIntegrationPage() {
     const loadTabs = async () => {
         setMessage({});
         if (!sheetUrl) {
-            setMessage({ type: 'error', text: 'Paste a Google Sheet URL first.' });
+            setMessage({ type: 'error', text: t('admin.apiIntegrations.googleSheet.pasteUrlFirst') });
             return;
         }
         setLoadingTabs(true);
@@ -160,11 +162,11 @@ export default function GoogleSheetIntegrationPage() {
             setMessage({
                 type: (response.data.data || []).length > 0 ? 'success' : 'error',
                 text: (response.data.data || []).length > 0
-                    ? 'Tabs loaded. Choose the tab that has your orders.'
-                    : 'No tabs were returned. Check that the sheet URL is correct and the sheet is shared for viewing.',
+                    ? t('admin.apiIntegrations.googleSheet.tabsLoaded')
+                    : t('admin.apiIntegrations.googleSheet.noTabs'),
             });
         } catch (error) {
-            setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to load tabs.' });
+            setMessage({ type: 'error', text: error.response?.data?.message || t('admin.apiIntegrations.googleSheet.failedLoadTabs') });
         } finally {
             setLoadingTabs(false);
         }
@@ -172,7 +174,7 @@ export default function GoogleSheetIntegrationPage() {
 
     const loadPreview = async () => {
         if (!selectedTab) {
-            setMessage({ type: 'error', text: 'Select a tab to preview.' });
+            setMessage({ type: 'error', text: t('admin.apiIntegrations.googleSheet.selectTabFirst') });
             return;
         }
         setLoadingPreview(true);
@@ -192,7 +194,7 @@ export default function GoogleSheetIntegrationPage() {
             setMapping(detected);
             buildPreview(data.rows || [], detected, normalized.includes('check'));
         } catch (error) {
-            setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to load preview.' });
+            setMessage({ type: 'error', text: error.response?.data?.message || t('admin.apiIntegrations.googleSheet.failedLoadPreview') });
         } finally {
             setLoadingPreview(false);
         }
@@ -284,11 +286,11 @@ export default function GoogleSheetIntegrationPage() {
 
     const persistAndImport = async () => {
         if (!sheetUrl || !selectedTab) {
-            setMessage({ type: 'error', text: 'Paste a sheet URL and select a tab first.' });
+            setMessage({ type: 'error', text: t('admin.apiIntegrations.googleSheet.pasteUrlAndTab') });
             return;
         }
         if (!validRows.length) {
-            setMessage({ type: 'error', text: 'No valid rows to import.' });
+            setMessage({ type: 'error', text: t('admin.apiIntegrations.googleSheet.noValidRowsToImport') });
             return;
         }
 
@@ -310,7 +312,7 @@ export default function GoogleSheetIntegrationPage() {
             setMessage({ type: 'success', text: logMsg });
             fetchIntegration();
         } catch (error) {
-            setMessage({ type: 'error', text: error.response?.data?.message || 'Import failed.' });
+            setMessage({ type: 'error', text: error.response?.data?.message || t('admin.apiIntegrations.googleSheet.importFailed') });
         } finally {
             setImporting(false);
         }
@@ -325,14 +327,14 @@ export default function GoogleSheetIntegrationPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                    <Link to={appPath('/api-integrations')} className="text-gray-500 hover:text-gray-700">← Back</Link>
+                    <Link to={appPath('/api-integrations')} className="text-gray-500 hover:text-gray-700">{t('admin.apiIntegrations.back')}</Link>
                     <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
                             <span className="text-2xl">📊</span>
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Google Sheets Import</h1>
-                            <p className="text-gray-600">Paste a sheet URL → pick the tab → review → import.</p>
+                            <h1 className="text-2xl font-bold text-gray-900">{t('admin.apiIntegrations.googleSheet.title')}</h1>
+                            <p className="text-gray-600">{t('admin.apiIntegrations.googleSheet.subtitle')}</p>
                         </div>
                     </div>
                 </div>
@@ -340,7 +342,7 @@ export default function GoogleSheetIntegrationPage() {
                     <span className={`px-4 py-2 rounded-full text-sm font-medium ${
                         integration.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
                     }`}>
-                        {integration.is_active ? 'Active' : 'Inactive'}
+                        {integration.is_active ? t('admin.apiIntegrations.active') : t('admin.apiIntegrations.inactive')}
                     </span>
                 )}
             </div>
@@ -358,28 +360,28 @@ export default function GoogleSheetIntegrationPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Google Sheet URL</label>
+                        <label className="text-sm font-medium text-gray-700">{t('admin.apiIntegrations.googleSheet.sheetUrl')}</label>
                         <input
                             type="text"
                             value={sheetUrl}
                             onChange={(e) => setSheetUrl(e.target.value)}
-                            placeholder="https://docs.google.com/spreadsheets/d/..."
+                            placeholder={t('admin.apiIntegrations.googleSheet.sheetUrlPlaceholder')}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                         />
-                        <p className="text-xs text-gray-500">We only need the URL. Tabs and headers are detected automatically.</p>
+                        <p className="text-xs text-gray-500">{t('admin.apiIntegrations.googleSheet.sheetUrlHelp')}</p>
                     </div>
 
                     {isAdminUser && (
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">Google Sheets API Key</label>
+                            <label className="text-sm font-medium text-gray-700">{t('admin.apiIntegrations.googleSheet.apiKey')}</label>
                             <input
                                 type="password"
                                 value={apiKeyInput}
                                 onChange={(e) => setApiKeyInput(e.target.value)}
-                                placeholder="AIza..."
+                                placeholder={t('admin.apiIntegrations.googleSheet.apiKeyPlaceholder')}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                             />
-                            <p className="text-xs text-gray-500">Admin only. Save the key once in the integration record, then sellers can import without server env access.</p>
+                            <p className="text-xs text-gray-500">{t('admin.apiIntegrations.googleSheet.apiKeyHelp')}</p>
                         </div>
                     )}
 
@@ -390,14 +392,14 @@ export default function GoogleSheetIntegrationPage() {
                             disabled={loadingTabs}
                             className="px-4 py-2 bg-white text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50 disabled:opacity-40"
                         >
-                            {loadingTabs ? 'Loading tabs...' : 'Load Tabs'}
+                            {loadingTabs ? t('admin.apiIntegrations.googleSheet.loadingTabs') : t('admin.apiIntegrations.googleSheet.loadTabs')}
                         </button>
                         <select
                             value={selectedTab}
                             onChange={(e) => setSelectedTab(e.target.value)}
                             className="px-3 py-2 border border-gray-300 rounded-lg"
                         >
-                            <option value="">Select tab</option>
+                            <option value="">{t('admin.apiIntegrations.googleSheet.selectTab')}</option>
                             {tabs.map((tab) => (
                                 <option key={tab} value={tab}>{tab}</option>
                             ))}
@@ -408,19 +410,19 @@ export default function GoogleSheetIntegrationPage() {
                             disabled={!selectedTab || loadingPreview}
                             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                         >
-                            {loadingPreview ? 'Loading preview...' : 'Preview'}
+                            {loadingPreview ? t('admin.apiIntegrations.googleSheet.loadingPreview') : t('admin.apiIntegrations.googleSheet.preview')}
                         </button>
                     </div>
 
                     {headers.length > 0 && (
                         <div className="space-y-3">
-                            <h3 className="font-semibold text-gray-900">Detected mapping</h3>
+                            <h3 className="font-semibold text-gray-900">{t('admin.apiIntegrations.googleSheet.detectedMapping')}</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {mappingList.map((item) => (
                                     <div key={item.field} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded border border-gray-100 text-sm">
                                         <span className="font-medium text-gray-700">{item.field}</span>
                                         <span className={`text-gray-800 ${item.column === 'Not detected' ? 'text-red-600' : ''}`}>
-                                            {item.column}
+                                            {item.column === 'Not detected' ? t('admin.apiIntegrations.googleSheet.notDetected') : item.column}
                                         </span>
                                     </div>
                                 ))}
@@ -430,11 +432,11 @@ export default function GoogleSheetIntegrationPage() {
 
                     {validRows.length + invalidRows.length + duplicateRows.length > 0 && (
                         <div className="space-y-3">
-                            <h3 className="font-semibold text-gray-900">Preview</h3>
+                            <h3 className="font-semibold text-gray-900">{t('admin.apiIntegrations.googleSheet.previewTitle')}</h3>
                             <div className="flex flex-wrap gap-3 text-sm">
-                                <span className="px-3 py-1 rounded bg-emerald-50 text-emerald-700">Valid: {validRows.length}</span>
-                                <span className="px-3 py-1 rounded bg-amber-50 text-amber-700">Duplicates: {duplicateRows.length}</span>
-                                <span className="px-3 py-1 rounded bg-red-50 text-red-700">Invalid: {invalidRows.length}</span>
+                                <span className="px-3 py-1 rounded bg-emerald-50 text-emerald-700">{t('admin.apiIntegrations.googleSheet.valid')}: {validRows.length}</span>
+                                <span className="px-3 py-1 rounded bg-amber-50 text-amber-700">{t('admin.apiIntegrations.googleSheet.duplicates')}: {duplicateRows.length}</span>
+                                <span className="px-3 py-1 rounded bg-red-50 text-red-700">{t('admin.apiIntegrations.googleSheet.invalid')}: {invalidRows.length}</span>
                             </div>
                             <div className="overflow-x-auto border border-gray-200 rounded-lg">
                                 <table className="min-w-full text-xs">
@@ -454,7 +456,7 @@ export default function GoogleSheetIntegrationPage() {
                                             </tr>
                                         ))}
                                         {validRows.length === 0 && (
-                                            <tr><td className="px-3 py-2 text-gray-500" colSpan={headers.length}>No valid rows found.</td></tr>
+                                            <tr><td className="px-3 py-2 text-gray-500" colSpan={headers.length}>{t('admin.apiIntegrations.googleSheet.noValidRows')}</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -469,23 +471,23 @@ export default function GoogleSheetIntegrationPage() {
                             disabled={importing || !validRows.length}
                             className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                         >
-                            {importing ? 'Importing...' : 'Confirm Import'}
+                            {importing ? t('admin.apiIntegrations.googleSheet.importing') : t('admin.apiIntegrations.googleSheet.confirmImport')}
                         </button>
-                        <p className="text-xs text-gray-500 self-center">Only valid, non-duplicate rows are imported. Required: customer, phone, and either city or address.</p>
+                        <p className="text-xs text-gray-500 self-center">{t('admin.apiIntegrations.googleSheet.importNote')}</p>
                     </div>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-3">
-                    <h3 className="text-base font-semibold text-gray-900">How it works</h3>
+                    <h3 className="text-base font-semibold text-gray-900">{t('admin.apiIntegrations.howItWorks')}</h3>
                     <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-                        <li>Paste the Google Sheet URL; we extract the ID automatically.</li>
-                        <li>Select the tab; the first row becomes headers.</li>
-                        <li>We auto-detect columns (client and phone are required; city or address is enough for location).</li>
-                        <li>Defaults: status pending, quantity 1, source google_sheet, date = today if missing.</li>
-                        <li>If a column named CHECK exists, only rows with a value in CHECK are imported.</li>
+                        <li>{t('admin.apiIntegrations.googleSheet.howItWorks1')}</li>
+                        <li>{t('admin.apiIntegrations.googleSheet.howItWorks2')}</li>
+                        <li>{t('admin.apiIntegrations.googleSheet.howItWorks3')}</li>
+                        <li>{t('admin.apiIntegrations.googleSheet.howItWorks4')}</li>
+                        <li>{t('admin.apiIntegrations.googleSheet.howItWorks5')}</li>
                     </ul>
                     <div className="p-3 bg-emerald-50 border border-emerald-100 rounded text-sm text-emerald-800">
-                        Supported aliases: client/client_name/customer/nom, phone/tel/mobile, city/ville, price/total/montant/cod, product/product_name/article, quantity/qty/qte, order_id/reference.
+                        {t('admin.apiIntegrations.googleSheet.supportedAliases')}
                     </div>
                 </div>
             </div>

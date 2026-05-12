@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 
 export default function BMDeliveryIntegrationPage() {
+    const { t } = useTranslation();
     const [integration, setIntegration] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isTesting, setIsTesting] = useState(false);
@@ -58,17 +60,17 @@ export default function BMDeliveryIntegrationPage() {
 
             if (integration) {
                 await api.put(`/api-integrations/${integration.id}`, payload);
-                setMessage({ type: 'success', text: 'BMDelivery integration updated successfully!' });
+                setMessage({ type: 'success', text: t('admin.apiIntegrations.bmdelivery.updatedSuccess') });
             } else {
                 await api.post('/api-integrations', payload);
-                setMessage({ type: 'success', text: 'BMDelivery integration created successfully!' });
+                setMessage({ type: 'success', text: t('admin.apiIntegrations.bmdelivery.createdSuccess') });
             }
 
             fetchIntegration();
         } catch (error) {
             setMessage({
                 type: 'error',
-                text: error.response?.data?.message || 'Failed to save integration',
+                text: error.response?.data?.message || t('admin.apiIntegrations.saveFailed'),
             });
         } finally {
             setIsSaving(false);
@@ -77,7 +79,7 @@ export default function BMDeliveryIntegrationPage() {
 
     const handleTestConnection = async () => {
         if (!integration) {
-            setMessage({ type: 'error', text: 'Please save the integration first' });
+            setMessage({ type: 'error', text: t('admin.apiIntegrations.bmdelivery.saveFirst') });
             return;
         }
 
@@ -93,7 +95,7 @@ export default function BMDeliveryIntegrationPage() {
         } catch (error) {
             setMessage({
                 type: 'error',
-                text: error.response?.data?.message || 'Connection test failed',
+                text: error.response?.data?.message || t('admin.apiIntegrations.bmdelivery.connectionFailed'),
             });
         } finally {
             setIsTesting(false);
@@ -106,22 +108,22 @@ export default function BMDeliveryIntegrationPage() {
         try {
             const response = await api.get(`/api-integrations/${integration.id}/cities`);
             setCities(response.data.data || []);
-            setMessage({ type: 'success', text: `Found ${response.data.data?.length || 0} cities` });
+            setMessage({ type: 'success', text: t('admin.apiIntegrations.bmdelivery.fetchSuccess', { count: response.data.data?.length || 0 }) });
         } catch (error) {
             setMessage({
                 type: 'error',
-                text: error.response?.data?.message || 'Failed to fetch cities',
+                text: error.response?.data?.message || t('admin.apiIntegrations.bmdelivery.fetchFailed'),
             });
         }
     };
 
     const handleDelete = async () => {
         if (!integration) return;
-        if (!confirm('Are you sure you want to delete this integration?')) return;
+        if (!confirm(t('admin.apiIntegrations.deleteConfirm'))) return;
 
         try {
             await api.delete(`/api-integrations/${integration.id}`);
-            setMessage({ type: 'success', text: 'Integration deleted successfully' });
+            setMessage({ type: 'success', text: t('admin.apiIntegrations.deleteSuccess') });
             setIntegration(null);
             setFormData({
                 name: 'BMDelivery',
@@ -131,7 +133,7 @@ export default function BMDeliveryIntegrationPage() {
         } catch (error) {
             setMessage({
                 type: 'error',
-                text: error.response?.data?.message || 'Failed to delete integration',
+                text: error.response?.data?.message || t('admin.apiIntegrations.deleteFailed'),
             });
         }
     };
@@ -141,7 +143,7 @@ export default function BMDeliveryIntegrationPage() {
             <div className="space-y-6">
                 <div className="flex items-center space-x-4">
                     <Link to={appPath('/api-integrations')} className="text-gray-500 hover:text-gray-700">
-                        ← Back to Integrations
+                        {t('admin.apiIntegrations.backToIntegrations')}
                     </Link>
                 </div>
                 <div className="flex items-center justify-center h-64">
@@ -157,15 +159,15 @@ export default function BMDeliveryIntegrationPage() {
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <Link to={appPath('/api-integrations')} className="text-gray-500 hover:text-gray-700">
-                        ← Back
+                        {t('admin.apiIntegrations.back')}
                     </Link>
                     <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                             <span className="text-2xl">🚚</span>
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900">BMDelivery Integration</h1>
-                            <p className="text-gray-600">Moroccan Delivery Service - Create and track shipments</p>
+                            <h1 className="text-2xl font-bold text-gray-900">{t('admin.apiIntegrations.bmdelivery.title')}</h1>
+                            <p className="text-gray-600">{t('admin.apiIntegrations.bmdelivery.description')}</p>
                         </div>
                     </div>
                 </div>
@@ -175,7 +177,7 @@ export default function BMDeliveryIntegrationPage() {
                             ? 'bg-blue-100 text-blue-800'
                             : 'bg-gray-100 text-gray-600'
                     }`}>
-                        {integration.is_active ? 'Active' : 'Inactive'}
+                        {integration.is_active ? t('admin.apiIntegrations.active') : t('admin.apiIntegrations.inactive')}
                     </span>
                 )}
             </div>
@@ -196,12 +198,12 @@ export default function BMDeliveryIntegrationPage() {
                 {/* Form Section */}
                 <div className="lg:col-span-2">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Connection Settings</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-6">{t('admin.apiIntegrations.bmdelivery.connectionSettings')}</h2>
                         
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Integration Name
+                                    {t('admin.apiIntegrations.integrationName')}
                                 </label>
                                 <input
                                     type="text"
@@ -215,18 +217,18 @@ export default function BMDeliveryIntegrationPage() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    API Token
+                                    {t('admin.apiIntegrations.bmdelivery.apiToken')}
                                 </label>
                                 <input
                                     type="password"
                                     value={formData.api_token}
                                     onChange={(e) => setFormData({ ...formData, api_token: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="Your BMDelivery API Token"
+                                    placeholder={t('admin.apiIntegrations.bmdelivery.apiTokenPlaceholder')}
                                     required
                                 />
                                 <p className="mt-2 text-sm text-gray-500">
-                                    Get your API token from{' '}
+                                    {t('admin.apiIntegrations.bmdelivery.apiTokenHelp')}{' '}
                                     <a
                                         href="https://bmdelivery.ma"
                                         target="_blank"
@@ -235,7 +237,7 @@ export default function BMDeliveryIntegrationPage() {
                                     >
                                         bmdelivery.ma
                                     </a>
-                                    {' '}back-office
+                                    {' '}{t('admin.apiIntegrations.bmdelivery.backOffice')}
                                 </p>
                             </div>
 
@@ -248,7 +250,7 @@ export default function BMDeliveryIntegrationPage() {
                                     className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                                 />
                                 <label htmlFor="bmdelivery-active" className="ml-3 text-sm text-gray-700">
-                                    Enable this integration
+                                    {t('admin.apiIntegrations.enableIntegration')}
                                 </label>
                             </div>
 
@@ -258,7 +260,7 @@ export default function BMDeliveryIntegrationPage() {
                                     disabled={isSaving}
                                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                                 >
-                                    {isSaving ? 'Saving...' : (integration ? 'Update Integration' : 'Connect BMDelivery')}
+                                    {isSaving ? t('admin.apiIntegrations.saving') : (integration ? t('admin.apiIntegrations.bmdelivery.updateIntegration') : t('admin.apiIntegrations.bmdelivery.connectBMDelivery'))}
                                 </button>
                                 {integration && (
                                     <button
@@ -266,7 +268,7 @@ export default function BMDeliveryIntegrationPage() {
                                         onClick={handleDelete}
                                         className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                                     >
-                                        Delete
+                                        {t('admin.apiIntegrations.delete')}
                                     </button>
                                 )}
                             </div>
@@ -275,23 +277,23 @@ export default function BMDeliveryIntegrationPage() {
 
                     {/* Features */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Features</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.apiIntegrations.bmdelivery.features')}</h2>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="p-4 bg-blue-50 rounded-lg">
-                                <h3 className="font-medium text-blue-900">Create Shipments</h3>
-                                <p className="text-sm text-blue-700 mt-1">Create delivery shipments from your orders</p>
+                                <h3 className="font-medium text-blue-900">{t('admin.apiIntegrations.bmdelivery.createShipments')}</h3>
+                                <p className="text-sm text-blue-700 mt-1">{t('admin.apiIntegrations.bmdelivery.createShipmentsDesc')}</p>
                             </div>
                             <div className="p-4 bg-blue-50 rounded-lg">
-                                <h3 className="font-medium text-blue-900">Track Packages</h3>
-                                <p className="text-sm text-blue-700 mt-1">Real-time tracking for all shipments</p>
+                                <h3 className="font-medium text-blue-900">{t('admin.apiIntegrations.bmdelivery.trackPackages')}</h3>
+                                <p className="text-sm text-blue-700 mt-1">{t('admin.apiIntegrations.bmdelivery.trackPackagesDesc')}</p>
                             </div>
                             <div className="p-4 bg-blue-50 rounded-lg">
-                                <h3 className="font-medium text-blue-900">Get Cities</h3>
-                                <p className="text-sm text-blue-700 mt-1">List all available delivery cities</p>
+                                <h3 className="font-medium text-blue-900">{t('admin.apiIntegrations.bmdelivery.getCities')}</h3>
+                                <p className="text-sm text-blue-700 mt-1">{t('admin.apiIntegrations.bmdelivery.getCitiesDesc')}</p>
                             </div>
                             <div className="p-4 bg-blue-50 rounded-lg">
-                                <h3 className="font-medium text-blue-900">Exchanges</h3>
-                                <p className="text-sm text-blue-700 mt-1">Support for package exchanges</p>
+                                <h3 className="font-medium text-blue-900">{t('admin.apiIntegrations.bmdelivery.exchanges')}</h3>
+                                <p className="text-sm text-blue-700 mt-1">{t('admin.apiIntegrations.bmdelivery.exchangesDesc')}</p>
                             </div>
                         </div>
                     </div>
@@ -299,7 +301,7 @@ export default function BMDeliveryIntegrationPage() {
                     {/* Cities List */}
                     {cities.length > 0 && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Cities ({cities.length})</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.apiIntegrations.bmdelivery.availableCities')} ({cities.length})</h2>
                             <div className="max-h-60 overflow-y-auto">
                                 <div className="grid grid-cols-3 gap-2">
                                     {cities.map((city, index) => (
@@ -317,21 +319,21 @@ export default function BMDeliveryIntegrationPage() {
                 <div className="space-y-6">
                     {/* Quick Actions */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.apiIntegrations.bmdelivery.quickActions')}</h2>
                         <div className="space-y-3">
                             <button
                                 onClick={handleTestConnection}
                                 disabled={!integration || isTesting}
                                 className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isTesting ? 'Testing...' : 'Test Connection'}
+                                {isTesting ? t('admin.apiIntegrations.bmdelivery.testing') : t('admin.apiIntegrations.bmdelivery.testConnection')}
                             </button>
                             <button
                                 onClick={handleFetchCities}
                                 disabled={!integration}
                                 className="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Fetch Cities
+                                {t('admin.apiIntegrations.bmdelivery.fetchCities')}
                             </button>
                         </div>
                     </div>
@@ -339,18 +341,18 @@ export default function BMDeliveryIntegrationPage() {
                     {/* Status */}
                     {integration && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Status</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.apiIntegrations.status').replace(':', '')}</h2>
                             <div className="space-y-4">
                                 <div>
-                                    <p className="text-sm text-gray-500">Last Sync</p>
+                                    <p className="text-sm text-gray-500">{t('admin.apiIntegrations.lastSync').replace(':', '')}</p>
                                     <p className="font-medium text-gray-900">
                                         {integration.last_sync_at
                                             ? new Date(integration.last_sync_at).toLocaleString()
-                                            : 'Never'}
+                                            : t('admin.apiIntegrations.never')}
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-gray-500">Created</p>
+                                    <p className="text-sm text-gray-500">{t('admin.apiIntegrations.created')}</p>
                                     <p className="font-medium text-gray-900">
                                         {new Date(integration.created_at).toLocaleString()}
                                     </p>
@@ -361,12 +363,12 @@ export default function BMDeliveryIntegrationPage() {
 
                     {/* Help */}
                     <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
-                        <h2 className="text-lg font-semibold text-blue-900 mb-3">Need Help?</h2>
+                        <h2 className="text-lg font-semibold text-blue-900 mb-3">{t('admin.apiIntegrations.needHelp')}</h2>
                         <ul className="text-sm text-blue-800 space-y-2">
-                            <li>• Login to bmdelivery.ma</li>
-                            <li>• Go to back-office</li>
-                            <li>• Find your API token</li>
-                            <li>• Copy and paste here</li>
+                            <li>• {t('admin.apiIntegrations.bmdelivery.help1')}</li>
+                            <li>• {t('admin.apiIntegrations.bmdelivery.help2')}</li>
+                            <li>• {t('admin.apiIntegrations.bmdelivery.help3')}</li>
+                            <li>• {t('admin.apiIntegrations.bmdelivery.help4')}</li>
                         </ul>
                         <a
                             href="https://bmdelivery.ma/doc/api-client"
@@ -374,7 +376,7 @@ export default function BMDeliveryIntegrationPage() {
                             rel="noopener noreferrer"
                             className="inline-block mt-4 text-blue-700 hover:text-blue-800 font-medium"
                         >
-                            View BMDelivery API Docs →
+                            {t('admin.apiIntegrations.bmdelivery.viewDocs')}
                         </a>
                     </div>
                 </div>

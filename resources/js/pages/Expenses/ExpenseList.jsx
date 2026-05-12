@@ -107,14 +107,14 @@ export default function ExpenseList() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this expense?')) return;
+        if (!window.confirm(t('admin.expenses.deleteConfirm'))) return;
 
         try {
             await api.delete(`/expenses/${id}`);
             fetchExpenses();
         } catch (error) {
             console.error('Error deleting expense:', error);
-            alert('Failed to delete expense.');
+            alert(t('admin.expenses.deleteFailed'));
         }
     };
 
@@ -213,13 +213,13 @@ export default function ExpenseList() {
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Category</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">{t('admin.expenses.category')}</label>
                         <select
                             value={filterCategory}
                             onChange={(e) => setFilterCategory(e.target.value)}
                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all bg-white"
                         >
-                            <option value="">All Categories</option>
+                            <option value="">{t('admin.expenses.allCategories')}</option>
                             {categories.map(cat => (
                                 <option key={cat.id} value={cat.id}>{cat.name}</option>
                             ))}
@@ -227,7 +227,7 @@ export default function ExpenseList() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">From Date</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">{t('admin.expenses.fromDate')}</label>
                         <input
                             type="date"
                             value={dateFrom}
@@ -237,7 +237,7 @@ export default function ExpenseList() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">To Date</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">{t('admin.expenses.toDate')}</label>
                         <input
                             type="date"
                             value={dateTo}
@@ -252,21 +252,21 @@ export default function ExpenseList() {
             {loading && expenses.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
-                    <p className="text-slate-600 mt-4">Loading expenses...</p>
+                    <p className="text-slate-600 mt-4">{t('admin.expenses.loadingExpenses')}</p>
                 </div>
             ) : expenses.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-12 text-center">
                     <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Receipt size={40} className="text-red-600" />
                     </div>
-                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No expenses found</h3>
-                    <p className="text-slate-500 mb-6">Start tracking your business expenses</p>
+                    <h3 className="text-xl font-semibold text-slate-700 mb-2">{t('admin.expenses.noExpensesFound')}</h3>
+                    <p className="text-slate-500 mb-6">{t('admin.expenses.startTracking')}</p>
                     <button
                         onClick={() => setShowModal(true)}
                         className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 font-medium transition-all"
                     >
                         <Plus size={18} />
-                        <span>Add Expense</span>
+                        <span>{t('admin.expenses.addExpense')}</span>
                     </button>
                 </div>
             ) : (
@@ -275,12 +275,12 @@ export default function ExpenseList() {
                         <table className="w-full">
                             <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
                                 <tr>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Date</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Category</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Description</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Amount</th>
-                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Added By</th>
-                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">Actions</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.expenses.date')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.expenses.category')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.expenses.description')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.expenses.amount')}</th>
+                                    <th className="text-left py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.expenses.addedBy')}</th>
+                                    <th className="text-center py-4 px-6 text-sm font-bold text-slate-700 uppercase tracking-wider">{t('admin.expenses.actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
@@ -301,7 +301,7 @@ export default function ExpenseList() {
                                         </td>
                                         <td className="py-4 px-6">
                                             <p className="text-sm text-slate-700 line-clamp-2">
-                                                {expense.description || 'No description'}
+                                                {expense.description || t('admin.expenses.noDescription')}
                                             </p>
                                         </td>
                                         <td className="py-4 px-6">
@@ -314,7 +314,7 @@ export default function ExpenseList() {
                                                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
                                                     {expense.user?.name?.charAt(0).toUpperCase() || 'U'}
                                                 </div>
-                                                <span className="text-sm text-slate-600">{expense.user?.name || 'Unknown'}</span>
+                                                <span className="text-sm text-slate-600">{expense.user?.name || t('admin.expenses.unknown')}</span>
                                             </div>
                                         </td>
                                         <td className="py-4 px-6">
@@ -325,7 +325,7 @@ export default function ExpenseList() {
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                                                        title="View Receipt"
+                                                        title={t('admin.expenses.viewReceipt')}
                                                     >
                                                         <Receipt size={18} />
                                                     </a>
@@ -333,14 +333,14 @@ export default function ExpenseList() {
                                                 <button
                                                     onClick={() => handleEdit(expense)}
                                                     className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                    title="Edit"
+                                                    title={t('admin.expenses.edit')}
                                                 >
                                                     <Edit2 size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(expense.id)}
                                                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                    title="Delete"
+                                                    title={t('admin.expenses.delete')}
                                                 >
                                                     <Trash2 size={18} />
                                                 </button>
@@ -365,7 +365,7 @@ export default function ExpenseList() {
                                     <Receipt size={20} className="text-white" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">
-                                    {editingExpense ? 'Edit Expense' : 'Add New Expense'}
+                                    {editingExpense ? t('admin.expenses.editExpense') : t('admin.expenses.addNewExpense')}
                                 </h2>
                             </div>
                             <button
@@ -384,7 +384,7 @@ export default function ExpenseList() {
                                     <div className="flex items-start">
                                         <X className="h-5 w-5 text-red-400 mt-0.5" />
                                         <div className="ml-3">
-                                            <h3 className="text-sm font-semibold text-red-800">Validation Errors</h3>
+                                            <h3 className="text-sm font-semibold text-red-800">{t('admin.expenses.validationErrors')}</h3>
                                             <ul className="mt-2 text-sm text-red-700 list-disc list-inside space-y-1">
                                                 {Object.entries(errors).map(([field, messages]) => (
                                                     <li key={field}>
@@ -400,7 +400,7 @@ export default function ExpenseList() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Category *
+                                        {t('admin.expenses.category')} *
                                     </label>
                                     <select
                                         value={formData.expense_category_id}
@@ -408,7 +408,7 @@ export default function ExpenseList() {
                                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all bg-white"
                                         required
                                     >
-                                        <option value="">Select Category</option>
+                                        <option value="">{t('admin.expenses.selectCategory')}</option>
                                         {categories.map(cat => (
                                             <option key={cat.id} value={cat.id}>{cat.name}</option>
                                         ))}
@@ -420,7 +420,7 @@ export default function ExpenseList() {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Amount *
+                                        {t('admin.expenses.amount')} *
                                     </label>
                                     <div className="relative">
                                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">{settings.currency_symbol}</span>
@@ -442,7 +442,7 @@ export default function ExpenseList() {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Date *
+                                        {t('admin.expenses.date')} *
                                     </label>
                                     <input
                                         type="date"
@@ -458,7 +458,7 @@ export default function ExpenseList() {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Receipt
+                                        {t('admin.expenses.receipt')}
                                     </label>
                                     <input
                                         type="file"
@@ -466,19 +466,19 @@ export default function ExpenseList() {
                                         onChange={(e) => setFormData({ ...formData, receipt: e.target.files[0] })}
                                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
                                     />
-                                    <p className="text-xs text-slate-500 mt-1.5">Upload receipt (Max 5MB)</p>
+                                    <p className="text-xs text-slate-500 mt-1.5">{t('admin.expenses.uploadReceipt')}</p>
                                 </div>
 
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Description
+                                        {t('admin.expenses.description')}
                                     </label>
                                     <textarea
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                         rows="3"
                                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
-                                        placeholder="Add notes about this expense..."
+                                        placeholder={t('admin.expenses.addNotes')}
                                     />
                                 </div>
                             </div>
@@ -490,7 +490,7 @@ export default function ExpenseList() {
                                     onClick={handleCloseModal}
                                     className="px-6 py-2.5 border-2 border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 font-medium transition-all"
                                 >
-                                    Cancel
+                                    {t('admin.expenses.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -503,12 +503,12 @@ export default function ExpenseList() {
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                             </svg>
-                                            <span>Saving...</span>
+                                            <span>{t('admin.expenses.saving')}</span>
                                         </>
                                     ) : (
                                         <>
                                             <Check size={20} />
-                                            <span>{editingExpense ? 'Update Expense' : 'Add Expense'}</span>
+                                            <span>{editingExpense ? t('admin.expenses.updateExpense') : t('admin.expenses.addExpense')}</span>
                                         </>
                                     )}
                                 </button>

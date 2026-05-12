@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { Copy, Key, RefreshCw, Eye, EyeOff, Code, BookOpen } from 'lucide-react';
 
 export default function CustomApiIntegrationPage() {
+    const { t } = useTranslation();
     const [integration, setIntegration] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -55,10 +57,10 @@ export default function CustomApiIntegrationPage() {
 
             if (integration) {
                 await api.put(`/api-integrations/${integration.id}`, payload);
-                setMessage({ type: 'success', text: 'Custom API integration updated successfully!' });
+                setMessage({ type: 'success', text: t('admin.apiIntegrations.customApi.updatedSuccess') });
             } else {
                 const response = await api.post('/api-integrations', payload);
-                setMessage({ type: 'success', text: 'Custom API integration created successfully!' });
+                setMessage({ type: 'success', text: t('admin.apiIntegrations.customApi.createdSuccess') });
                 setIntegration(response.data);
             }
 
@@ -66,7 +68,7 @@ export default function CustomApiIntegrationPage() {
         } catch (error) {
             setMessage({
                 type: 'error',
-                text: error.response?.data?.message || 'Failed to save integration',
+                text: error.response?.data?.message || t('admin.apiIntegrations.saveFailed'),
             });
         } finally {
             setIsSaving(false);
@@ -83,12 +85,12 @@ export default function CustomApiIntegrationPage() {
             });
 
             setIntegration(response.data);
-            setMessage({ type: 'success', text: 'API key generated successfully! Make sure to copy it now.' });
+            setMessage({ type: 'success', text: t('admin.apiIntegrations.customApi.apiKeyGenerated') });
             setShowApiKey(true);
         } catch (error) {
             setMessage({
                 type: 'error',
-                text: error.response?.data?.message || 'Failed to generate API key',
+                text: error.response?.data?.message || t('admin.apiIntegrations.customApi.apiKeyGenerateFailed'),
             });
         } finally {
             setIsGeneratingKey(false);
@@ -103,11 +105,11 @@ export default function CustomApiIntegrationPage() {
 
     const handleDelete = async () => {
         if (!integration) return;
-        if (!confirm('Are you sure you want to delete this integration? This will revoke all API keys.')) return;
+        if (!confirm(t('admin.apiIntegrations.customApi.deleteConfirm'))) return;
 
         try {
             await api.delete(`/api-integrations/${integration.id}`);
-            setMessage({ type: 'success', text: 'Integration deleted successfully' });
+            setMessage({ type: 'success', text: t('admin.apiIntegrations.deleteSuccess') });
             setIntegration(null);
             setFormData({
                 name: 'Custom API Integration',
@@ -116,7 +118,7 @@ export default function CustomApiIntegrationPage() {
         } catch (error) {
             setMessage({
                 type: 'error',
-                text: error.response?.data?.message || 'Failed to delete integration',
+                text: error.response?.data?.message || t('admin.apiIntegrations.deleteFailed'),
             });
         }
     };
@@ -175,7 +177,7 @@ export default function CustomApiIntegrationPage() {
             <div className="space-y-6">
                 <div className="flex items-center space-x-4">
                     <Link to={appPath('/api-integrations')} className="text-gray-500 hover:text-gray-700">
-                        ← Back to Integrations
+                        {t('admin.apiIntegrations.backToIntegrations')}
                     </Link>
                 </div>
                 <div className="flex items-center justify-center h-64">
@@ -191,15 +193,15 @@ export default function CustomApiIntegrationPage() {
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <Link to={appPath('/api-integrations')} className="text-gray-500 hover:text-gray-700">
-                        ← Back
+                        {t('admin.apiIntegrations.back')}
                     </Link>
                     <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                             <Code className="text-purple-600" size={24} />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Custom API Integration</h1>
-                            <p className="text-gray-600">Connect your own platform, website, or mobile app</p>
+                            <h1 className="text-2xl font-bold text-gray-900">{t('admin.apiIntegrations.customApi.title')}</h1>
+                            <p className="text-gray-600">{t('admin.apiIntegrations.customApi.description')}</p>
                         </div>
                     </div>
                 </div>
@@ -209,7 +211,7 @@ export default function CustomApiIntegrationPage() {
                             ? 'bg-purple-100 text-purple-800'
                             : 'bg-gray-100 text-gray-600'
                     }`}>
-                        {integration.is_active ? 'Active' : 'Inactive'}
+                        {integration.is_active ? t('admin.apiIntegrations.active') : t('admin.apiIntegrations.inactive')}
                     </span>
                 )}
             </div>
@@ -226,7 +228,7 @@ export default function CustomApiIntegrationPage() {
                         onClick={() => setMessage({ type: '', text: '' })}
                         className="text-sm font-medium underline"
                     >
-                        Dismiss
+                        {t('admin.apiIntegrations.customApi.dismiss')}
                     </button>
                 </div>
             )}
@@ -237,19 +239,19 @@ export default function CustomApiIntegrationPage() {
                 <div className="lg:col-span-2 space-y-6">
                     {/* Basic Settings */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Integration Settings</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-6">{t('admin.apiIntegrations.customApi.integrationSettings')}</h2>
                         
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Integration Name
+                                    {t('admin.apiIntegrations.integrationName')}
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                    placeholder="My Custom Platform"
+                                    placeholder={t('admin.apiIntegrations.customApi.placeholder')}
                                     required
                                 />
                             </div>
@@ -263,7 +265,7 @@ export default function CustomApiIntegrationPage() {
                                     className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
                                 />
                                 <label htmlFor="custom-api-active" className="ml-3 text-sm text-gray-700">
-                                    Enable this integration
+                                    {t('admin.apiIntegrations.enableIntegration')}
                                 </label>
                             </div>
 
@@ -273,7 +275,7 @@ export default function CustomApiIntegrationPage() {
                                     disabled={isSaving}
                                     className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
                                 >
-                                    {isSaving ? 'Saving...' : (integration ? 'Update Integration' : 'Create Integration')}
+                                    {isSaving ? t('admin.apiIntegrations.saving') : (integration ? t('admin.apiIntegrations.customApi.updateIntegration') : t('admin.apiIntegrations.customApi.createIntegration'))}
                                 </button>
                                 {integration && (
                                     <button
@@ -281,7 +283,7 @@ export default function CustomApiIntegrationPage() {
                                         onClick={handleDelete}
                                         className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                                     >
-                                        Delete
+                                        {t('admin.apiIntegrations.delete')}
                                     </button>
                                 )}
                             </div>
@@ -292,14 +294,14 @@ export default function CustomApiIntegrationPage() {
                     {integration && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-lg font-semibold text-gray-900">API Authentication</h2>
+                                <h2 className="text-lg font-semibold text-gray-900">{t('admin.apiIntegrations.customApi.apiAuthentication')}</h2>
                                 <button
                                     onClick={handleGenerateApiKey}
                                     disabled={isGeneratingKey}
                                     className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
                                 >
                                     <RefreshCw size={16} className={isGeneratingKey ? 'animate-spin' : ''} />
-                                    <span>{integration.credentials?.api_key ? 'Regenerate' : 'Generate'} API Key</span>
+                                    <span>{integration.credentials?.api_key ? t('admin.apiIntegrations.customApi.regenerate') : t('admin.apiIntegrations.customApi.generate')} {t('admin.apiIntegrations.customApi.apiKey')}</span>
                                 </button>
                             </div>
 
@@ -308,7 +310,7 @@ export default function CustomApiIntegrationPage() {
                                     <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                                         <div className="flex items-center justify-between mb-2">
                                             <label className="block text-sm font-medium text-purple-900">
-                                                Your API Key
+                                                {t('admin.apiIntegrations.customApi.yourApiKey')}
                                             </label>
                                             <button
                                                 type="button"
@@ -332,13 +334,13 @@ export default function CustomApiIntegrationPage() {
                                             </button>
                                         </div>
                                         <p className="mt-2 text-xs text-purple-700">
-                                            <strong>Important:</strong> Keep this key secure. It provides full access to your account via API.
+                                            {t('admin.apiIntegrations.customApi.keepSecure')}
                                         </p>
                                     </div>
 
                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                                         <label className="block text-sm font-medium text-blue-900 mb-2">
-                                            Base API URL
+                                            {t('admin.apiIntegrations.customApi.baseApiUrl')}
                                         </label>
                                         <div className="flex items-center space-x-2">
                                             <code className="flex-1 bg-white px-3 py-2 rounded border border-blue-300 text-sm text-gray-800 break-all">
@@ -356,8 +358,8 @@ export default function CustomApiIntegrationPage() {
                                     </div>
 
                                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                        <h3 className="text-sm font-medium text-gray-900 mb-3">Authentication Header</h3>
-                                        <p className="text-sm text-gray-600 mb-2">Include this header in all your API requests:</p>
+                                        <h3 className="text-sm font-medium text-gray-900 mb-3">{t('admin.apiIntegrations.customApi.authHeader')}</h3>
+                                        <p className="text-sm text-gray-600 mb-2">{t('admin.apiIntegrations.customApi.authHeaderHelp')}</p>
                                         <code className="block bg-gray-800 text-green-400 px-4 py-3 rounded text-sm font-mono overflow-x-auto">
                                             Authorization: Bearer {showApiKey ? integration.credentials.api_key : 'YOUR_API_KEY'}
                                         </code>
@@ -366,8 +368,8 @@ export default function CustomApiIntegrationPage() {
                             ) : (
                                 <div className="text-center py-8">
                                     <Key className="mx-auto text-gray-400 mb-4" size={48} />
-                                    <p className="text-gray-600 mb-4">No API key generated yet</p>
-                                    <p className="text-sm text-gray-500">Click "Generate API Key" to create your authentication credentials</p>
+                                    <p className="text-gray-600 mb-4">{t('admin.apiIntegrations.customApi.noApiKey')}</p>
+                                    <p className="text-sm text-gray-500">{t('admin.apiIntegrations.customApi.noApiKeyHelp')}</p>
                                 </div>
                             )}
                         </div>
@@ -378,7 +380,7 @@ export default function CustomApiIntegrationPage() {
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <div className="flex items-center space-x-2 mb-6">
                                 <BookOpen className="text-purple-600" size={20} />
-                                <h2 className="text-lg font-semibold text-gray-900">Available Endpoints</h2>
+                                <h2 className="text-lg font-semibold text-gray-900">{t('admin.apiIntegrations.customApi.availableEndpoints')}</h2>
                             </div>
                             <div className="space-y-3">
                                 {apiEndpoints.map((endpoint, index) => (
@@ -394,9 +396,9 @@ export default function CustomApiIntegrationPage() {
                                 ))}
                             </div>
                             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                <p className="text-sm text-blue-900 font-medium mb-2">Need detailed documentation?</p>
+                                <p className="text-sm text-blue-900 font-medium mb-2">{t('admin.apiIntegrations.customApi.needDocs')}</p>
                                 <p className="text-sm text-blue-700">
-                                    Contact your administrator for complete API documentation with request/response examples.
+                                    {t('admin.apiIntegrations.customApi.contactAdmin')}
                                 </p>
                             </div>
                         </div>
@@ -407,27 +409,27 @@ export default function CustomApiIntegrationPage() {
                 <div className="space-y-6">
                     {/* How it works */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">How it works</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.apiIntegrations.howItWorks')}</h2>
                         <div className="space-y-3 text-sm text-gray-600">
                             <div className="flex items-start space-x-2">
                                 <span className="text-purple-600 font-bold mt-0.5">1.</span>
-                                <p>Create your Custom API integration</p>
+                                <p>{t('admin.apiIntegrations.customApi.step1')}</p>
                             </div>
                             <div className="flex items-start space-x-2">
                                 <span className="text-purple-600 font-bold mt-0.5">2.</span>
-                                <p>Generate an API key for authentication</p>
+                                <p>{t('admin.apiIntegrations.customApi.step2')}</p>
                             </div>
                             <div className="flex items-start space-x-2">
                                 <span className="text-purple-600 font-bold mt-0.5">3.</span>
-                                <p>Use the API key in your application's requests</p>
+                                <p>{t('admin.apiIntegrations.customApi.step3')}</p>
                             </div>
                             <div className="flex items-start space-x-2">
                                 <span className="text-purple-600 font-bold mt-0.5">4.</span>
-                                <p>Start creating orders, fetching products, and more</p>
+                                <p>{t('admin.apiIntegrations.customApi.step4')}</p>
                             </div>
                             <div className="flex items-start space-x-2">
                                 <span className="text-purple-600 font-bold mt-0.5">5.</span>
-                                <p>Monitor your integration activity</p>
+                                <p>{t('admin.apiIntegrations.customApi.step5')}</p>
                             </div>
                         </div>
                     </div>
@@ -435,26 +437,26 @@ export default function CustomApiIntegrationPage() {
                     {/* Status */}
                     {integration && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Status</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.apiIntegrations.status').replace(':', '')}</h2>
                             <div className="space-y-4">
                                 <div>
-                                    <p className="text-sm text-gray-500">API Key Status</p>
+                                    <p className="text-sm text-gray-500">{t('admin.apiIntegrations.customApi.apiKeyStatus')}</p>
                                     <p className="font-medium text-gray-900">
                                         {integration.credentials?.api_key ? (
-                                            <span className="text-green-600">Active</span>
+                                            <span className="text-green-600">{t('admin.apiIntegrations.active')}</span>
                                         ) : (
-                                            <span className="text-gray-500">Not Generated</span>
+                                            <span className="text-gray-500">{t('admin.apiIntegrations.customApi.notGenerated')}</span>
                                         )}
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-gray-500">Last Updated</p>
+                                    <p className="text-sm text-gray-500">{t('admin.apiIntegrations.customApi.lastUpdated')}</p>
                                     <p className="font-medium text-gray-900">
                                         {new Date(integration.updated_at).toLocaleString()}
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-gray-500">Created</p>
+                                    <p className="text-sm text-gray-500">{t('admin.apiIntegrations.created')}</p>
                                     <p className="font-medium text-gray-900">
                                         {new Date(integration.created_at).toLocaleString()}
                                     </p>
@@ -465,26 +467,26 @@ export default function CustomApiIntegrationPage() {
 
                     {/* Help */}
                     <div className="bg-purple-50 rounded-xl border border-purple-200 p-6">
-                        <h2 className="text-lg font-semibold text-purple-900 mb-3">Use Cases</h2>
+                        <h2 className="text-lg font-semibold text-purple-900 mb-3">{t('admin.apiIntegrations.customApi.useCases')}</h2>
                         <ul className="text-sm text-purple-800 space-y-2">
-                            <li>• Connect your e-commerce website</li>
-                            <li>• Integrate mobile applications</li>
-                            <li>• Build custom order management tools</li>
-                            <li>• Automate product synchronization</li>
-                            <li>• Create custom reporting dashboards</li>
-                            <li>• Integrate with third-party systems</li>
+                            <li>• {t('admin.apiIntegrations.customApi.useCase1')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.useCase2')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.useCase3')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.useCase4')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.useCase5')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.useCase6')}</li>
                         </ul>
                     </div>
 
                     {/* Security Notice */}
                     <div className="bg-yellow-50 rounded-xl border border-yellow-200 p-6">
-                        <h2 className="text-lg font-semibold text-yellow-900 mb-3">⚠️ Security Notice</h2>
+                        <h2 className="text-lg font-semibold text-yellow-900 mb-3">⚠️ {t('admin.apiIntegrations.customApi.securityNotice')}</h2>
                         <ul className="text-sm text-yellow-800 space-y-2">
-                            <li>• Never share your API key publicly</li>
-                            <li>• Store keys securely (use environment variables)</li>
-                            <li>• Regenerate keys if compromised</li>
-                            <li>• Use HTTPS for all API requests</li>
-                            <li>• Monitor API usage regularly</li>
+                            <li>• {t('admin.apiIntegrations.customApi.security1')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.security2')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.security3')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.security4')}</li>
+                            <li>• {t('admin.apiIntegrations.customApi.security5')}</li>
                         </ul>
                     </div>
                 </div>

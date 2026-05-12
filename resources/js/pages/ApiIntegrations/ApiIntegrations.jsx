@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function ApiIntegrations() {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const [integrations, setIntegrations] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -24,7 +26,7 @@ export default function ApiIntegrations() {
             setError(null);
         } catch (err) {
             console.error('Error fetching integrations:', err);
-            setError('Failed to load integrations. Please try again.');
+            setError(t('admin.apiIntegrations.loadFailed'));
         } finally {
             setLoading(false);
         }
@@ -111,7 +113,7 @@ export default function ApiIntegrations() {
     if (loading) {
         return (
             <div className="space-y-6">
-                <h1 className="text-3xl font-bold text-gray-900">API Integrations</h1>
+                <h1 className="text-3xl font-bold text-gray-900">{t('admin.apiIntegrations.title')}</h1>
                 <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                 </div>
@@ -124,9 +126,9 @@ export default function ApiIntegrations() {
             {/* Page Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">API Integrations</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">{t('admin.apiIntegrations.title')}</h1>
                     <p className="mt-2 text-gray-600">
-                        Connect your store with Shopify, Google Sheets, and delivery services
+                        {t('admin.apiIntegrations.subtitle')}
                     </p>
                 </div>
                 <button
@@ -136,7 +138,7 @@ export default function ApiIntegrations() {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    <span>Refresh</span>
+                    <span>{t('admin.apiIntegrations.refresh')}</span>
                 </button>
             </div>
 
@@ -172,7 +174,7 @@ export default function ApiIntegrations() {
                                                 ? item.badgeColor
                                                 : 'bg-gray-100 text-gray-600'
                                         }`}>
-                                            {integration.is_active ? 'Active' : 'Inactive'}
+                                            {integration.is_active ? t('admin.apiIntegrations.active') : t('admin.apiIntegrations.inactive')}
                                         </span>
                                     )}
                                 </div>
@@ -185,30 +187,30 @@ export default function ApiIntegrations() {
                                 {integration ? (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-500">Status:</span>
+                                            <span className="text-gray-500">{t('admin.apiIntegrations.status')}</span>
                                             <span className={`font-medium ${integration.is_active ? 'text-green-600' : 'text-gray-500'}`}>
-                                                {integration.is_active ? 'Connected' : 'Disabled'}
+                                                {integration.is_active ? t('admin.apiIntegrations.connected') : t('admin.apiIntegrations.disabled')}
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-500">Last Sync:</span>
+                                            <span className="text-gray-500">{t('admin.apiIntegrations.lastSync')}</span>
                                             <span className="font-medium text-gray-700">
                                                 {integration.last_sync_at
                                                     ? new Date(integration.last_sync_at).toLocaleDateString()
-                                                    : 'Never'}
+                                                    : t('admin.apiIntegrations.never')}
                                             </span>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="text-center py-2">
-                                        <span className="text-gray-500 text-sm">Not configured</span>
+                                        <span className="text-gray-500 text-sm">{t('admin.apiIntegrations.notConfigured')}</span>
                                     </div>
                                 )}
 
                                 {/* Action */}
                                 <div className="mt-4 pt-4 border-t border-gray-100">
                                     <span className={`${item.textColor} font-medium text-sm flex items-center justify-center`}>
-                                        {integration ? 'Manage Integration' : 'Configure'}
+                                        {integration ? t('admin.apiIntegrations.manageIntegration') : t('admin.apiIntegrations.configure')}
                                         <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                         </svg>
@@ -222,27 +224,27 @@ export default function ApiIntegrations() {
 
             {/* Quick Info */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-6">
-                <h2 className="text-lg font-semibold text-blue-900 mb-3">Quick Guide</h2>
+                <h2 className="text-lg font-semibold text-blue-900 mb-3">{t('admin.apiIntegrations.quickGuide')}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="flex items-start space-x-3">
                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold">1</div>
                         <div>
-                            <h3 className="font-medium text-blue-900">Select Integration</h3>
-                            <p className="text-sm text-blue-700">Click on any card above to configure</p>
+                            <h3 className="font-medium text-blue-900">{t('admin.apiIntegrations.selectIntegration')}</h3>
+                            <p className="text-sm text-blue-700">{t('admin.apiIntegrations.clickToConfig')}</p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold">2</div>
                         <div>
-                            <h3 className="font-medium text-blue-900">Enter Credentials</h3>
-                            <p className="text-sm text-blue-700">Add your API tokens or keys</p>
+                            <h3 className="font-medium text-blue-900">{t('admin.apiIntegrations.enterCredentials')}</h3>
+                            <p className="text-sm text-blue-700">{t('admin.apiIntegrations.addApiKeys')}</p>
                         </div>
                     </div>
                     <div className="flex items-start space-x-3">
                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold">3</div>
                         <div>
-                            <h3 className="font-medium text-blue-900">Test & Connect</h3>
-                            <p className="text-sm text-blue-700">Verify connection and start syncing</p>
+                            <h3 className="font-medium text-blue-900">{t('admin.apiIntegrations.testConnect')}</h3>
+                            <p className="text-sm text-blue-700">{t('admin.apiIntegrations.verifyStartSync')}</p>
                         </div>
                     </div>
                 </div>
