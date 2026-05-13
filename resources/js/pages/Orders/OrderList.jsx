@@ -1146,7 +1146,7 @@ export default function OrderList({ status = '' }) {
             </div>
 
             {/* Orders List */}
-            <div className="space-y-0.5">
+            <div className="space-y-4">
                 {loading ? (
                     <div className="bg-white rounded-lg p-12 text-center text-gray-500">
                         <div className="inline-block animate-spin h-8 w-8 border-4 border-blue-200 border-t-blue-600 rounded-full mb-3"></div>
@@ -1164,7 +1164,8 @@ export default function OrderList({ status = '' }) {
                         </p>
                     </div>
                 ) : (
-                    orders.map(order => {
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {orders.map(order => {
                         const deliveryAgentLabel = getDeliveryAgentLabel(order);
                         const companyLabel = getDeliveryCompanyLabel(order);
                         const confirmationAgentLabel = getConfirmationAgentLabel(order);
@@ -1225,346 +1226,230 @@ export default function OrderList({ status = '' }) {
                         return (
                             <div
                                 key={order.id}
-                                className={`rounded-lg shadow-sm hover:shadow-md transition-all border-l-4 overflow-hidden ${
+                                className={`rounded-xl shadow-sm hover:shadow-md transition-all border overflow-hidden flex flex-col ${
                                     isBlacklisted
-                                        ? 'bg-rose-50 border border-rose-200'
-                                        : 'bg-white'
-                                } ${statusBorderColor[order.status] || 'border-l-gray-400'}`}
+                                        ? 'bg-rose-50 border-rose-200'
+                                        : 'bg-white border-gray-200'
+                                } ${statusBorderColor[order.status] || 'border-l-gray-400'} border-l-4`}
                             >
-                                {/* Header Row - Compact and clean */}
-                                <div className={`flex items-center justify-between gap-3 px-4 py-1.5 border-b border-gray-100 ${isBlacklisted ? 'bg-rose-100/70' : 'bg-gray-50'}`}>
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <span className="text-xs font-bold text-blue-700 flex-shrink-0">{order.order_number}</span>
+                                {/* Card Header */}
+                                <div className={`flex items-center justify-between gap-2 px-3 py-2 border-b ${isBlacklisted ? 'bg-rose-100/70 border-rose-200' : 'bg-gray-50 border-gray-100'}`}>
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className="text-xs font-bold text-blue-700 truncate">{order.order_number}</span>
                                         <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 ${getSourceColor(order.source)}`}>
                                             {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
                                         </span>
-                                        {isBlacklisted && (
-                                            <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 bg-rose-600 text-white">
-                                                {order.blacklist_badge || t('admin.orderList.bannedBlacklisted')}
-                                            </span>
-                                        )}
-                                        <span className="text-[10px] text-gray-600 flex-shrink-0">{formatDate(order.created_at)}</span>
-                                        {order.callback_date && (
-                                            <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-800 flex-shrink-0">
-                                                {t('admin.orderList.callback')} {formatDate(order.callback_date)}
-                                            </span>
-                                        )}
                                     </div>
                                     {confirmationStatusLocked || sellerStatusLocked || deliveryWorkflowIsLocked || adminStatusLocked ? (
-                                        <div className="flex flex-col items-end gap-1 flex-shrink-0" title={statusLockMessage}>
-                                            <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getStatusBadgeColor(order.status)}`}>
-                                                {formatStatusLabel(order.status)}
-                                            </span>
-                                            <span className="text-[9px] font-medium text-slate-500">
-                                                {deliveryWorkflowIsLocked || (adminStatusLocked && isDeliveryWorkflowLocked(order)) ? t('admin.orderList.invoiceLocked') : t('admin.orderList.deliveryControlled')}
-                                            </span>
-                                        </div>
+                                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded flex-shrink-0 ${getStatusBadgeColor(order.status)}`}>
+                                            {formatStatusLabel(order.status)}
+                                        </span>
                                     ) : (
                                         <select
                                             value={order.status}
                                             onChange={(e) => handleStatusChange(order.id, e.target.value)}
                                             disabled={updatingStatus === order.id || !canWorkOnOrder}
-                                            title={statusLockMessage}
                                             className={`px-2 py-0.5 text-[10px] font-semibold rounded border-0 cursor-pointer flex-shrink-0 ${getStatusBadgeColor(order.status)} ${
-                                                updatingStatus === order.id || !canWorkOnOrder ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 transition-opacity'
+                                                updatingStatus === order.id || !canWorkOnOrder ? 'opacity-50 cursor-not-allowed' : ''
                                             }`}
                                         >
                                             {getStatusOptionsForOrder(order).map((value) => (
-                                                <option key={value} value={value}>
-                                                    {formatStatusLabel(value)}
-                                                </option>
+                                                <option key={value} value={value}>{formatStatusLabel(value)}</option>
                                             ))}
                                         </select>
                                     )}
                                 </div>
 
-                                {/* Content - Horizontal table layout */}
-                                <div className="grid gap-x-2 gap-y-3 px-4 py-2 text-xs leading-snug items-start" style={{gridTemplateColumns: '1.45fr 0.95fr 1.05fr 1.05fr 0.9fr 0.9fr 1fr 1.25fr auto'}}>
-                                    
-                                    {/* CLIENT COLUMN */}
-                                    <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.client')}</p>
-                                        <p className="font-bold text-gray-900 text-sm leading-tight truncate">{order.client?.name || '-'}</p>
-                                        <p className="text-gray-600 text-[10px] leading-tight truncate">{order.client?.phone || '-'}</p>
-                                        <p className="text-gray-500 text-[10px] leading-tight truncate">{order.city || order.client?.city || '-'}</p>
-                                        {order.callback_date && (
-                                            <p className="text-amber-700 text-[10px] leading-tight truncate">{t('admin.orderList.followUp')}: {formatDate(order.callback_date)}</p>
-                                        )}
-                                        {isBlacklisted && order.blacklist_entry?.reason && (
-                                            <p className="text-rose-700 text-[10px] leading-tight">
-                                                {t('admin.orderList.blacklist')}: {order.blacklist_entry.reason}
+                                {/* Card Body */}
+                                <div className="px-3 py-3 flex-1 space-y-3">
+                                    {/* Client Info Row */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t('admin.orderList.client')}</p>
+                                            <p className="font-semibold text-gray-900 text-sm truncate">{order.client?.name || '-'}</p>
+                                            <p className="text-gray-500 text-xs truncate">{order.client?.phone || '-'}</p>
+                                            <p className="text-gray-400 text-xs truncate">{order.city || order.client?.city || '-'}</p>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t('admin.orderList.amount')}</p>
+                                            <p className="font-bold text-gray-900 text-base">{formatCurrency(orderAmount)}</p>
+                                            <p className={`text-xs font-semibold ${orderBenefit > 0 ? 'text-green-600' : orderBenefit < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                                {orderBenefit > 0 ? '+' : ''}{formatCurrency(orderBenefit)}
                                             </p>
-                                        )}
-                                        {order.shipping_address && (
-                                            <p className="text-gray-500 text-[10px] leading-tight truncate">{order.shipping_address}</p>
-                                        )}
-                                        {order.delivery_status_note && (
-                                            <p className="text-rose-700 text-[10px] leading-tight">
-                                                {t('admin.orderList.motif')}: {order.delivery_status_note}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    {/* SELLER COLUMN */}
-                                    <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.seller')}</p>
-                                        {sellerLabel ? (
-                                            <>
-                                                <p className="font-bold text-gray-900 text-sm leading-tight truncate">{sellerLabel}</p>
-                                            </>
-                                        ) : (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
-                                                {t('admin.orderList.direct')}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* CONFIRMATION COLUMN */}
-                                    <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.confirmation')}</p>
-                                        {confirmationAgentLabel ? (
-                                            <>
-                                                <p className="font-bold text-gray-900 text-sm leading-tight truncate">
-                                                    {confirmationAgentLabel}
-                                                </p>
-                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                                                    isResponsibleConfirmationAgent
-                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                        : 'bg-slate-100 text-slate-600'
-                                                }`}>
-                                                    {isResponsibleConfirmationAgent ? t('admin.orderList.responsible') : t('admin.orderList.assigned')}
-                                                </span>
-                                                {order.returned_to_confirmation_at && (
-                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-cyan-50 text-cyan-700">
-                                                        {t('admin.orderList.backFromDelivery')}
-                                                    </span>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
-                                                {t('admin.orderList.unassigned')}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* ITEMS COLUMN */}
-                                    <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">{t('admin.orderList.items')}</p>
-                                        <div className="space-y-0.25">
-                                            {primaryItems.slice(0, 2).map((item, idx) => (
-                                                <div key={idx} className="text-[11px] text-gray-800 leading-snug truncate">
-                                                    <span className="font-medium">{item.product?.name?.substring(0, 12) || item.product_name?.substring(0, 12) || 'Item'}</span>
-                                                    <span className="text-gray-600"> ×{item.quantity}</span>
-                                                </div>
-                                            ))}
-                                            {primaryItems.length > 2 && (
-                                                <p className="text-[11px] text-blue-600 font-semibold leading-snug">{t('admin.orderList.moreItems', { count: primaryItems.length - 2 })}</p>
-                                            )}
-                                            {upsellItems.length > 0 && (
-                                                <p className="text-[11px] text-emerald-700 font-semibold leading-snug">
-                                                    {t('admin.orderList.upsell')}: {upsellItems.map((item) => item.product?.name || item.product_name || 'Product').join(', ')}
-                                                </p>
-                                            )}
                                         </div>
                                     </div>
 
-                                    {/* AMOUNT COLUMN */}
-                                    <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isDeliveryPersonUser ? t('admin.orderList.collected') : t('admin.orderList.amount')}
-                                        </p>
-                                        <p className="font-bold text-gray-900 text-sm leading-tight">
-                                            {formatCurrency(isDeliveryPersonUser ? (order.collected_amount || 0) : orderAmount)}
-                                        </p>
-                                    </div>
-
-                                    {/* BENEFIT COLUMN */}
-                                    <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isDeliveryPersonUser ? t('admin.orderList.commission') : t('admin.orderList.profit')}
-                                        </p>
-                                        <p className={`font-bold text-sm leading-tight ${
-                                            isDeliveryPersonUser
-                                                ? 'text-emerald-700'
-                                                : orderBenefit > 0 ? 'text-green-600' : orderBenefit < 0 ? 'text-red-600' : 'text-gray-600'
-                                        }`}>
-                                            {formatCurrency(isDeliveryPersonUser ? (order.delivery_person_commission || 0) : orderBenefit)}
-                                        </p>
-                                    </div>
-
-                                    {/* TRACKING COLUMN */}
-                                    <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isDeliveryPersonUser ? t('admin.orderList.dueAdmin') : t('admin.orderList.tracking')}
-                                        </p>
-                                        {isDeliveryPersonUser ? (
-                                            <p className="text-amber-700 font-semibold text-[11px] leading-snug">
-                                                {formatCurrency(order.amount_due_to_admin || 0)}
-                                            </p>
-                                        ) : order.delivery_tracking_code ? (
-                                            <p className="text-blue-700 font-mono font-semibold text-[10px] truncate leading-snug" title={order.delivery_tracking_code}>
-                                                {order.delivery_tracking_code.substring(0, 12)}
-                                            </p>
-                                        ) : (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium">
-                                                {t('admin.orderList.unassigned')}
+                                    {/* Date & Callback */}
+                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                        <span>{formatDate(order.created_at)}</span>
+                                        {order.callback_date && (
+                                            <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-700">
+                                                {t('admin.orderList.callback')} {formatDate(order.callback_date)}
+                                            </span>
+                                        )}
+                                        {isBlacklisted && (
+                                            <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-rose-600 text-white">
+                                                {order.blacklist_badge || t('admin.orderList.bannedBlacklisted')}
                                             </span>
                                         )}
                                     </div>
 
-                                    <div className="min-w-0 space-y-0.5 flex flex-col items-start">
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                                            {isConfirmationAgentUser ? t('admin.orderList.assignment') : isDeliveryPersonUser ? t('admin.orderList.actions') : t('admin.orderList.delivery')}
-                                        </p>
+                                    {/* Items */}
+                                    {primaryItems.length > 0 && (
+                                        <div className="bg-gray-50 rounded-lg px-2 py-1.5">
+                                            {primaryItems.slice(0, 2).map((item, idx) => (
+                                                <div key={idx} className="text-xs text-gray-700 truncate">
+                                                    <span className="font-medium">{item.product?.name || item.product_name || 'Item'}</span>
+                                                    <span className="text-gray-500 ml-1">×{item.quantity}</span>
+                                                </div>
+                                            ))}
+                                            {primaryItems.length > 2 && (
+                                                <p className="text-xs text-blue-600 font-medium">+{primaryItems.length - 2} {t('admin.orderList.moreItems', { count: primaryItems.length - 2 })}</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Assignments Row */}
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t('admin.orderList.seller')}</p>
+                                            <p className="font-medium text-gray-700 truncate">{sellerLabel || t('admin.orderList.direct')}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t('admin.orderList.confirmation')}</p>
+                                            <p className="font-medium text-gray-700 truncate">{confirmationAgentLabel || t('admin.orderList.unassigned')}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Delivery Assignment */}
+                                    <div>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('admin.orderList.delivery')}</p>
                                         {isConfirmationAgentUser ? (
                                             assignmentScope === 'available' && !order.confirmation_agent_id ? (
                                                 <button
                                                     onClick={() => handleAssignToMe(order.id)}
-                                                    className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 hover:bg-emerald-100"
+                                                    className="inline-flex items-center px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 hover:bg-emerald-100"
                                                 >
                                                     {t('admin.orderList.assignToMe')}
                                                 </button>
                                             ) : canWorkOnOrder ? (
                                                 <button
                                                     onClick={() => handleAgentClick(order)}
-                                                    className={`inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full text-xs font-semibold transition-all ${interactiveDeliveryTone}`}
-                                                    title={assignmentPrimaryLabel}
+                                                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${interactiveDeliveryTone}`}
                                                 >
-                                                    <span className="truncate max-w-[140px]">
-                                                        {assignmentPrimaryLabel}
-                                                    </span>
+                                                    <span className="truncate max-w-[120px]">{assignmentPrimaryLabel}</span>
                                                 </button>
                                             ) : (
-                                                <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold ${staticDeliveryTone}`}>
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${staticDeliveryTone}`}>
                                                     {assignmentPrimaryLabel}
                                                 </span>
                                             )
-                                        ) : isDeliveryPersonUser ? (
-                                            <>
-                                                <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-                                                    {order.delivery_person?.name || t('admin.orderList.assigned')}
-                                                </span>
-                                                {!deliveryWorkflowIsLocked && canWorkOnOrder && (
-                                                    <button
-                                                        onClick={() => openDeliveryWorkflowModal(order, { mode: 'report', nextStatus: order.status })}
-                                                        className="mt-2 inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-200 hover:bg-amber-100"
-                                                    >
-                                                        {t('admin.orderList.reportCallback')}
-                                                    </button>
-                                                )}
-                                                {!deliveryWorkflowIsLocked && canWorkOnOrder && (
-                                                    <button
-                                                        onClick={() => openDeliveryWorkflowModal(order, { mode: 'return', nextStatus: 'returned' })}
-                                                        className="mt-2 inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full bg-cyan-50 text-cyan-700 text-xs font-semibold border border-cyan-200 hover:bg-cyan-100"
-                                                    >
-                                                        {t('admin.orderList.sendBackToConfirmation')}
-                                                    </button>
-                                                )}
-                                            </>
                                         ) : (
                                             <button
                                                 onClick={() => handleAgentClick(order)}
-                                                className={`inline-flex w-fit max-w-fit self-start items-center whitespace-nowrap px-3 py-0.5 rounded-full text-xs font-semibold transition-all ${interactiveDeliveryTone}`}
-                                                title={assignmentPrimaryLabel}
+                                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${interactiveDeliveryTone}`}
                                             >
-                                                <span className="truncate max-w-[140px]">
-                                                    {assignmentPrimaryLabel}
-                                                </span>
+                                                <span className="truncate max-w-[120px]">{assignmentPrimaryLabel}</span>
                                             </button>
                                         )}
                                     </div>
+                                </div>
 
-                                    {/* ACTION ICONS COLUMN */}
-                                    <div className="flex items-start gap-0.5">
+                                {/* Card Footer - Actions */}
+                                <div className="flex items-center justify-between gap-1 px-3 py-2 border-t border-gray-100 bg-gray-50/50">
+                                    <div className="flex items-center gap-1">
                                         {order.client?.phone && (
                                             <a
                                                 href={`https://wa.me/${order.client.phone.replace(/[^0-9]/g, '')}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors flex-shrink-0"
+                                                className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                                 title={t('admin.orderList.sendWhatsApp')}
                                             >
-                                                <MessageCircle size={15} />
+                                                <MessageCircle size={16} />
                                             </a>
                                         )}
                                         <button
                                             onClick={() => fetchOrders()}
-                                            className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                                             title={t('admin.orderList.refresh')}
                                         >
-                                            <RefreshCw size={15} />
+                                            <RefreshCw size={16} />
                                         </button>
+                                    </div>
+                                    <div className="flex items-center gap-1">
                                         {canWorkOnOrder && (
                                             <Link
                                                 to={appPath(`/orders/${order.id}`)}
-                                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors flex-shrink-0"
+                                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                                                 title="View Details"
                                             >
-                                                <Eye size={15} />
+                                                <Eye size={16} />
                                             </Link>
                                         )}
                                         {canWorkOnOrder && !isDeliveryPersonUser && (
                                             <Link
                                                 to={appPath(`/orders/${order.id}/edit`)}
-                                                className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors flex-shrink-0"
+                                                className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                                                 title={t('admin.orderList.editOrder')}
                                             >
-                                                <Edit size={15} />
+                                                <Edit size={16} />
                                             </Link>
                                         )}
                                         {!isConfirmationAgentUser && !isDeliveryPersonUser && (
                                             <button
                                                 onClick={() => handleDeleteOrder(order.id, order.order_number)}
                                                 disabled={deletingOrderId === order.id}
-                                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 flex-shrink-0"
+                                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                                                 title={t('admin.orderList.deleteOrder')}
                                             >
-                                                <Trash2 size={15} />
+                                                <Trash2 size={16} />
                                             </button>
                                         )}
                                     </div>
                                 </div>
                             </div>
                             );
-                        })
-                    )}
-
-                {/* Pagination */}
-                {!loading && orders.length > 0 && (
-                    <div className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-between border border-gray-100">
-                        <span className="text-sm text-gray-600 font-medium">{t('admin.orderList.showingOrders', { from: pagination.from, to: pagination.to, total: pagination.total })}</span>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
-                                disabled={pagination.current_page === 1}
-                                className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
-                            >
-                                ◀ {t('admin.orderList.previous')}
-                            </button>
-                            {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                                .filter(page => page === 1 || page === pagination.last_page || (page >= pagination.current_page - 1 && page <= pagination.current_page + 1))
-                                .map((page, index, array) => (
-                                    <React.Fragment key={page}>
-                                        {index > 0 && array[index - 1] !== page - 1 && <span className="px-2 text-gray-400">•••</span>}
-                                        <button
-                                            onClick={() => setFilters({ ...filters, page })}
-                                            className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === page ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
-                                        >
-                                            {page}
-                                        </button>
-                                    </React.Fragment>
-                                ))}
-                            <button
-                                onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
-                                disabled={pagination.current_page === pagination.last_page}
-                                className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === pagination.last_page ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
-                            >
-                                {t('admin.orderList.next')} ▶
-                            </button>
-                        </div>
+                        })}
                     </div>
                 )}
             </div>
+
+            {/* Pagination */}
+            {!loading && orders.length > 0 && (
+                <div className="bg-white rounded-lg p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between border border-gray-100 gap-3">
+                    <span className="text-sm text-gray-600 font-medium">{t('admin.orderList.showingOrders', { from: pagination.from, to: pagination.to, total: pagination.total })}</span>
+                    <div className="flex gap-2 flex-wrap justify-center">
+                        <button
+                            onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
+                            disabled={pagination.current_page === 1}
+                            className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
+                        >
+                            ◀ {t('admin.orderList.previous')}
+                        </button>
+                        {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
+                            .filter(page => page === 1 || page === pagination.last_page || (page >= pagination.current_page - 1 && page <= pagination.current_page + 1))
+                            .map((page, index, array) => (
+                                <React.Fragment key={page}>
+                                    {index > 0 && array[index - 1] !== page - 1 && <span className="px-2 text-gray-400">•••</span>}
+                                    <button
+                                        onClick={() => setFilters({ ...filters, page })}
+                                        className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === page ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
+                                    >
+                                        {page}
+                                    </button>
+                                </React.Fragment>
+                            ))}
+                        <button
+                            onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
+                            disabled={pagination.current_page === pagination.last_page}
+                            className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${pagination.current_page === pagination.last_page ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
+                        >
+                            {t('admin.orderList.next')} ▶
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <DeliveryWorkflowModal
                 modal={deliveryWorkflowModal}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
+import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -841,10 +843,13 @@ export default function Dashboard() {
                             <h3 className="text-lg font-semibold text-slate-800">{t('admin.dashboard.recentOrders')}</h3>
                             <p className="text-sm text-slate-500 mt-1">{t('admin.dashboard.latestOrders')}</p>
                         </div>
-                        <button className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center space-x-1">
+                        <Link 
+                            to={appPath('/orders')}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+                        >
                             <span>{t('admin.dashboard.viewAll')}</span>
                             <ArrowUpRight size={16} />
-                        </button>
+                        </Link>
                     </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -891,9 +896,13 @@ export default function Dashboard() {
                                         })}
                                     </td>
                                     <td className="py-4 px-6">
-                                        <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                                        <Link 
+                                            to={appPath(`/orders/${order.id}`)}
+                                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex items-center justify-center"
+                                            title={t('admin.dashboard.viewOrderDetails')}
+                                        >
                                             <Eye size={18} />
-                                        </button>
+                                        </Link>
                                     </td>
                                 </tr>
                             ))}

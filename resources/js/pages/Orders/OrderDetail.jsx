@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -14,6 +15,7 @@ import {
 export default function OrderDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const { user } = useAuth();
     const { formatCurrency, settings } = useSettings();
     const [order, setOrder] = useState(null);
