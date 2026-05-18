@@ -5,7 +5,7 @@ import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { isAdminRole, isDeliveryPersonRole } from '../../utils/roles';
+import { isAdminRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { 
     Package, User, MapPin, Phone, Calendar, DollarSign, 
     Truck, UserCheck, ArrowLeft, Edit, Printer, CheckCircle,
@@ -22,9 +22,11 @@ export default function OrderDetail() {
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [resettingAssignment, setResettingAssignment] = useState(false);
+    const autoSyncPerformed = useRef(false);
     const printRef = useRef(null);
     const isAdminUser = isAdminRole(user?.role?.slug);
     const isDeliveryPersonUser = isDeliveryPersonRole(user?.role?.slug);
+    const isVendorUser = isVendorRole(user?.role?.slug);
 
     useEffect(() => {
         fetchOrder();
@@ -42,15 +44,22 @@ export default function OrderDetail() {
         }
     };
 
-    const handleSyncDeliveryStatus = async () => {
+    useEffect(() => {
+        if (order && order.delivery_tracking_code && order.delivery_tracking_code.toLowerCase() !== 'ko' && !autoSyncPerformed.current) {
+            autoSyncPerformed.current = true;
+            handleSyncDeliveryStatus(true);
+        }
+    }, [order]);
+
+    const handleSyncDeliveryStatus = async (silent = false) => {
         if (!order.delivery_tracking_code) {
-            alert('This order does not have a tracking code.');
+            if (!silent) alert('This order does not have a tracking code.');
             return;
         }
 
         // Check for invalid tracking codes
         if (order.delivery_tracking_code.toLowerCase() === 'ko') {
-            alert('This order has an invalid tracking code.\n\nThe order was not successfully sent to BMDelivery.\n\nPlease try sending the order to BMDelivery again by updating the order status to "confirmed".');
+            if (!silent) alert('This order has an invalid tracking code.\n\nThe order was not successfully sent to BMDelivery.\n\nPlease try sending the order to BMDelivery again by updating the order status to "confirmed".');
             return;
         }
 
@@ -58,10 +67,12 @@ export default function OrderDetail() {
             setSyncing(true);
             const response = await api.post(`/orders/${id}/sync-delivery-status`);
             
-            if (response.data.result.status_changed) {
-                alert(`Status synced successfully!\n\nDelivery Status: ${response.data.result.old_delivery_status} → ${response.data.result.new_delivery_status}`);
-            } else {
-                alert(`Status is up to date.\n\nCurrent Delivery Status: ${response.data.result.new_delivery_status}`);
+            if (!silent) {
+                if (response.data.result.status_changed) {
+                    alert(`Status synced successfully!\n\nDelivery Status: ${response.data.result.old_delivery_status} → ${response.data.result.new_delivery_status}`);
+                } else {
+                    alert(`Status is up to date.\n\nCurrent Delivery Status: ${response.data.result.new_delivery_status}`);
+                }
             }
             
             // Refresh order data
@@ -69,16 +80,18 @@ export default function OrderDetail() {
         } catch (error) {
             console.error('Error syncing delivery status:', error);
             
-            let errorMessage = error.response?.data?.error || error.message;
-            
-            // Provide helpful context for common errors
-            if (errorMessage.includes('Invalid tracking code')) {
-                errorMessage = 'This order has an invalid tracking code.\n\nThe order was not successfully sent to BMDelivery.\n\nPlease try sending the order again.';
-            } else if (errorMessage.includes('not found in BMDelivery system')) {
-                errorMessage = 'Tracking code not found in BMDelivery.\n\nThe order may not have been successfully sent.\n\nPlease check the order in BMDelivery dashboard or try sending it again.';
+            if (!silent) {
+                let errorMessage = error.response?.data?.error || error.message;
+                
+                // Provide helpful context for common errors
+                if (errorMessage.includes('Invalid tracking code')) {
+                    errorMessage = 'This order has an invalid tracking code.\n\nThe order was not successfully sent to BMDelivery.\n\nPlease try sending the order again.';
+                } else if (errorMessage.includes('not found in BMDelivery system')) {
+                    errorMessage = 'Tracking code not found in BMDelivery.\n\nThe order may not have been successfully sent.\n\nPlease check the order in BMDelivery dashboard or try sending it again.';
+                }
+                
+                alert('Failed to sync delivery status:\n\n' + errorMessage);
             }
-            
-            alert('Failed to sync delivery status:\n\n' + errorMessage);
         } finally {
             setSyncing(false);
         }
@@ -781,6 +794,29 @@ export default function OrderDetail() {
                                         </span>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Seller Finance */}
+                    {order.vendor_id && (isAdminUser || isVendorUser) && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                <DollarSign className="mr-2" size={20} />
+                                Seller Finance
+                            </h2>
+                            <div className="space-y-3">
+                                <div>
+                                    <p className="text-sm text-gray-500">Seller Net Profit</p>
+                                    <p className="font-semibold text-emerald-700">{formatCurrency(order.seller_net_profit || 0)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Platform Commission</p>
+                                    <p className="font-semibold text-gray-900">{formatCurrency(order.commission_amount || 0)}</p>
+                                </div>
+                                <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
+                                    Formula: Prix de vente - Prix produit - Livraison - Fullfilment
+                                </p>
                             </div>
                         </div>
                     )}

@@ -26,17 +26,9 @@ class OrderService
             $shippingResolution = $this->shippingPriceService->resolveForOrderData($data);
             $data['shipping_cost'] = $shippingResolution['shipping_cost'];
 
+            // Calculate subtotal and total
             ['subtotal' => $subtotal, 'total' => $total, 'shipping_included_in_price' => $shippingIncludedInPrice] =
                 $this->calculateOrderTotals($data['items'], $data);
-
-            // Calculate commission if vendor order
-            $commissionAmount = 0;
-            if (isset($data['vendor_id']) && $data['vendor_id']) {
-                $vendor = \App\Models\Vendor::find($data['vendor_id']);
-                if ($vendor) {
-                    $commissionAmount = ($total * $vendor->commission_rate) / 100;
-                }
-            }
 
             // Create order
             $order = Order::create([
@@ -60,7 +52,7 @@ class OrderService
                 'tax' => $data['tax'] ?? 0,
                 'discount' => $data['discount'] ?? 0,
                 'total' => $total,
-                'commission_amount' => $commissionAmount,
+                'commission_amount' => 0,
                 'shipping_address' => $data['shipping_address'] ?? null,
                 'city' => $data['city'] ?? null,
                 'phone' => $data['client_phone'] ?? null,
@@ -78,6 +70,17 @@ class OrderService
                     'price' => $item['price'],
                     'subtotal' => $item['price'] * $item['quantity'],
                     'is_upsell' => (bool) ($item['is_upsell'] ?? false),
+                ]);
+            }
+
+            // Calculate seller net profit and update commission if vendor order
+            if ($order->vendor_id) {
+                $order->load('items.product');
+                $fulfillmentCost = (float) \App\Models\Setting::get('order_fulfillment_cost', 10.0);
+                $sellerNetProfit = $order->calculateProfit($fulfillmentCost);
+                $order->update([
+                    'seller_net_profit' => $sellerNetProfit,
+                    'commission_amount' => $order->total - $sellerNetProfit,
                 ]);
             }
 
@@ -107,17 +110,9 @@ class OrderService
             $shippingResolution = $this->shippingPriceService->resolveForOrderData($data, $order);
             $data['shipping_cost'] = $shippingResolution['shipping_cost'];
 
+            // Calculate subtotal and total
             ['subtotal' => $subtotal, 'total' => $total, 'shipping_included_in_price' => $shippingIncludedInPrice] =
                 $this->calculateOrderTotals($data['items'], $data, $order);
-
-            // Calculate commission if vendor order
-            $commissionAmount = 0;
-            if (isset($data['vendor_id']) && $data['vendor_id']) {
-                $vendor = \App\Models\Vendor::find($data['vendor_id']);
-                if ($vendor) {
-                    $commissionAmount = ($total * $vendor->commission_rate) / 100;
-                }
-            }
 
             // Update order (but don't update status here - let updateOrderStatus handle that)
             $updateData = [
@@ -137,7 +132,7 @@ class OrderService
                 'tax' => $data['tax'] ?? 0,
                 'discount' => $data['discount'] ?? 0,
                 'total' => $total,
-                'commission_amount' => $commissionAmount,
+                'commission_amount' => 0,
                 'shipping_address' => $data['shipping_address'] ?? null,
                 'city' => $data['city'] ?? null,
                 'phone' => $data['client_phone'] ?? null,
@@ -163,6 +158,17 @@ class OrderService
                     'price' => $item['price'],
                     'subtotal' => $item['price'] * $item['quantity'],
                     'is_upsell' => (bool) ($item['is_upsell'] ?? false),
+                ]);
+            }
+
+            // Calculate seller net profit and update commission if vendor order
+            if ($order->vendor_id) {
+                $order->load('items.product');
+                $fulfillmentCost = (float) \App\Models\Setting::get('order_fulfillment_cost', 10.0);
+                $sellerNetProfit = $order->calculateProfit($fulfillmentCost);
+                $order->update([
+                    'seller_net_profit' => $sellerNetProfit,
+                    'commission_amount' => $order->total - $sellerNetProfit,
                 ]);
             }
 

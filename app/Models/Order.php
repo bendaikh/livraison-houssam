@@ -38,6 +38,7 @@ class Order extends Model
         'total',
         'total_amount',
         'commission_amount',
+        'seller_net_profit',
         'shipping_address',
         'city',
         'delivery_city',
@@ -70,6 +71,7 @@ class Order extends Model
         'discount' => 'decimal:2',
         'total' => 'decimal:2',
         'commission_amount' => 'decimal:2',
+        'seller_net_profit' => 'decimal:2',
         'returned_to_confirmation_at' => 'datetime',
         'confirmation_assigned_at' => 'datetime',
         'confirmed_at' => 'datetime',
@@ -201,30 +203,15 @@ class Order extends Model
 
     public function calculateProfit(float $fulfillmentCost = 10.0): float
     {
-        $baseSellTotal = 0.0;
-        $baseCostTotal = 0.0;
-        $upsellSellTotal = 0.0;
-        $upsellCostTotal = 0.0;
-
+        $totalProductCost = 0.0;
         foreach ($this->items as $item) {
-            $quantity = (float) ($item->quantity ?? 0);
-            $sellTotal = (float) ($item->price ?? 0) * $quantity;
-            $productCost = (float) ($item->product?->getOrderCostAmount() ?? 0) * $quantity;
-
-            if ($item->is_upsell) {
-                $upsellSellTotal += $sellTotal;
-                $upsellCostTotal += $productCost;
-                continue;
-            }
-
-            $baseSellTotal += $sellTotal;
-            $baseCostTotal += $productCost;
+            $totalProductCost += (float) ($item->product?->getOrderCostAmount() ?? 0) * (float) ($item->quantity ?? 0);
         }
 
+        $total = (float) ($this->total ?? 0);
         $shippingCost = (float) ($this->shipping_cost ?? 0);
-        $discount = (float) ($this->discount ?? 0);
 
-        return ($baseSellTotal - $discount - $baseCostTotal - $shippingCost - $fulfillmentCost)
-            + ($upsellSellTotal - $upsellCostTotal);
+        // Formula: Prix de vente (total) - Livraison (shipping_cost) - Fullfilment - Prix produit (totalProductCost)
+        return $total - $shippingCost - $fulfillmentCost - $totalProductCost;
     }
 }

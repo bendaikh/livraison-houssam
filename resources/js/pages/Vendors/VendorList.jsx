@@ -61,6 +61,17 @@ export default function VendorList() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrors({});
+
+        // Basic frontend validation for common typos
+        if (formData.email.match(/\.([a-z]{2,})\.\1$/i)) {
+            setErrors({ email: ['The email address contains a repeated extension (e.g., .com.com).'] });
+            return;
+        }
+        if (formData.email.includes('..')) {
+            setErrors({ email: ['The email address cannot contain consecutive dots.'] });
+            return;
+        }
+
         setLoading(true);
 
         try {

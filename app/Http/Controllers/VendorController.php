@@ -38,7 +38,20 @@ class VendorController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:vendors,email|unique:users,email',
+            'email' => [
+                'required',
+                'email:rfc,dns',
+                'unique:vendors,email',
+                'unique:users,email',
+                function ($attribute, $value, $fail) {
+                    if (preg_match('/\.([a-z]{2,})\.\1$/i', $value)) {
+                        $fail('The email address contains a repeated extension (e.g., .com.com).');
+                    }
+                    if (str_contains($value, '..')) {
+                        $fail('The email address cannot contain consecutive dots.');
+                    }
+                },
+            ],
             'password' => 'required|string|min:8|confirmed',
             'phone' => 'nullable|string',
             'address' => 'nullable|string',
@@ -120,7 +133,21 @@ class VendorController extends Controller
     {
         $validated = $request->validate([
             'name' => 'string|max:255',
-            'email' => 'email|unique:vendors,email,' . $vendor->id . '|unique:users,email,' . ($vendor->user_id ?? 'NULL'),
+            'email' => [
+                'nullable',
+                'email:rfc,dns',
+                'unique:vendors,email,' . $vendor->id,
+                'unique:users,email,' . ($vendor->user_id ?? 'NULL'),
+                function ($attribute, $value, $fail) {
+                    if (empty($value)) return;
+                    if (preg_match('/\.([a-z]{2,})\.\1$/i', $value)) {
+                        $fail('The email address contains a repeated extension (e.g., .com.com).');
+                    }
+                    if (str_contains($value, '..')) {
+                        $fail('The email address cannot contain consecutive dots.');
+                    }
+                },
+            ],
             'password' => 'nullable|string|min:8|confirmed',
             'phone' => 'nullable|string',
             'address' => 'nullable|string',
@@ -267,7 +294,20 @@ class VendorController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:vendors,email|unique:users,email',
+            'email' => [
+                'required',
+                'email:rfc,dns',
+                'unique:vendors,email',
+                'unique:users,email',
+                function ($attribute, $value, $fail) {
+                    if (preg_match('/\.([a-z]{2,})\.\1$/i', $value)) {
+                        $fail('The email address contains a repeated extension (e.g., .com.com).');
+                    }
+                    if (str_contains($value, '..')) {
+                        $fail('The email address cannot contain consecutive dots.');
+                    }
+                },
+            ],
             'password' => 'required|string|min:8|confirmed',
             'phone' => 'required|string',
             'company_name' => 'required|string',

@@ -491,7 +491,7 @@ class BillingService
             'paid_at' => $billing->paid_at?->toIso8601String(),
             'paid_by_name' => $billing->paidBy?->name,
             'notes' => $billing->notes,
-            'calculation_label' => 'Delivered sales minus platform commission',
+            'calculation_label' => 'Sum of Seller Net Profits (Prix de vente - Prix produit - Livraison - Fullfilment)',
         ];
     }
 
