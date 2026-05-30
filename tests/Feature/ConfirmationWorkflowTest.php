@@ -189,7 +189,7 @@ class ConfirmationWorkflowTest extends TestCase
             'status' => 'cancelled',
         ]);
 
-        $pendingResponse->assertOk();
+        $pendingResponse->assertForbidden();
 
         $order->update([
             'delivery_person_id' => null,

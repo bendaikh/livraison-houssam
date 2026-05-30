@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Support\MoroccanPhone;
+use App\Support\OrderTotals;
 use App\Services\DeliveryStatusMapper;
 use App\Services\OrderService;
 use App\Services\ShippingPriceService;
@@ -141,6 +142,8 @@ class OrderController extends Controller
         $orders = $query->paginate($perPage);
         $orders->getCollection()->transform(function (Order $order) {
             $order->setAttribute('delivery_workflow_locked', $this->isDeliveryWorkflowLocked($order));
+            $order->setAttribute('seller_name', $this->resolveSellerName($order));
+            $this->attachOrderDisplayTotals($order);
             return $order;
         });
         $this->attachBlacklistMetadata($request, $orders->getCollection());
@@ -180,7 +183,7 @@ class OrderController extends Controller
             'callback_date' => 'nullable|date',
             'delivery_city' => 'nullable|string|max:255',
             'status' => 'nullable|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
-            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
+            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp,custom_api,website',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'nullable|exists:products,id',
             'items.*.product_name' => 'nullable|string|max:255',
@@ -207,6 +210,11 @@ class OrderController extends Controller
             $validated['whatsapp'] = $normalizedWhatsapp !== '' ? $normalizedWhatsapp : $validated['whatsapp'];
         }
         $validated = $this->applyAuthenticatedVendor($request, $validated);
+        $validated = $this->applyIntegrationDefaults($request, $validated);
+        $validated = $this->stripVendorRestrictedFields($request, $validated);
+        if ($request->user()?->isVendor()) {
+            $validated['status'] = 'pending';
+        }
         if ($request->user()?->isConfirmationAgent()) {
             $validated['confirmation_agent_id'] = $request->user()->id;
         }
@@ -276,6 +284,8 @@ class OrderController extends Controller
         ]);
         $this->attachShippingPricingMetadata($order, 'show');
         $this->attachBlacklistMetadata(request(), $order);
+        $order->setAttribute('seller_name', $this->resolveSellerName($order));
+        $this->attachOrderDisplayTotals($order);
 
         return response()->json($order);
     }
@@ -308,7 +318,7 @@ class OrderController extends Controller
             'callback_date' => 'nullable|date',
             'delivery_city' => 'nullable|string|max:255',
             'status' => 'nullable|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
-            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp',
+            'source' => 'string|in:manual,shopify,google_sheet,delivery_company,marketplace,whatsapp,custom_api,website',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
@@ -333,6 +343,7 @@ class OrderController extends Controller
             $validated['whatsapp'] = $normalizedWhatsapp !== '' ? $normalizedWhatsapp : $validated['whatsapp'];
         }
         $validated = $this->applyAuthenticatedVendor($request, $validated);
+        $validated = $this->stripVendorRestrictedFields($request, $validated);
         $this->ensureProductsAllowedForSeller($validated['items'] ?? [], $validated['vendor_id'] ?? $order->vendor_id);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated, $order);
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
@@ -415,6 +426,10 @@ class OrderController extends Controller
     {
         $this->authorizeOrderAccess($request, $order);
 
+        if ($request->user()?->isVendor()) {
+            abort(403, 'Status is read-only for sellers.');
+        }
+
         $validated = $request->validate([
             'status' => 'required|in:pending,confirmed,reported,picked_up,ready_for_shipping,shipped,out_for_delivery,delivered,cancelled,refused,returned,no_response,return_requested',
             'note' => 'nullable|string',
@@ -433,9 +448,11 @@ class OrderController extends Controller
 
         $this->ensureDeliveryAssignmentExistsForConfirmedStatus($validated, $order);
 
-        $assignmentPayload = $this->extractAssignmentPayload($request, $validated);
-        if (!empty($assignmentPayload)) {
-            $order = $this->orderService->assignDeliveryAgent($order->id, $assignmentPayload);
+        if (!$request->user()?->isVendor()) {
+            $assignmentPayload = $this->extractAssignmentPayload($request, $validated);
+            if (!empty($assignmentPayload)) {
+                $order = $this->orderService->assignDeliveryAgent($order->id, $assignmentPayload);
+            }
         }
 
         $deliveryIntegrationId = $validated['delivery_integration_id'] ?? $order->delivery_integration_id;
@@ -466,6 +483,10 @@ class OrderController extends Controller
 
         if ($request->user()?->isDeliveryPerson()) {
             abort(403, 'Delivery people cannot assign orders.');
+        }
+
+        if ($request->user()?->isVendor()) {
+            abort(403, 'Sellers cannot assign delivery agents.');
         }
 
         $validated = $request->validate([
@@ -1087,17 +1108,11 @@ class OrderController extends Controller
 
     private function ensureSellerCanManuallyUpdateStatus(Request $request, Order $order, ?string $requestedStatus = null): void
     {
-        $user = $request->user();
-
-        if (!$user?->isVendor()) {
+        if (!$request->user()?->isVendor()) {
             return;
         }
 
-        if ($requestedStatus === null || $requestedStatus === $order->status) {
-            return;
-        }
-
-        if ($this->isSellerStatusLocked($order, $requestedStatus)) {
+        if ($requestedStatus !== null && $requestedStatus !== $order->status) {
             abort(403, $this->getSellerStatusLockMessage($order));
         }
     }
@@ -1142,11 +1157,7 @@ class OrderController extends Controller
 
     private function isSellerStatusLocked(Order $order, ?string $requestedStatus = null): bool
     {
-        if (!empty($order->returned_to_confirmation_at)) {
-            return true;
-        }
-
-        return $this->isConfirmationAgentStatusLocked($order, $requestedStatus);
+        return true;
     }
 
     private function getConfirmationAgentStatusLockMessage(Order $order): string
@@ -1164,19 +1175,7 @@ class OrderController extends Controller
 
     private function getSellerStatusLockMessage(Order $order): string
     {
-        if (!empty($order->returned_to_confirmation_at)) {
-            return 'Status is read-only for sellers while the order is back in the confirmation workflow.';
-        }
-
-        if (!empty($order->delivery_tracking_code)) {
-            return 'Status is read-only for sellers after the order is handed to a delivery company.';
-        }
-
-        if ($order->delivery_person_id) {
-            return 'Status is read-only for sellers once a delivery person is assigned.';
-        }
-
-        return 'Status is read-only for sellers once the order has been confirmed.';
+        return 'Status is read-only for sellers.';
     }
 
     private function isAdminStatusLocked(Order $order): bool
@@ -1402,6 +1401,15 @@ class OrderController extends Controller
         ]);
     }
 
+    private function attachOrderDisplayTotals(Order $order): void
+    {
+        $display = OrderTotals::resolveForDisplay($order);
+
+        $order->setAttribute('shipping_included_in_price', $display['shipping_included_in_price']);
+        $order->setAttribute('display_subtotal', $display['display_subtotal']);
+        $order->setAttribute('display_total', $display['display_total']);
+    }
+
     private function attachBlacklistMetadata(Request $request, Order|Collection $orders): void
     {
         $collection = $orders instanceof Order ? collect([$orders]) : $orders;
@@ -1515,8 +1523,136 @@ class OrderController extends Controller
         $roleSlug = $user?->role?->slug;
         $source = $validated['source'] ?? 'manual';
 
+        if ($request->attributes->get('api_integration_id')) {
+            return true;
+        }
+
+        if (in_array($source, ['custom_api', 'website', 'google_sheet', 'marketplace'], true)) {
+            return true;
+        }
+
         return in_array($roleSlug, ['admin', 'superadmin'], true)
             && in_array($source, ['manual', 'marketplace'], true);
+    }
+
+    private function applyIntegrationDefaults(Request $request, array $validated): array
+    {
+        $integration = $request->attributes->get('api_integration');
+
+        if (!$integration) {
+            return $validated;
+        }
+
+        $vendorId = $request->attributes->get('api_vendor_id');
+        if ($vendorId && empty($validated['vendor_id'])) {
+            $validated['vendor_id'] = $vendorId;
+        }
+
+        $defaultSource = match ($integration->provider) {
+            'shopify' => 'shopify',
+            'google_sheets' => 'google_sheet',
+            'custom_api' => 'custom_api',
+            default => 'custom_api',
+        };
+
+        $currentSource = $this->normalizeOrderSource($validated['source'] ?? null, $defaultSource);
+        $integrationSources = ['shopify', 'google_sheet', 'custom_api', 'website', 'marketplace'];
+
+        if (
+            !$request->filled('source')
+            || in_array($currentSource, ['manual', 'whatsapp'], true)
+            || !in_array($currentSource, $integrationSources, true)
+        ) {
+            $validated['source'] = $defaultSource;
+        } else {
+            $validated['source'] = $currentSource;
+        }
+
+        return $validated;
+    }
+
+    private function applyIntegrationVendor(Request $request, array $validated): array
+    {
+        $vendorId = $request->attributes->get('api_vendor_id');
+
+        if ($vendorId && empty($validated['vendor_id'])) {
+            $validated['vendor_id'] = $vendorId;
+        }
+
+        return $validated;
+    }
+
+    private function stripVendorRestrictedFields(Request $request, array $validated): array
+    {
+        if (!$request->user()?->isVendor()) {
+            return $validated;
+        }
+
+        unset(
+            $validated['delivery_agent_id'],
+            $validated['delivery_person_id'],
+            $validated['delivery_integration_id'],
+            $validated['delivery_city'],
+            $validated['confirmation_agent_id'],
+            $validated['status'],
+        );
+
+        return $validated;
+    }
+
+    private function normalizeOrderSource(?string $source, string $default = 'manual'): string
+    {
+        $normalized = strtolower(trim((string) $source));
+        $normalized = str_replace([' ', '-'], '_', $normalized);
+
+        $aliases = [
+            'api' => 'custom_api',
+            'api_personnalisee' => 'custom_api',
+            'api_personnalisée' => 'custom_api',
+            'custom' => 'custom_api',
+            'google_sheets' => 'google_sheet',
+            'google_sheet' => 'google_sheet',
+            'sheet' => 'google_sheet',
+            'site' => 'website',
+            'web' => 'website',
+            'store' => 'website',
+        ];
+
+        if (isset($aliases[$normalized])) {
+            $normalized = $aliases[$normalized];
+        }
+
+        $allowed = [
+            'manual',
+            'shopify',
+            'google_sheet',
+            'delivery_company',
+            'marketplace',
+            'whatsapp',
+            'custom_api',
+            'website',
+        ];
+
+        if ($normalized === '' || !in_array($normalized, $allowed, true)) {
+            return $default;
+        }
+
+        return $normalized;
+    }
+
+    private function resolveSellerName(Order $order): ?string
+    {
+        if ($order->relationLoaded('vendor') && $order->vendor) {
+            return $order->vendor->name ?: $order->vendor->company_name;
+        }
+
+        if ($order->vendor_id) {
+            $vendor = Vendor::find($order->vendor_id);
+
+            return $vendor?->name ?: $vendor?->company_name;
+        }
+
+        return null;
     }
 
     /**

@@ -93,10 +93,12 @@ class WebhookController extends Controller
             $order = $this->orderService->createOrder([
                 'client_id' => $client->id,
                 'client_phone' => $parsedData['customer']['phone'] ?? $client->phone,
+                'vendor_id' => $integration->vendor_id,
                 'external_order_id' => $parsedData['external_order_id'],
                 'shopify_name' => $parsedData['shopify_name'] ?? null,
                 'items' => $items,
                 'shipping_cost' => $parsedData['total_shipping'],
+                'shipping_included_in_price' => false,
                 'tax' => $parsedData['total_tax'],
                 'discount' => $parsedData['total_discounts'],
                 'status' => 'pending',

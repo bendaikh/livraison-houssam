@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -43,6 +44,8 @@ class Product extends Model
         'weight' => 'decimal:2',
         'images' => 'array',
     ];
+
+    protected $appends = ['image_url', 'image_urls'];
 
     public function category(): BelongsTo
     {
@@ -99,5 +102,38 @@ class Product extends Model
     public function getAdminUnitProfitAmount(): float
     {
         return $this->getAdminSellAmount() - $this->getAdminCostAmount();
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        $images = $this->images ?? [];
+
+        return isset($images[0]) ? self::resolveImageUrl($images[0]) : null;
+    }
+
+    public function getImageUrlsAttribute(): array
+    {
+        return collect($this->images ?? [])
+            ->map(fn ($path) => self::resolveImageUrl($path))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    public static function resolveImageUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        if (str_starts_with($path, '/')) {
+            return $path;
+        }
+
+        return Storage::disk('public')->url($path);
     }
 }

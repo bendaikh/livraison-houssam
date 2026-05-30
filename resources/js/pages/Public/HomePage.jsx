@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Globe, Package, TrendingUp, Headphones, Truck, ShieldCheck, Menu, X, UserPlus, ShoppingCart, Megaphone, BarChart3, CheckCircle, Wallet, Laptop, Home, Heart, Shirt, GraduationCap, Cpu } from 'lucide-react';
 import axios from 'axios';
 import { useSettings } from '../../contexts/SettingsContext';
+import { getProductImageSrc } from '../../utils/images';
 
 export default function HomePage() {
     const { t, i18n } = useTranslation();
@@ -11,6 +12,7 @@ export default function HomePage() {
     const appName = settings.app_name || 'Livraison';
     const [products, setProducts] = useState([]);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [brokenImages, setBrokenImages] = useState({});
     const isRTL = i18n.language === 'ar';
 
     useEffect(() => {
@@ -457,8 +459,13 @@ export default function HomePage() {
                         {products.slice(0, 8).map((product) => (
                             <div key={product.id} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition transform hover:-translate-y-2">
                                 <div className="aspect-square bg-gray-200 overflow-hidden">
-                                    {product.images && product.images[0] ? (
-                                        <img src={`/storage/${product.images[0]}`} alt={product.name} className="w-full h-full object-cover" />
+                                    {getProductImageSrc(product) && !brokenImages[product.id] ? (
+                                        <img
+                                            src={getProductImageSrc(product)}
+                                            alt={product.name}
+                                            className="w-full h-full object-cover"
+                                            onError={() => setBrokenImages((prev) => ({ ...prev, [product.id]: true }))}
+                                        />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center">
                                             <Package className="w-16 h-16 text-gray-400" />

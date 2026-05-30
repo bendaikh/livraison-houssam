@@ -199,7 +199,7 @@ export default function OrderForm() {
             price: selectedProduct.company_price || selectedProduct.price || selectedProduct.recommended_price || 0
         }]);
 
-        if (source && ['manual', 'shopify', 'google_sheet', 'delivery_company', 'marketplace', 'whatsapp'].includes(source)) {
+        if (source && ['manual', 'shopify', 'google_sheet', 'delivery_company', 'marketplace', 'whatsapp', 'custom_api', 'website'].includes(source)) {
             setFormData((prev) => ({ ...prev, source }));
         }
 
@@ -479,9 +479,7 @@ export default function OrderForm() {
 
         return Boolean(currentOrderConfirmedAt) || formData.status === 'confirmed';
     };
-    const isSellerStatusLocked = isVendorUser
-        && isEditing
-        && (Boolean(currentOrderReturnedToConfirmationAt) || isConfirmationStyleStatusLocked());
+    const isSellerStatusLocked = isVendorUser;
     const adminDeliveryCompanyLockedStatuses = [
         'picked_up',
         'ready_for_shipping',
@@ -594,6 +592,14 @@ export default function OrderForm() {
                 vendor_id: isVendorUser ? (user?.vendor?.id || formData.vendor_id || null) : (formData.vendor_id || null),
                 items: orderItems
             };
+
+            if (isVendorUser) {
+                delete submitData.delivery_agent_id;
+                delete submitData.delivery_person_id;
+                delete submitData.delivery_integration_id;
+                delete submitData.delivery_city;
+                delete submitData.confirmation_agent_id;
+            }
 
             console.debug('[OrderForm] price sent back on save', {
                 isEditing,
@@ -880,6 +886,8 @@ export default function OrderForm() {
                         </div>
                     </div>
 
+                    {!(isVendorUser && isEditing) && (
+                    <>
                     <div className="mb-3 border-t border-slate-200 pt-5">
                         <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Assignment & Workflow</h3>
                     </div>
@@ -907,16 +915,10 @@ export default function OrderForm() {
                                         ? currentOrderDeliveryWorkflowLocked
                                             ? 'Status is locked for admins after the delivery person invoice is marked as paid.'
                                             : 'Status is locked for admins once the delivery company marks the order as picked up.'
-                                        : currentOrderTrackingCode
-                                        ? 'Status is locked for sellers after the order is handed to a delivery company.'
-                                        : currentOrderReturnedToConfirmationAt
-                                            ? 'Status is locked for sellers while the order is back in the confirmation workflow.'
-                                        : formData.delivery_person_id && (Boolean(currentOrderConfirmedAt) || formData.status === 'confirmed')
-                                            ? 'Status is locked for sellers once a delivery person is assigned.'
-                                            : 'Status is locked for sellers once the order has been confirmed.'}
+                                        : 'Status is read-only for sellers. New orders are created as Pending.'}
                                 </p>
                             )}
-                            {!isEditing && (
+                            {!isEditing && !isVendorUser && (
                                 <p className="text-xs text-gray-500 mt-1">
                                     Choose <span className="font-medium">Confirmed</span> to send the order immediately after save.
                                 </p>
@@ -1014,6 +1016,7 @@ export default function OrderForm() {
                             </>
                         )}
 
+                        {!isVendorUser && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
                             <select
@@ -1024,12 +1027,16 @@ export default function OrderForm() {
                                 <option value="manual">Manual</option>
                                 <option value="shopify">Shopify</option>
                                 <option value="google_sheet">Google Sheet</option>
+                                <option value="custom_api">API Personnalisée</option>
+                                <option value="website">Website</option>
                                 <option value="delivery_company">Delivery Company</option>
                                 <option value="marketplace">Marketplace</option>
                                 <option value="whatsapp">WhatsApp</option>
                             </select>
                         </div>
+                        )}
 
+                        {!isVendorUser && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Delivery Company
@@ -1129,7 +1136,10 @@ export default function OrderForm() {
                                 <p className="mt-2 text-xs text-red-600">{errors.delivery_assignment[0]}</p>
                             )}
                         </div>
+                        )}
                     </div>
+                    </>
+                    )}
 
                     <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.orderForm.notes')}</label>

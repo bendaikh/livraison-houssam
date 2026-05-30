@@ -10,6 +10,7 @@ import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRol
 import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import { formatDeliveryDispatchFailureMessage } from '../../utils/delivery';
 import { appPath } from '../../constants/appPaths';
+import { formatOrderSource, getOrderSourceBadge } from '../../utils/orderSource';
 
 export default function OrderList({ status = '' }) {
     const { t } = useTranslation();
@@ -248,9 +249,10 @@ export default function OrderList({ status = '' }) {
             shopify: 'bg-green-100 text-green-800',
             google_sheet: 'bg-emerald-100 text-emerald-800',
             delivery_company: 'bg-blue-100 text-blue-800',
-            marketplace: 'bg-purple-100 text-purple-800'
-            ,
-            whatsapp: 'bg-emerald-100 text-emerald-800'
+            marketplace: 'bg-purple-100 text-purple-800',
+            whatsapp: 'bg-emerald-100 text-emerald-800',
+            custom_api: 'bg-indigo-100 text-indigo-800',
+            website: 'bg-cyan-100 text-cyan-800',
         };
         return colors[source] || 'bg-gray-100 text-gray-800';
     };
@@ -301,25 +303,9 @@ export default function OrderList({ status = '' }) {
         return Boolean(order?.confirmed_at) || order?.status === 'confirmed';
     };
 
-    const isSellerStatusLocked = (order) => {
-        return isVendorUser && (Boolean(order?.returned_to_confirmation_at) || isConfirmationAgentStatusLocked(order));
-    };
+    const isSellerStatusLocked = () => isVendorUser;
 
-    const getSellerStatusLockMessage = (order) => {
-        if (order?.returned_to_confirmation_at) {
-            return 'Status is now handled by the confirmation workflow.';
-        }
-
-        if (order?.delivery_tracking_code) {
-            return 'Status is now controlled by the delivery company.';
-        }
-
-        if (order?.delivery_person_id) {
-            return 'Status is now controlled by the assigned delivery person.';
-        }
-
-        return 'Status is now locked after confirmation.';
-    };
+    const getSellerStatusLockMessage = () => 'Status is read-only for sellers.';
 
     const getConfirmationAgentStatusLockMessage = (order) => {
         if (order?.delivery_tracking_code) {
@@ -500,16 +486,26 @@ export default function OrderList({ status = '' }) {
     };
 
     const getSellerLabel = (order) => {
+        if (order.seller_name) {
+            return order.seller_name;
+        }
+
         if (order.vendor?.name) {
             return order.vendor.name;
         }
 
-        if (order.confirmation_agent?.name) {
-            return order.confirmation_agent.name;
+        if (order.vendor?.company_name) {
+            return order.vendor.company_name;
         }
 
-        if (order.confirmation_agent_id && String(order.confirmation_agent_id) === String(user?.id)) {
-            return user?.name || 'You';
+        if (order.vendor_id) {
+            const matchedVendor = vendors.find((vendor) => String(vendor.id) === String(order.vendor_id));
+            if (matchedVendor?.name) {
+                return matchedVendor.name;
+            }
+            if (matchedVendor?.company_name) {
+                return matchedVendor.company_name;
+            }
         }
 
         if (user?.vendor?.id && String(order.vendor_id) === String(user.vendor.id)) {
@@ -1237,7 +1233,7 @@ export default function OrderList({ status = '' }) {
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                         <span className="text-xs font-bold text-blue-700 truncate">{order.order_number}</span>
                                         <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 ${getSourceColor(order.source)}`}>
-                                            {order.source?.replace('_', ' ').substring(0, 3).toUpperCase() || 'MAN'}
+                                            {getOrderSourceBadge(order.source)}
                                         </span>
                                     </div>
                                     {confirmationStatusLocked || sellerStatusLocked || deliveryWorkflowIsLocked || adminStatusLocked ? (
@@ -1344,6 +1340,10 @@ export default function OrderList({ status = '' }) {
                                                     {assignmentPrimaryLabel}
                                                 </span>
                                             )
+                                        ) : isVendorUser ? (
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${staticDeliveryTone}`}>
+                                                <span className="truncate max-w-[120px]">{assignmentPrimaryLabel}</span>
+                                            </span>
                                         ) : (
                                             <button
                                                 onClick={() => handleAgentClick(order)}

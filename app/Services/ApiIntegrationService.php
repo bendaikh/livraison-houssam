@@ -80,7 +80,7 @@ class ApiIntegrationService
 
             foreach ($shopifyOrders as $shopifyOrder) {
                 try {
-                    $this->importShopifyOrder($shopifyOrder);
+                    $this->importShopifyOrder($shopifyOrder, $integration);
                     $successful++;
                 } catch (\Exception $e) {
                     $failed++;
@@ -194,7 +194,7 @@ class ApiIntegrationService
         }
     }
 
-    private function importShopifyOrder(array $shopifyOrder)
+    private function importShopifyOrder(array $shopifyOrder, ?ApiIntegration $integration = null)
     {
         // Check if order already exists
         $existingOrder = Order::where('external_order_id', $shopifyOrder['id'])
@@ -250,11 +250,13 @@ class ApiIntegrationService
         return $this->orderService->createOrder([
             'client_id' => $client->id,
             'client_phone' => $client->phone,
+            'vendor_id' => $integration?->vendor_id,
             'source' => 'shopify',
             'external_order_id' => $shopifyOrder['id'],
             'status' => $status,
             'items' => $items,
             'shipping_cost' => $shopifyOrder['total_shipping_price_set']['shop_money']['amount'] ?? 0,
+            'shipping_included_in_price' => false,
             'tax' => $shopifyOrder['total_tax'] ?? 0,
             'discount' => $shopifyOrder['total_discounts'] ?? 0,
             'shipping_address' => json_encode($shopifyOrder['shipping_address'] ?? []),
@@ -690,7 +692,7 @@ class ApiIntegrationService
         ];
         $statusKey = strtolower(trim((string)($statusRaw ?? '')));
         $status = $statusMap[$statusKey] ?? 'pending';
-        $source = $sourceRaw ?: 'google_sheet';
+        $source = $this->normalizeImportedSource($sourceRaw, 'google_sheet');
 
         // De-dupe by external_id, otherwise deterministic hash of essentials
         $hashId = hash('sha256', implode('|', [
@@ -739,13 +741,14 @@ class ApiIntegrationService
                     'client_id' => $client->id,
                     'client_phone' => $client->phone,
                     'vendor_id' => $vendorId,
-                    'source' => $source ?: 'google_sheet',
+                    'source' => $source,
                     'shopify_name' => $shopifyName,
                     'status' => $status,
                     'shipping_address' => $address,
                     'city' => $city ?: $address,
                     'subtotal' => $numericPrice * $quantity,
                     'shipping_cost' => 0,
+                    'shipping_included_in_price' => true,
                     'tax' => 0,
                     'discount' => 0,
                     'total' => $numericPrice * $quantity,
@@ -770,12 +773,13 @@ class ApiIntegrationService
             'client_id' => $client->id,
             'client_phone' => $client->phone,
             'vendor_id' => $vendorId,
-            'source' => $source ?: 'google_sheet',
+            'source' => $source,
             'external_order_id' => $computedExternalId,
             'shopify_name' => $shopifyName,
             'status' => $status,
             'items' => $items,
             'shipping_cost' => 0,
+            'shipping_included_in_price' => true,
             'tax' => 0,
             'discount' => 0,
             'shipping_address' => $address,
@@ -850,6 +854,45 @@ class ApiIntegrationService
             'headers' => $normalizedHeaders,
             'rows' => $rows,
         ];
+    }
+
+    private function normalizeImportedSource(?string $source, string $default = 'manual'): string
+    {
+        $normalized = strtolower(trim((string) $source));
+        $normalized = str_replace([' ', '-'], '_', $normalized);
+
+        $aliases = [
+            'api' => 'custom_api',
+            'api_personnalisee' => 'custom_api',
+            'api_personnalisée' => 'custom_api',
+            'custom' => 'custom_api',
+            'google_sheets' => 'google_sheet',
+            'sheet' => 'google_sheet',
+            'site' => 'website',
+            'web' => 'website',
+            'store' => 'website',
+        ];
+
+        if (isset($aliases[$normalized])) {
+            $normalized = $aliases[$normalized];
+        }
+
+        $allowed = [
+            'manual',
+            'shopify',
+            'google_sheet',
+            'delivery_company',
+            'marketplace',
+            'whatsapp',
+            'custom_api',
+            'website',
+        ];
+
+        if ($normalized === '' || !in_array($normalized, $allowed, true)) {
+            return $default;
+        }
+
+        return $normalized;
     }
 
     private function sanitizePrice($price): string|float|null

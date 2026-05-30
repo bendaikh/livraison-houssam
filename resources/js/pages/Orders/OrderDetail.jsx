@@ -11,6 +11,8 @@ import {
     Truck, UserCheck, ArrowLeft, Edit, Printer, CheckCircle,
     Clock, XCircle, AlertCircle, RefreshCw
 } from 'lucide-react';
+import { formatOrderSource } from '../../utils/orderSource';
+import { resolveOrderDisplayTotals } from '../../utils/orderTotals';
 
 export default function OrderDetail() {
     const { id } = useParams();
@@ -170,6 +172,7 @@ export default function OrderDetail() {
     const handlePrint = () => {
         const printWindow = window.open('', '_blank');
         const currencySymbol = settings.currency_symbol || 'MAD';
+        const printTotals = resolveOrderDisplayTotals(order);
         
         const formatPrice = (amount) => {
             const num = parseFloat(amount) || 0;
@@ -393,12 +396,12 @@ export default function OrderDetail() {
                     <div class="summary">
                         <div class="summary-row">
                             <span>Subtotal</span>
-                            <span>${formatPrice(order.subtotal || order.total)}</span>
+                            <span>${formatPrice(printTotals.displaySubtotal)}</span>
                         </div>
-                        ${parseFloat(order.shipping_cost) > 0 ? `
+                        ${printTotals.shippingCost > 0 ? `
                         <div class="summary-row">
-                            <span>Shipping</span>
-                            <span>${formatPrice(order.shipping_cost)}</span>
+                            <span>${printTotals.shippingIncluded ? 'Shipping (included in price)' : 'Shipping'}</span>
+                            <span>${formatPrice(printTotals.shippingCost)}</span>
                         </div>
                         ` : ''}
                         ${parseFloat(order.tax) > 0 ? `
@@ -415,7 +418,7 @@ export default function OrderDetail() {
                         ` : ''}
                         <div class="summary-row total">
                             <span>Total</span>
-                            <span>${formatPrice(order.total)}</span>
+                            <span>${formatPrice(printTotals.displayTotal)}</span>
                         </div>
                     </div>
                 </div>
@@ -487,6 +490,14 @@ export default function OrderDetail() {
             </div>
         );
     }
+
+    const {
+        shippingIncluded,
+        displaySubtotal,
+        displayTotal,
+        shippingCost,
+    } = resolveOrderDisplayTotals(order);
+    const sellerName = order.seller_name || order.vendor?.name || order.vendor?.company_name || null;
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
@@ -596,12 +607,12 @@ export default function OrderDetail() {
                             <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
                                 <div className="flex justify-between text-gray-600">
                                     <span>{t('admin.orderDetail.subtotal')}</span>
-                                    <span>{formatCurrency(order.subtotal || order.total)}</span>
+                                    <span>{formatCurrency(displaySubtotal)}</span>
                                 </div>
-                                {order.shipping_cost > 0 && (
+                                {shippingCost > 0 && (
                                     <div className="flex justify-between text-gray-600">
-                                        <span>{order.shipping_included_in_price ? t('admin.orderDetail.shippingIncludedInPrice') : t('admin.orderDetail.shipping')}</span>
-                                        <span>{formatCurrency(order.shipping_cost)}</span>
+                                        <span>{shippingIncluded ? t('admin.orderDetail.shippingIncludedInPrice') : t('admin.orderDetail.shipping')}</span>
+                                        <span>{formatCurrency(shippingCost)}</span>
                                     </div>
                                 )}
                                 {order.tax > 0 && (
@@ -618,7 +629,7 @@ export default function OrderDetail() {
                                 )}
                                 <div className="flex justify-between text-xl font-bold text-gray-900 pt-3 border-t border-gray-300">
                                     <span>{t('admin.orderDetail.total')}</span>
-                                    <span>{formatCurrency(order.total)}</span>
+                                    <span>{formatCurrency(displayTotal)}</span>
                                 </div>
                             </div>
                         </div>
@@ -763,9 +774,15 @@ export default function OrderDetail() {
                     {/* Source */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('admin.orderDetail.orderSource')}</h2>
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
-                            {order.source || 'Manual'}
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                            {formatOrderSource(order.source)}
                         </span>
+                        {sellerName && (
+                            <p className="text-sm text-gray-600 mt-3">
+                                <span className="text-gray-500">{t('admin.orderList.seller')}: </span>
+                                <span className="font-medium text-gray-900">{sellerName}</span>
+                            </p>
+                        )}
                     </div>
 
                     {(order.collected_amount || order.delivery_person_commission || order.amount_due_to_admin) && (

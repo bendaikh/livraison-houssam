@@ -24,6 +24,11 @@ export default defineConfig({
                 changeOrigin: true,
                 secure: false,
             },
+            '/storage': {
+                target: backendUrl,
+                changeOrigin: true,
+                secure: false,
+            },
         },
     },
 });
