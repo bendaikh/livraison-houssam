@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ApiIntegration;
+use App\Models\Vendor;
 use App\Services\ApiIntegrationService;
 use Illuminate\Http\Request;
 
@@ -62,6 +63,16 @@ class ApiIntegrationController extends Controller
 
         $validated['credentials'] = $validated['credentials'] ?? [];
 
+        if (empty($validated['vendor_id'])) {
+            $user = auth()->user();
+            if ($user && $user->role?->slug === 'vendor') {
+                $vendor = Vendor::where('user_id', $user->id)->first();
+                if ($vendor) {
+                    $validated['vendor_id'] = $vendor->id;
+                }
+            }
+        }
+
         $integration = ApiIntegration::create($validated);
 
         return response()->json($integration, 201);
@@ -83,6 +94,16 @@ class ApiIntegrationController extends Controller
             'credentials' => 'nullable|array',
             'settings' => 'nullable|array',
         ]);
+
+        if (empty($validated['vendor_id']) && ($apiIntegration->provider === 'custom_api' || ($validated['provider'] ?? null) === 'custom_api')) {
+            $user = auth()->user();
+            if ($user && $user->role?->slug === 'vendor') {
+                $vendor = Vendor::where('user_id', $user->id)->first();
+                if ($vendor) {
+                    $validated['vendor_id'] = $vendor->id;
+                }
+            }
+        }
 
         $apiIntegration->update($validated);
 

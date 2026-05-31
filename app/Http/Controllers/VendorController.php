@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Vendor;
 use App\Services\DashboardService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class VendorController extends Controller
 {
@@ -292,6 +293,10 @@ class VendorController extends Controller
 
     public function register(Request $request)
     {
+        if ($request->filled('bank_rib') && !$request->filled('rib')) {
+            $request->merge(['rib' => $request->input('bank_rib')]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => [
@@ -313,7 +318,11 @@ class VendorController extends Controller
             'company_name' => 'required|string',
             'address' => 'required|string',
             'city' => 'required|string',
+            'bank_name' => ['required', 'string', 'max:255', Rule::in(config('moroccan_banks'))],
+            'rib' => ['required', 'string', 'max:34', 'regex:/^[0-9 ]+$/'],
         ]);
+
+        $rib = preg_replace('/\s+/', '', $validated['rib']);
 
         $vendor = Vendor::create([
             'name' => $validated['name'],
@@ -323,6 +332,8 @@ class VendorController extends Controller
             'company_name' => $validated['company_name'],
             'address' => $validated['address'],
             'city' => $validated['city'],
+            'bank_name' => $validated['bank_name'],
+            'rib' => $rib,
             'is_active' => false,
             'commission_rate' => 10,
         ]);

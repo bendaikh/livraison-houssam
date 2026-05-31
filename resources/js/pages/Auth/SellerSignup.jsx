@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Globe, ArrowLeft, ArrowRight, CheckCircle, Clock, Mail, Phone } from 'lucide-react';
+import { Globe, ArrowLeft, ArrowRight, CheckCircle, Clock, Mail, Phone, Landmark } from 'lucide-react';
 import axios from 'axios';
+import { MOROCCAN_BANKS } from '../../constants/moroccanBanks';
+import BankLogo from '../../components/BankLogo';
 
 export default function SellerSignup() {
     const { t, i18n } = useTranslation();
@@ -13,6 +15,7 @@ export default function SellerSignup() {
     const [currentStep, setCurrentStep] = useState(1);
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
+    const [bankSearch, setBankSearch] = useState('');
     const [formData, setFormData] = useState({
         // Step 1 fields
         name: '',
@@ -26,8 +29,21 @@ export default function SellerSignup() {
         // Step 2 fields
         company_name: '',
         seller_level: '',
-        bank_rib: ''
+        bank_name: '',
+        rib: ''
     });
+
+    const filteredBanks = useMemo(
+        () => MOROCCAN_BANKS.filter((bank) =>
+            bank.name.toLowerCase().includes(bankSearch.toLowerCase())
+        ),
+        [bankSearch]
+    );
+
+    const formatRibInput = (value) => {
+        const digitsOnly = value.replace(/\D/g, '').slice(0, 34);
+        return digitsOnly.replace(/(.{4})/g, '$1 ').trim();
+    };
 
     const changeLanguage = (lng) => {
         i18n.changeLanguage(lng);
@@ -82,7 +98,13 @@ export default function SellerSignup() {
         }
 
         // Step 2 validation
-        if (!formData.company_name || !formData.seller_level || !formData.bank_rib) {
+        if (!formData.company_name || !formData.seller_level || !formData.bank_name || !formData.rib) {
+            setError(t('auth.signup.fillAllFields'));
+            return;
+        }
+
+        const ribDigits = formData.rib.replace(/\s/g, '');
+        if (ribDigits.length === 0) {
             setError(t('auth.signup.fillAllFields'));
             return;
         }
@@ -100,7 +122,8 @@ export default function SellerSignup() {
                 city: formData.city,
                 company_name: formData.company_name,
                 seller_level: formData.seller_level,
-                bank_rib: formData.bank_rib
+                bank_name: formData.bank_name,
+                rib: formData.rib
             });
 
             if (response.data.success) {
@@ -462,6 +485,61 @@ export default function SellerSignup() {
                                         </select>
                                     </div>
 
+                                    {/* Bank Selection */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            <Landmark className="inline w-4 h-4 me-1" />
+                                            {t('auth.signup.selectBank')}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={bankSearch}
+                                            onChange={(e) => setBankSearch(e.target.value)}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent mb-2"
+                                            placeholder={t('auth.signup.searchBank')}
+                                        />
+                                        {formData.bank_name && (
+                                            <div className="mb-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-teal-50 border border-teal-200">
+                                                <BankLogo bankName={formData.bank_name} size={20} />
+                                                <span className="text-sm font-medium text-teal-900">{formData.bank_name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({ ...prev, bank_name: '' }));
+                                                        setBankSearch('');
+                                                    }}
+                                                    className="text-xs text-gray-500 hover:text-red-600 ms-2"
+                                                >
+                                                    {t('auth.signup.clearBank')}
+                                                </button>
+                                            </div>
+                                        )}
+                                        <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1 bg-gray-50">
+                                            {filteredBanks.length > 0 ? (
+                                                filteredBanks.map((bank) => (
+                                                    <button
+                                                        key={bank.name}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(prev => ({ ...prev, bank_name: bank.name }));
+                                                            setBankSearch(bank.name);
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-start transition-all ${
+                                                            formData.bank_name === bank.name
+                                                                ? 'bg-teal-100 border border-teal-300'
+                                                                : 'hover:bg-gray-100 border border-transparent'
+                                                        }`}
+                                                    >
+                                                        <BankLogo bankName={bank.name} logoUrl={bank.logo} size={24} className="flex-shrink-0" />
+                                                        <span className="text-sm font-medium text-gray-700">{bank.name}</span>
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <p className="text-sm text-gray-500 px-2 py-1">{t('auth.signup.noBanksFound')}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     {/* Bank RIB */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -469,13 +547,14 @@ export default function SellerSignup() {
                                         </label>
                                         <input
                                             type="text"
-                                            name="bank_rib"
+                                            name="rib"
                                             required
-                                            value={formData.bank_rib}
-                                            onChange={handleChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                                            value={formData.rib}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, rib: formatRibInput(e.target.value) }))}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent font-mono"
                                             placeholder={t('auth.signup.bankRIBPlaceholder')}
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">{formData.rib.replace(/\s/g, '').length}/34</p>
                                     </div>
 
                                     {/* Navigation Buttons */}

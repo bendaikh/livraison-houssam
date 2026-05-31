@@ -219,9 +219,26 @@ class OrderController extends Controller
             $validated['confirmation_agent_id'] = $request->user()->id;
         }
         $validated['created_by_user_id'] = $request->user()?->id;
-        
-        // Resolve product IDs for items that don't have product_id but have product_name or sku
-        $validated['items'] = $this->resolveProductsForItems($validated['items'] ?? []);
+
+        $orderSource = $validated['source'] ?? 'manual';
+        $preferSkuResolution = in_array($orderSource, ['website', 'custom_api'], true);
+
+        $validated['items'] = $this->enrichItemsFromOrderNotes(
+            $validated['items'] ?? [],
+            $validated['notes'] ?? null
+        );
+        $validated['items'] = $this->resolveProductsForItems(
+            $validated['items'] ?? [],
+            isset($validated['vendor_id']) ? (int) $validated['vendor_id'] : null,
+            $preferSkuResolution
+        );
+
+        if (empty($validated['vendor_id'])) {
+            $inferredVendorId = $this->inferVendorFromItems($validated['items'] ?? []);
+            if ($inferredVendorId) {
+                $validated['vendor_id'] = $inferredVendorId;
+            }
+        }
         
         $this->ensureProductsAllowedForSeller($validated['items'] ?? [], $validated['vendor_id'] ?? null);
         $validated['shipping_included_in_price'] = $this->resolveShippingIncludedInPrice($request, $validated);
@@ -1659,32 +1676,54 @@ class OrderController extends Controller
      * Resolve product IDs for items that don't have product_id but have product_name or sku.
      * This allows external apps to send product info without knowing internal product IDs.
      */
-    private function resolveProductsForItems(array $items): array
+    private function resolveProductsForItems(array $items, ?int $vendorId = null, bool $preferSkuOverProductId = false): array
     {
-        return array_map(function ($item) {
+        return array_map(function ($item) use ($vendorId, $preferSkuOverProductId) {
+            $productBySku = $this->findProductBySku($item['sku'] ?? null, $vendorId);
+
+            if ($productBySku && ($preferSkuOverProductId || $this->shouldReplaceProductId($item['product_id'] ?? null))) {
+                $item['product_id'] = $productBySku->id;
+                if (empty($item['product_name'])) {
+                    $item['product_name'] = $productBySku->name;
+                }
+                if (empty($item['sku'])) {
+                    $item['sku'] = $productBySku->sku;
+                }
+
+                return $item;
+            }
+
             // If product_id already exists, no need to resolve
             if (!empty($item['product_id'])) {
                 return $item;
             }
 
-            // Try to find product by SKU first (most specific)
-            if (!empty($item['sku'])) {
-                $product = Product::where('sku', $item['sku'])->first();
-                if ($product) {
-                    $item['product_id'] = $product->id;
-                    // Store original product_name if provided for reference
-                    if (empty($item['product_name'])) {
-                        $item['product_name'] = $product->name;
-                    }
-                    return $item;
+            if ($productBySku) {
+                $item['product_id'] = $productBySku->id;
+                if (empty($item['product_name'])) {
+                    $item['product_name'] = $productBySku->name;
                 }
+
+                return $item;
             }
 
             // Try to find product by name
             if (!empty($item['product_name'])) {
-                $product = Product::where('name', 'LIKE', '%' . $item['product_name'] . '%')->first();
+                $productQuery = Product::where('name', 'LIKE', '%' . $item['product_name'] . '%');
+                if ($vendorId) {
+                    $productQuery->where(function ($query) use ($vendorId) {
+                        $query->where('vendor_id', $vendorId)
+                            ->orWhereHas('marketplaceProducts', function ($marketplaceQuery) use ($vendorId) {
+                                $marketplaceQuery
+                                    ->where('vendor_id', $vendorId)
+                                    ->where('is_active', true);
+                            });
+                    });
+                }
+                $product = $productQuery->first();
                 if ($product) {
                     $item['product_id'] = $product->id;
+
                     return $item;
                 }
             }
@@ -1704,8 +1743,7 @@ class OrderController extends Controller
                     ]
                 );
                 $item['product_id'] = $unknownProduct->id;
-                
-                // Store the original product name in product_name field
+
                 if (empty($item['product_name'])) {
                     $item['product_name'] = 'Unknown Product';
                 }
@@ -1713,6 +1751,137 @@ class OrderController extends Controller
 
             return $item;
         }, $items);
+    }
+
+    private function findProductBySku(?string $sku, ?int $vendorId = null): ?Product
+    {
+        $sku = trim((string) $sku);
+        if ($sku === '') {
+            return null;
+        }
+
+        if ($vendorId) {
+            $scopedProduct = Product::query()
+                ->where('sku', $sku)
+                ->where(function ($query) use ($vendorId) {
+                    $query->where('vendor_id', $vendorId)
+                        ->orWhereHas('marketplaceProducts', function ($marketplaceQuery) use ($vendorId) {
+                            $marketplaceQuery
+                                ->where('vendor_id', $vendorId)
+                                ->where('is_active', true);
+                        });
+                })
+                ->first();
+
+            if ($scopedProduct) {
+                return $scopedProduct;
+            }
+        }
+
+        return Product::where('sku', $sku)->first();
+    }
+
+    private function shouldReplaceProductId(mixed $productId): bool
+    {
+        if (empty($productId)) {
+            return false;
+        }
+
+        $product = Product::find($productId);
+
+        return $product && $product->sku === 'UNKNOWN';
+    }
+
+    private function enrichItemsFromOrderNotes(array $items, ?string $notes): array
+    {
+        $fromNotes = $this->extractProductInfoFromNotes($notes);
+        if (empty($fromNotes)) {
+            return $items;
+        }
+
+        if (empty($items)) {
+            return $items;
+        }
+
+        return array_map(function ($item, $index) use ($fromNotes, $items) {
+            if ($index > 0 && count($items) > 1) {
+                return $item;
+            }
+
+            if (empty($item['sku']) && !empty($fromNotes['sku'])) {
+                $item['sku'] = $fromNotes['sku'];
+            }
+
+            if (empty($item['product_name']) && !empty($fromNotes['product_name'])) {
+                $item['product_name'] = $fromNotes['product_name'];
+            }
+
+            return $item;
+        }, $items, array_keys($items));
+    }
+
+    private function extractProductInfoFromNotes(?string $notes): array
+    {
+        $notes = trim((string) $notes);
+        if ($notes === '') {
+            return [];
+        }
+
+        $result = [];
+
+        if (str_starts_with($notes, '{') || str_starts_with($notes, '[')) {
+            $decoded = json_decode($notes, true);
+            if (is_array($decoded)) {
+                $payload = isset($decoded[0]) && is_array($decoded[0]) ? $decoded[0] : $decoded;
+                $sku = trim((string) ($payload['sku'] ?? $payload['SKU'] ?? ''));
+                $productName = trim((string) ($payload['product_name'] ?? $payload['product'] ?? $payload['name'] ?? ''));
+
+                if ($sku !== '') {
+                    $result['sku'] = $sku;
+                }
+                if ($productName !== '') {
+                    $result['product_name'] = $productName;
+                }
+
+                if (!empty($result)) {
+                    return $result;
+                }
+            }
+        }
+
+        if (preg_match('/(?:SKU|sku|Sku|Réf|réf|Ref|ref|Reference|reference)\s*[:\-]\s*([A-Za-z0-9\-_.]+)/u', $notes, $matches)) {
+            $result['sku'] = trim($matches[1]);
+        }
+
+        if (preg_match('/(?:Product|Produit|product|produit|Article|article)\s*[:\-]\s*(.+?)(?:\n|\||$)/u', $notes, $matches)) {
+            $result['product_name'] = trim($matches[1]);
+        }
+
+        return array_filter($result);
+    }
+
+    private function inferVendorFromItems(array $items): ?int
+    {
+        $productIds = collect($items)
+            ->pluck('product_id')
+            ->filter()
+            ->map(fn ($productId) => (int) $productId)
+            ->unique()
+            ->values();
+
+        if ($productIds->isEmpty()) {
+            return null;
+        }
+
+        $vendorIds = Product::query()
+            ->whereIn('id', $productIds)
+            ->whereNotNull('vendor_id')
+            ->pluck('vendor_id')
+            ->map(fn ($vendorId) => (int) $vendorId)
+            ->unique()
+            ->values();
+
+        return $vendorIds->count() === 1 ? $vendorIds->first() : null;
     }
 }
 
