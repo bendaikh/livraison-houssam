@@ -166,6 +166,7 @@ class OrderController extends Controller
         ]);
         
         $this->normalizeLegacyItemProductKeys($request);
+        $this->enrichItemsFromRequestMetadata($request);
 
         if ($request->user()?->isDeliveryPerson()) {
             abort(403, 'Delivery people cannot create orders.');
@@ -200,6 +201,7 @@ class OrderController extends Controller
             'city' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
+            'metadata' => 'nullable|array',
         ]);
         $normalizedClientPhone = MoroccanPhone::normalize($validated['client_phone'] ?? null);
         if ($normalizedClientPhone !== '') {
@@ -220,8 +222,12 @@ class OrderController extends Controller
         }
         $validated['created_by_user_id'] = $request->user()?->id;
 
-        $orderSource = $validated['source'] ?? 'manual';
-        $preferSkuResolution = in_array($orderSource, ['website', 'custom_api'], true);
+        $validated['notes'] = $this->mergeExternalMetadataIntoNotes(
+            $validated['notes'] ?? null,
+            $request->input('metadata')
+        );
+
+        $preferSkuResolution = $this->shouldPreferSkuResolution($request, $validated);
 
         $validated['items'] = $this->enrichItemsFromOrderNotes(
             $validated['items'] ?? [],
@@ -1516,31 +1522,44 @@ class OrderController extends Controller
                 }
 
                 // If product_id is a SKU (non-numeric string), move it to sku field
-                if (!empty($item['product_id']) && !is_numeric($item['product_id']) && empty($item['sku'])) {
-                    $item['sku'] = $item['product_id'];
+                if (
+                    !empty($item['product_id'])
+                    && !is_numeric($item['product_id'])
+                    && $this->isBlankItemField($item['sku'] ?? null)
+                ) {
+                    $item['sku'] = trim((string) $item['product_id']);
                     unset($item['product_id']);
                 }
 
                 // Map legacy SKU keys
-                if (empty($item['sku'])) {
-                    $skuAliases = ['SKU', 'ref', 'reference', 'Ref', 'Reference', 'article_sku'];
+                if ($this->isBlankItemField($item['sku'] ?? null)) {
+                    $skuAliases = ['SKU', 'ref', 'reference', 'Ref', 'Reference', 'article_sku', 'product_sku', 'code', 'variant_sku'];
                     foreach ($skuAliases as $alias) {
-                        if (!empty($item[$alias])) {
-                            $item['sku'] = $item[$alias];
+                        if (!$this->isBlankItemField($item[$alias] ?? null)) {
+                            $item['sku'] = trim((string) $item[$alias]);
                             break;
                         }
                     }
                 }
 
-                // Map legacy product name keys
-                if (empty($item['product_name'])) {
-                    $nameAliases = ['product', 'article', 'name', 'Product', 'Article', 'Name', 'product_title'];
+                // Map legacy product name keys (ChatEasy sends "name")
+                if ($this->isBlankItemField($item['product_name'] ?? null)) {
+                    $nameAliases = ['product', 'article', 'name', 'Product', 'Article', 'Name', 'product_title', 'title'];
                     foreach ($nameAliases as $alias) {
-                        if (!empty($item[$alias])) {
-                            $item['product_name'] = $item[$alias];
+                        if (!$this->isBlankItemField($item[$alias] ?? null)) {
+                            $item['product_name'] = trim((string) $item[$alias]);
                             break;
                         }
                     }
+                }
+
+                // Drop placeholder product_id when a real SKU was provided
+                if (
+                    !$this->isBlankItemField($item['sku'] ?? null)
+                    && !empty($item['product_id'])
+                    && $this->shouldReplaceProductId($item['product_id'])
+                ) {
+                    unset($item['product_id']);
                 }
 
                 return $item;
@@ -1846,9 +1865,30 @@ class OrderController extends Controller
             if ($scopedProduct) {
                 return $scopedProduct;
             }
+
+            $scopedProduct = Product::query()
+                ->whereRaw('LOWER(sku) = ?', [mb_strtolower($sku)])
+                ->where(function ($query) use ($vendorId) {
+                    $query->where('vendor_id', $vendorId)
+                        ->orWhereHas('marketplaceProducts', function ($marketplaceQuery) use ($vendorId) {
+                            $marketplaceQuery
+                                ->where('vendor_id', $vendorId)
+                                ->where('is_active', true);
+                        });
+                })
+                ->first();
+
+            if ($scopedProduct) {
+                return $scopedProduct;
+            }
         }
 
-        return Product::where('sku', $sku)->first();
+        $product = Product::where('sku', $sku)->first();
+        if ($product) {
+            return $product;
+        }
+
+        return Product::whereRaw('LOWER(sku) = ?', [mb_strtolower($sku)])->first();
     }
 
     private function shouldReplaceProductId(mixed $productId): bool
@@ -1874,6 +1914,119 @@ class OrderController extends Controller
         }
 
         return false;
+    }
+
+    private function enrichItemsFromRequestMetadata(Request $request): void
+    {
+        $metadata = $request->input('metadata');
+        if (!is_array($metadata)) {
+            return;
+        }
+
+        $items = $request->input('items');
+        if (!is_array($items) || $items === []) {
+            return;
+        }
+
+        $metadataSku = trim((string) ($metadata['sku'] ?? ''));
+
+        $items = array_map(function ($item, $index) use ($metadata, $metadataSku) {
+            if (!is_array($item) || $index > 0) {
+                return $item;
+            }
+
+            if ($this->isBlankItemField($item['sku'] ?? null) && $metadataSku !== '') {
+                $item['sku'] = $metadataSku;
+            }
+
+            if ($this->isBlankItemField($item['product_name'] ?? null)) {
+                foreach (['product_name', 'name', 'product', 'title'] as $key) {
+                    if (!$this->isBlankItemField($metadata[$key] ?? null)) {
+                        $item['product_name'] = trim((string) $metadata[$key]);
+                        break;
+                    }
+                }
+            }
+
+            if (
+                !$this->isBlankItemField($item['sku'] ?? null)
+                && !empty($item['product_id'])
+                && $this->shouldReplaceProductId($item['product_id'])
+            ) {
+                unset($item['product_id']);
+            }
+
+            return $item;
+        }, $items, array_keys($items));
+
+        $request->merge(['items' => $items]);
+    }
+
+    private function shouldPreferSkuResolution(Request $request, array $validated): bool
+    {
+        if ($request->attributes->get('api_integration_id')) {
+            return true;
+        }
+
+        $source = $validated['source'] ?? 'manual';
+        if (in_array($source, ['website', 'custom_api', 'marketplace', 'whatsapp'], true)) {
+            return true;
+        }
+
+        $metadataSku = trim((string) data_get($validated, 'metadata.sku', data_get($request->input('metadata'), 'sku', '')));
+        if ($metadataSku !== '') {
+            return true;
+        }
+
+        foreach ($validated['items'] ?? [] as $item) {
+            if (!$this->isBlankItemField($item['sku'] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function mergeExternalMetadataIntoNotes(?string $notes, mixed $metadata): ?string
+    {
+        if (!is_array($metadata) || $metadata === []) {
+            return $notes;
+        }
+
+        $parts = [];
+        foreach ([
+            'chateasy_lead_id' => 'Lead',
+            'chateasy_product_id' => 'Product',
+            'chateasy_variation_id' => 'Variation',
+            'sku' => 'SKU',
+            'language' => 'Lang',
+        ] as $key => $label) {
+            if (!empty($metadata[$key])) {
+                $parts[] = "{$label}: {$metadata[$key]}";
+            }
+        }
+
+        if ($parts === []) {
+            return $notes;
+        }
+
+        $metadataLine = '[ChatEasy ' . implode(' | ', $parts) . ']';
+        $notesText = trim((string) $notes);
+
+        if ($notesText !== '' && str_contains($notesText, 'ChatEasy')) {
+            return $notesText;
+        }
+
+        return $notesText === '' ? $metadataLine : $notesText . "\n" . $metadataLine;
+    }
+
+    private function isBlankItemField(mixed $value): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+
+        return is_string($value) && trim($value) === '';
     }
 
     private function enrichItemsFromOrderNotes(array $items, ?string $notes): array
