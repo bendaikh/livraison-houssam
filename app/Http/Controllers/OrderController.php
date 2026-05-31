@@ -1510,11 +1510,37 @@ class OrderController extends Controller
                     return $item;
                 }
 
-                if (
-                    empty($item['product_id'])
-                    && !empty($item['article_id'])
-                ) {
+                // Map legacy product ID keys
+                if (empty($item['product_id']) && !empty($item['article_id'])) {
                     $item['product_id'] = $item['article_id'];
+                }
+
+                // If product_id is a SKU (non-numeric string), move it to sku field
+                if (!empty($item['product_id']) && !is_numeric($item['product_id']) && empty($item['sku'])) {
+                    $item['sku'] = $item['product_id'];
+                    unset($item['product_id']);
+                }
+
+                // Map legacy SKU keys
+                if (empty($item['sku'])) {
+                    $skuAliases = ['SKU', 'ref', 'reference', 'Ref', 'Reference', 'article_sku'];
+                    foreach ($skuAliases as $alias) {
+                        if (!empty($item[$alias])) {
+                            $item['sku'] = $item[$alias];
+                            break;
+                        }
+                    }
+                }
+
+                // Map legacy product name keys
+                if (empty($item['product_name'])) {
+                    $nameAliases = ['product', 'article', 'name', 'Product', 'Article', 'Name', 'product_title'];
+                    foreach ($nameAliases as $alias) {
+                        if (!empty($item[$alias])) {
+                            $item['product_name'] = $item[$alias];
+                            break;
+                        }
+                    }
                 }
 
                 return $item;
@@ -1693,39 +1719,19 @@ class OrderController extends Controller
                 return $item;
             }
 
-            // If product_id already exists, no need to resolve
-            if (!empty($item['product_id'])) {
-                return $item;
-            }
+            // Try to find product by name if SKU resolution failed or wasn't possible
+            if (!empty($item['product_name']) && ($preferSkuOverProductId || empty($item['product_id']) || $this->shouldReplaceProductId($item['product_id']))) {
+                $product = $this->findProductByNameFlexible($item['product_name'], $vendorId);
 
-            if ($productBySku) {
-                $item['product_id'] = $productBySku->id;
-                if (empty($item['product_name'])) {
-                    $item['product_name'] = $productBySku->name;
-                }
-
-                return $item;
-            }
-
-            // Try to find product by name
-            if (!empty($item['product_name'])) {
-                $productQuery = Product::where('name', 'LIKE', '%' . $item['product_name'] . '%');
-                if ($vendorId) {
-                    $productQuery->where(function ($query) use ($vendorId) {
-                        $query->where('vendor_id', $vendorId)
-                            ->orWhereHas('marketplaceProducts', function ($marketplaceQuery) use ($vendorId) {
-                                $marketplaceQuery
-                                    ->where('vendor_id', $vendorId)
-                                    ->where('is_active', true);
-                            });
-                    });
-                }
-                $product = $productQuery->first();
                 if ($product) {
                     $item['product_id'] = $product->id;
-
                     return $item;
                 }
+            }
+
+            // If product_id already exists, no need to resolve further
+            if (!empty($item['product_id'])) {
+                return $item;
             }
 
             // If we still don't have a product_id, create/use a generic "Unknown Product"
@@ -1751,6 +1757,70 @@ class OrderController extends Controller
 
             return $item;
         }, $items);
+    }
+
+    private function findProductByNameFlexible(string $name, ?int $vendorId = null): ?Product
+    {
+        // Clean product name (remove common prefixes/suffixes like [ChatEasy Product: ...])
+        $name = preg_replace('/^\[?ChatEasy\s+Product\s*[:\-]\s*/i', '', $name);
+        $name = trim(str_replace([']', '['], '', $name));
+        
+        if ($name === '') {
+            return null;
+        }
+
+        $query = Product::query();
+        if ($vendorId) {
+            $query->where(function ($q) use ($vendorId) {
+                $q->where('vendor_id', $vendorId)
+                    ->orWhereHas('marketplaceProducts', function ($mq) use ($vendorId) {
+                        $mq->where('vendor_id', $vendorId)->where('is_active', true);
+                    });
+            });
+        }
+
+        // 1. Try exact SKU match (in case name field actually contains SKU)
+        $skuMatch = (clone $query)->where('sku', $name)->first();
+        if ($skuMatch) return $skuMatch;
+
+        // 2. Exact name match
+        $exact = (clone $query)->where('name', $name)->first();
+        if ($exact) return $exact;
+
+        // 3. Fuzzy name match (LIKE)
+        $fuzzy = (clone $query)->where('name', 'LIKE', '%' . $name . '%')->first();
+        if ($fuzzy) return $fuzzy;
+
+        // 4. Search in description
+        $inDesc = (clone $query)->where('description', 'LIKE', '%' . $name . '%')->first();
+        if ($inDesc) return $inDesc;
+
+        // 5. Keyword match (split name into words and search for products containing all words)
+        $words = array_filter(explode(' ', $name), function($w) { return mb_strlen($w) > 2; });
+        if (!empty($words)) {
+            $keywordQuery = clone $query;
+            foreach ($words as $word) {
+                $keywordQuery->where(function($q) use ($word) {
+                    $q->where('name', 'LIKE', '%' . $word . '%')
+                      ->orWhere('description', 'LIKE', '%' . $word . '%')
+                      ->orWhere('sku', 'LIKE', '%' . $word . '%');
+                });
+            }
+            $keywordMatch = $keywordQuery->first();
+            if ($keywordMatch) return $keywordMatch;
+        }
+
+        // 6. Try matching parts of the name (e.g. if name is "حقيبة تبريد أنسولين مزودة بشاشة", try "حقيبة تبريد أنسولين")
+        if (mb_strlen($name) > 10) {
+            $parts = explode(' ', $name);
+            if (count($parts) > 2) {
+                $shortName = implode(' ', array_slice($parts, 0, 3));
+                $shortMatch = (clone $query)->where('name', 'LIKE', '%' . $shortName . '%')->first();
+                if ($shortMatch) return $shortMatch;
+            }
+        }
+
+        return null;
     }
 
     private function findProductBySku(?string $sku, ?int $vendorId = null): ?Product
@@ -1789,7 +1859,21 @@ class OrderController extends Controller
 
         $product = Product::find($productId);
 
-        return $product && $product->sku === 'UNKNOWN';
+        if (!$product) {
+            return true;
+        }
+
+        // UNKNOWN product should always be replaced if a better match is found
+        if ($product->sku === 'UNKNOWN') {
+            return true;
+        }
+
+        // PDR001 is often used as a default/placeholder product in some integrations
+        if ($product->sku === 'PDR001') {
+            return true;
+        }
+
+        return false;
     }
 
     private function enrichItemsFromOrderNotes(array $items, ?string $notes): array
@@ -1829,6 +1913,7 @@ class OrderController extends Controller
 
         $result = [];
 
+        // Check for JSON-like structure in notes
         if (str_starts_with($notes, '{') || str_starts_with($notes, '[')) {
             $decoded = json_decode($notes, true);
             if (is_array($decoded)) {
@@ -1849,11 +1934,13 @@ class OrderController extends Controller
             }
         }
 
+        // Try to extract SKU using common patterns
         if (preg_match('/(?:SKU|sku|Sku|Réf|réf|Ref|ref|Reference|reference)\s*[:\-]\s*([A-Za-z0-9\-_.]+)/u', $notes, $matches)) {
             $result['sku'] = trim($matches[1]);
         }
 
-        if (preg_match('/(?:Product|Produit|product|produit|Article|article)\s*[:\-]\s*(.+?)(?:\n|\||$)/u', $notes, $matches)) {
+        // Try to extract Product Name using common patterns, handling optional brackets
+        if (preg_match('/(?:Product|Produit|product|produit|Article|article)\s*[:\-]\s*([^\]\n|]+)/u', $notes, $matches)) {
             $result['product_name'] = trim($matches[1]);
         }
 
