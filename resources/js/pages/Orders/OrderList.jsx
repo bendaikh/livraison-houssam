@@ -485,9 +485,30 @@ export default function OrderList({ status = '' }) {
         return '';
     };
 
+    const getWebsiteSellerLabel = (order) => {
+        const website = order?.source_website;
+        if (!website) {
+            return '';
+        }
+
+        const storeLabel = website.store_name || website.name || '';
+        const ownerLabel = website.owner?.company_name || website.owner?.name || '';
+
+        if (storeLabel && ownerLabel && storeLabel !== ownerLabel) {
+            return `${storeLabel} (${ownerLabel})`;
+        }
+
+        return storeLabel || ownerLabel || '';
+    };
+
     const getSellerLabel = (order) => {
         if (order.seller_name) {
             return order.seller_name;
+        }
+
+        const websiteLabel = getWebsiteSellerLabel(order);
+        if (websiteLabel) {
+            return websiteLabel;
         }
 
         if (order.vendor?.name) {

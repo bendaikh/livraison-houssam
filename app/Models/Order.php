@@ -23,6 +23,7 @@ class Order extends Model
         'status',
         'payment_status',
         'source',
+        'source_website',
         'external_order_id',
         'shopify_name',
         'delivery_tracking_code',
@@ -61,6 +62,7 @@ class Order extends Model
     ];
 
     protected $casts = [
+        'source_website' => 'array',
         'subtotal' => 'decimal:2',
         'collected_amount' => 'decimal:2',
         'delivery_person_commission' => 'decimal:2',

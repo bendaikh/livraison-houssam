@@ -497,7 +497,19 @@ export default function OrderDetail() {
         displayTotal,
         shippingCost,
     } = resolveOrderDisplayTotals(order);
-    const sellerName = order.seller_name || order.vendor?.name || order.vendor?.company_name || null;
+    const sellerName = order.seller_name
+        || order.vendor?.name
+        || order.vendor?.company_name
+        || (() => {
+            const website = order.source_website;
+            if (!website) return null;
+            const storeLabel = website.store_name || website.name || '';
+            const ownerLabel = website.owner?.company_name || website.owner?.name || '';
+            if (storeLabel && ownerLabel && storeLabel !== ownerLabel) {
+                return `${storeLabel} (${ownerLabel})`;
+            }
+            return storeLabel || ownerLabel || null;
+        })();
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto">

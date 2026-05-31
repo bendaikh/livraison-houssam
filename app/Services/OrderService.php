@@ -44,6 +44,7 @@ class OrderService
                 'delivery_city' => $data['delivery_city'] ?? null,
                 'status' => $data['status'] ?? 'pending',
                 'source' => $data['source'] ?? 'manual',
+                'source_website' => $data['source_website'] ?? null,
                 'external_order_id' => $data['external_order_id'] ?? null,
                 'shopify_name' => $data['shopify_name'] ?? null,
                 'subtotal' => $subtotal,

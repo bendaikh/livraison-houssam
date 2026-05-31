@@ -202,6 +202,7 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
             'metadata' => 'nullable|array',
+            'website' => 'nullable|array',
         ]);
         $normalizedClientPhone = MoroccanPhone::normalize($validated['client_phone'] ?? null);
         if ($normalizedClientPhone !== '') {
@@ -213,6 +214,7 @@ class OrderController extends Controller
         }
         $validated = $this->applyAuthenticatedVendor($request, $validated);
         $validated = $this->applyIntegrationDefaults($request, $validated);
+        $validated = $this->applyExternalWebsiteContext($request, $validated);
         $validated = $this->stripVendorRestrictedFields($request, $validated);
         if ($request->user()?->isVendor()) {
             $validated['status'] = 'pending';
@@ -285,6 +287,8 @@ class OrderController extends Controller
 
         $this->attachShippingPricingMetadata($order, 'store');
         $this->attachBlacklistMetadata($request, $order);
+        $order->setAttribute('seller_name', $this->resolveSellerName($order));
+        $this->attachOrderDisplayTotals($order);
 
         return response()->json($order, 201);
     }
@@ -1711,10 +1715,149 @@ class OrderController extends Controller
         if ($order->vendor_id) {
             $vendor = Vendor::find($order->vendor_id);
 
-            return $vendor?->name ?: $vendor?->company_name;
+            if ($vendor) {
+                return $vendor->name ?: $vendor->company_name;
+            }
+        }
+
+        return $this->formatSourceWebsiteSellerLabel($order->source_website);
+    }
+
+    private function applyExternalWebsiteContext(Request $request, array $validated): array
+    {
+        $website = $this->extractWebsitePayload($request);
+        if ($website === null) {
+            return $validated;
+        }
+
+        $validated['source_website'] = $this->normalizeSourceWebsitePayload($website);
+
+        if (empty($validated['vendor_id'])) {
+            $vendorId = $this->resolveVendorFromWebsite($website);
+            if ($vendorId) {
+                $validated['vendor_id'] = $vendorId;
+            }
+        }
+
+        return $validated;
+    }
+
+    private function extractWebsitePayload(Request $request): ?array
+    {
+        $website = $request->input('website');
+        if (is_array($website) && $website !== []) {
+            return $website;
+        }
+
+        $metadata = $request->input('metadata');
+        if (is_array($metadata) && is_array($metadata['website'] ?? null) && $metadata['website'] !== []) {
+            return $metadata['website'];
         }
 
         return null;
+    }
+
+    private function normalizeSourceWebsitePayload(array $website): array
+    {
+        $owner = is_array($website['owner'] ?? null) ? $website['owner'] : [];
+        $contact = is_array($website['contact'] ?? null) ? $website['contact'] : [];
+
+        return array_filter([
+            'id' => $website['id'] ?? null,
+            'name' => $website['name'] ?? null,
+            'store_name' => $website['store_name'] ?? null,
+            'subdomain' => $website['subdomain'] ?? null,
+            'domain' => $website['domain'] ?? null,
+            'url' => $website['url'] ?? null,
+            'product_url' => $website['product_url'] ?? null,
+            'owner' => array_filter([
+                'id' => $owner['id'] ?? null,
+                'name' => $owner['name'] ?? null,
+                'company_name' => $owner['company_name'] ?? null,
+                'email' => $owner['email'] ?? null,
+                'phone' => $owner['phone'] ?? null,
+            ], fn ($value) => $value !== null && $value !== ''),
+            'contact' => array_filter([
+                'phone' => $contact['phone'] ?? null,
+                'email' => $contact['email'] ?? null,
+            ], fn ($value) => $value !== null && $value !== ''),
+        ], fn ($value) => $value !== null && $value !== []);
+    }
+
+    private function resolveVendorFromWebsite(array $website): ?int
+    {
+        $owner = is_array($website['owner'] ?? null) ? $website['owner'] : [];
+
+        if (!empty($owner['id'])) {
+            $vendor = Vendor::find((int) $owner['id']);
+            if ($vendor) {
+                return $vendor->id;
+            }
+        }
+
+        if (!empty($owner['email'])) {
+            $email = trim((string) $owner['email']);
+            $vendor = Vendor::where('email', $email)->first();
+            if ($vendor) {
+                return $vendor->id;
+            }
+
+            $vendor = Vendor::whereHas('user', function ($query) use ($email) {
+                $query->where('email', $email);
+            })->first();
+            if ($vendor) {
+                return $vendor->id;
+            }
+        }
+
+        if (!empty($owner['phone'])) {
+            $phone = MoroccanPhone::normalize($owner['phone']);
+            if ($phone !== '') {
+                $vendor = Vendor::where('phone', $phone)->first();
+                if ($vendor) {
+                    return $vendor->id;
+                }
+            }
+        }
+
+        if (!empty($owner['company_name'])) {
+            $companyName = trim((string) $owner['company_name']);
+            $vendor = Vendor::where('company_name', $companyName)->first();
+            if ($vendor) {
+                return $vendor->id;
+            }
+        }
+
+        if (!empty($owner['name'])) {
+            $ownerName = trim((string) $owner['name']);
+            $vendor = Vendor::where('name', $ownerName)->first();
+            if ($vendor) {
+                return $vendor->id;
+            }
+        }
+
+        return null;
+    }
+
+    private function formatSourceWebsiteSellerLabel(mixed $sourceWebsite): ?string
+    {
+        if (!is_array($sourceWebsite) || $sourceWebsite === []) {
+            return null;
+        }
+
+        $storeLabel = trim((string) ($sourceWebsite['store_name'] ?? $sourceWebsite['name'] ?? ''));
+        $owner = is_array($sourceWebsite['owner'] ?? null) ? $sourceWebsite['owner'] : [];
+        $ownerLabel = trim((string) ($owner['company_name'] ?? $owner['name'] ?? ''));
+
+        if ($storeLabel !== '' && $ownerLabel !== '' && strcasecmp($storeLabel, $ownerLabel) !== 0) {
+            return "{$storeLabel} ({$ownerLabel})";
+        }
+
+        if ($storeLabel !== '') {
+            return $storeLabel;
+        }
+
+        return $ownerLabel !== '' ? $ownerLabel : null;
     }
 
     /**
