@@ -41,6 +41,7 @@ class DashboardService
 
         return [
             'seller_overview' => $vendorId ? $this->getSellerOverviewStats($vendorId) : null,
+            'kpis' => $this->getBusinessKpis($vendorId),
             'sales' => $this->getSalesStats($dateRange, $vendorId),
             'orders' => $this->getOrdersStats($dateRange, $vendorId),
             'revenue' => $this->getRevenueStats($dateRange, $vendorId),
@@ -394,6 +395,37 @@ class DashboardService
         return $query->sum('total');
     }
 
+    private function getBusinessKpis($vendorId = null): array
+    {
+        $baseQuery = Order::query();
+        if ($vendorId) {
+            $baseQuery->where('vendor_id', $vendorId);
+        }
+
+        $todayStart = Carbon::today();
+        $todayEnd = Carbon::today()->endOfDay();
+        $todayQuery = (clone $baseQuery)->whereBetween('created_at', [$todayStart, $todayEnd]);
+        $deliveredQuery = (clone $baseQuery)->where('status', 'delivered');
+
+        $totalOrders = (clone $baseQuery)->count();
+        $deliveredOrders = (clone $deliveredQuery)->count();
+
+        return [
+            'total_orders' => $totalOrders,
+            'pending_orders' => (clone $baseQuery)->where('status', 'pending')->count(),
+            'confirmed_orders' => (clone $baseQuery)->where('status', 'confirmed')->count(),
+            'shipped_orders' => (clone $baseQuery)->where('status', 'shipped')->count(),
+            'delivered_orders' => $deliveredOrders,
+            'refused_orders' => (clone $baseQuery)->where('status', 'refused')->count(),
+            'returned_orders' => (clone $baseQuery)->where('status', 'returned')->count(),
+            'cancelled_orders' => (clone $baseQuery)->where('status', 'cancelled')->count(),
+            'total_revenue' => (float) (clone $deliveredQuery)->sum('total'),
+            'today_orders' => (clone $todayQuery)->count(),
+            'today_revenue' => (float) (clone $todayQuery)->where('status', 'delivered')->sum('total'),
+            'conversion_rate' => $this->calculateRate($deliveredOrders, $totalOrders),
+        ];
+    }
+
     private function getOrdersStats(array $dateRange, $vendorId = null)
     {
         $baseQuery = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
@@ -408,6 +440,8 @@ class DashboardService
         $shipped = (clone $baseQuery)->where('status', 'shipped')->count();
         $delivered = (clone $baseQuery)->where('status', 'delivered')->count();
         $cancelled = (clone $baseQuery)->where('status', 'cancelled')->count();
+        $refused = (clone $baseQuery)->where('status', 'refused')->count();
+        $returned = (clone $baseQuery)->where('status', 'returned')->count();
         
         $confirmationCount = $confirmed + $shipped + $delivered;
 
@@ -418,8 +452,11 @@ class DashboardService
             'shipped' => $shipped,
             'delivered' => $delivered,
             'cancelled' => $cancelled,
+            'refused' => $refused,
+            'returned' => $returned,
             'confirmation_rate' => $this->calculateRate($confirmationCount, $totalOrders),
             'delivery_rate' => $this->calculateRate($delivered, $totalOrders),
+            'conversion_rate' => $this->calculateRate($delivered, $totalOrders),
             'by_source' => (clone $baseQuery)
                 ->select('source', DB::raw('count(*) as count'))
                 ->groupBy('source')

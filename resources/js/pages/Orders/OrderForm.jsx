@@ -8,7 +8,6 @@ import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRol
 import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import { formatDeliveryDispatchFailureMessage, parseDeliveryCitiesResponse } from '../../utils/delivery';
 import { resolveShippingCost, sameCityName } from '../../utils/shipping';
-import ConfirmationWorkflowForm from './ConfirmationWorkflowForm';
 import { appPath } from '../../constants/appPaths';
 
 const getImageSrc = (imagePath) => {
@@ -173,6 +172,10 @@ export default function OrderForm() {
             }));
         }
     }, [id, user, isEditing, isAdminUser, isConfirmationAgentUser]);
+
+    useEffect(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }, [id]);
 
     useEffect(() => {
         if (isEditing || queryPrefillApplied || products.length === 0) return;
@@ -631,33 +634,6 @@ export default function OrderForm() {
         }
     };
 
-    const canConfirmationAgentUseCreateStyleEdit = isConfirmationAgentUser
-        && isEditing
-        && (
-            String(currentOrderCreatedByUserId || '') === String(user?.id || '')
-            || wasOrderCreatedByCurrentConfirmationAgent({
-                created_by_user_id: currentOrderCreatedByUserId,
-                source: formData.source,
-                history: currentOrderHistory,
-            }, user?.id)
-        )
-        && (
-            Boolean(currentOrderReturnedToConfirmationAt)
-            || (!currentOrderConfirmedAt && formData.status === 'pending')
-        );
-
-    if (isConfirmationAgentUser && isEditing && currentOrderCreatedByUserId === undefined) {
-        return (
-            <div className="flex h-80 items-center justify-center">
-                <div className="text-slate-500">{t('admin.orderForm.loadingOrder')}</div>
-            </div>
-        );
-    }
-
-    if (isConfirmationAgentUser && isEditing && !canConfirmationAgentUseCreateStyleEdit) {
-        return <ConfirmationWorkflowForm />;
-    }
-
     return (
         <div className="space-y-6">
             <div className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-6 text-white shadow-lg">
@@ -960,38 +936,25 @@ export default function OrderForm() {
                         {/* Hide Agent Confirmation and Delivery Person for sellers - only admin assigns these */}
                         {!isVendorUser && (
                             <>
-                                {isConfirmationAgentUser ? (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation Agent</label>
-                                        <input
-                                            type="text"
-                                            value={user?.name || 'Current confirmation agent'}
-                                            disabled
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">Manual orders created from this account are assigned to you automatically.</p>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation Agent</label>
-                                        <select
-                                            value={formData.confirmation_agent_id}
-                                            onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
-                                            disabled={isConfirmationLocked}
-                                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isConfirmationLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                        >
-                                            <option value="">Select Agent</option>
-                                            {confirmationAgents.map(agent => (
-                                                <option key={agent.id} value={agent.id}>{agent.name}</option>
-                                            ))}
-                                        </select>
-                                        {isConfirmationLocked && (
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                Agent already confirmed for this order; changes are locked.
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirmation Agent</label>
+                                    <select
+                                        value={formData.confirmation_agent_id}
+                                        onChange={(e) => setFormData({ ...formData, confirmation_agent_id: e.target.value })}
+                                        disabled={isConfirmationLocked}
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isConfirmationLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                    >
+                                        <option value="">Select Agent</option>
+                                        {confirmationAgents.map(agent => (
+                                            <option key={agent.id} value={agent.id}>{agent.name}</option>
+                                        ))}
+                                    </select>
+                                    {isConfirmationLocked && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Agent already confirmed for this order; changes are locked.
+                                        </p>
+                                    )}
+                                </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">

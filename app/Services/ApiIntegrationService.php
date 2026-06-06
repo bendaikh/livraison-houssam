@@ -21,7 +21,8 @@ class ApiIntegrationService
         private ShopifyService $shopifyService,
         private TawsilexService $tawsilexService,
         private BMDeliveryService $bmDeliveryService,
-        private GoogleSheetService $googleSheetService
+        private GoogleSheetService $googleSheetService,
+        private GoogleOAuthService $googleOAuthService
     ) {}
 
     public function syncShopifyOrders(int $integrationId)
@@ -133,16 +134,15 @@ class ApiIntegrationService
 
         try {
             $credentials = $integration->credentials;
-            $apiKey = $this->resolveGoogleSheetsApiKey($integration);
             $sheetId = $credentials['sheet_id'] ?? '';
             $range = $credentials['range'] ?? 'Orders!A1:Z1000';
             $headerRow = (int)($credentials['header_row'] ?? 1);
 
-            if (!$apiKey || !$sheetId) {
-                throw new \Exception('Missing Google Sheets credentials (API key or Sheet ID).');
+            if (!$sheetId) {
+                throw new \Exception('Select a Google spreadsheet before syncing.');
             }
 
-            $this->googleSheetService->setCredentials($apiKey, $sheetId, $range, $headerRow);
+            $this->configureGoogleSheetService($integration, $sheetId, $range, $headerRow);
             $rows = $this->googleSheetService->fetchRows();
 
             $log->update(['total_records' => count($rows)]);
@@ -544,11 +544,11 @@ class ApiIntegrationService
                 return $this->shopifyService->testConnection();
             } elseif ($integration->type === 'google_sheet') {
                 $credentials = $integration->credentials;
-                $this->googleSheetService->setCredentials(
-                    $this->resolveGoogleSheetsApiKey($integration),
-                    $credentials['sheet_id'] ?? '',
+                $this->configureGoogleSheetService(
+                    $integration,
+                    (string) ($credentials['sheet_id'] ?? ''),
                     $credentials['range'] ?? null,
-                    (int)($credentials['header_row'] ?? 1)
+                    (int) ($credentials['header_row'] ?? 1)
                 );
                 return $this->googleSheetService->testConnection();
             } elseif ($integration->type === 'delivery') {
@@ -812,13 +812,10 @@ class ApiIntegrationService
     public function listGoogleSheetTabs(int $integrationId, string $sheetUrl): array
     {
         $integration = ApiIntegration::findOrFail($integrationId);
-        $apiKey = $this->resolveGoogleSheetsApiKey($integration);
-        if (!$apiKey) {
-            throw new \Exception('Google Sheets API key is not configured. Add it to the integration or the server environment.');
-        }
+        $sheetId = $sheetUrl !== '' ? $sheetUrl : (string) ($integration->credentials['sheet_id'] ?? '');
+        $this->configureGoogleSheetService($integration, $sheetId);
 
-        $this->googleSheetService->setApiKey($apiKey);
-        return $this->googleSheetService->listTabs($sheetUrl);
+        return $this->googleSheetService->listTabs($sheetId);
     }
 
     /**
@@ -827,13 +824,9 @@ class ApiIntegrationService
     public function previewGoogleSheet(int $integrationId, string $sheetUrl, string $tab, int $limit = 100): array
     {
         $integration = ApiIntegration::findOrFail($integrationId);
-        $apiKey = $this->resolveGoogleSheetsApiKey($integration);
-        if (!$apiKey) {
-            throw new \Exception('Google Sheets API key is not configured. Add it to the integration or the server environment.');
-        }
-
-        $this->googleSheetService->setApiKey($apiKey);
-        $values = $this->googleSheetService->fetchTab($sheetUrl, $tab, $limit);
+        $sheetId = $sheetUrl !== '' ? $sheetUrl : (string) ($integration->credentials['sheet_id'] ?? '');
+        $this->configureGoogleSheetService($integration, $sheetId);
+        $values = $this->googleSheetService->fetchTab($sheetId, $tab, $limit);
 
         if (empty($values)) {
             return ['headers' => [], 'rows' => []];
@@ -925,5 +918,31 @@ class ApiIntegrationService
             ?? env('GOOGLE_SHEETS_API_KEY')
             ?? ''
         ));
+    }
+
+    private function configureGoogleSheetService(
+        ApiIntegration $integration,
+        string $sheetId,
+        ?string $range = null,
+        int $headerRow = 1
+    ): void {
+        if ($sheetId === '') {
+            throw new \Exception('Google spreadsheet is not selected.');
+        }
+
+        if ($this->googleOAuthService->isConnected($integration)) {
+            $accessToken = $this->googleOAuthService->getValidAccessToken($integration);
+            $this->googleSheetService->setAccessToken($accessToken);
+            $this->googleSheetService->setCredentials('', $sheetId, $range, $headerRow);
+
+            return;
+        }
+
+        $apiKey = $this->resolveGoogleSheetsApiKey($integration);
+        if ($apiKey === '') {
+            throw new \Exception('Connect with Google or configure a Google Sheets API key.');
+        }
+
+        $this->googleSheetService->setCredentials($apiKey, $sheetId, $range, $headerRow);
     }
 }

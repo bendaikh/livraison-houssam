@@ -96,13 +96,15 @@ export default function Dashboard() {
     const sellerOverview = stats?.seller_overview || null;
     const sellerBilling = stats?.seller_billing || null;
     const latestSellerInvoice = sellerBilling?.latest_invoice || null;
+    const kpis = stats?.kpis || {};
     const displayOrdersStats = isVendor && sellerOverview ? sellerOverview.orders : (stats?.orders || {});
     const displayRevenue = isVendor && sellerOverview
         ? sellerOverview.total_revenue || 0
-        : (stats?.revenue?.revenue || 0);
+        : (kpis.total_revenue ?? stats?.revenue?.revenue ?? 0);
     const displayProfit = isVendor && sellerOverview
         ? sellerOverview.total_profit || 0
         : (stats?.revenue?.profit || 0);
+    const formatRateFromKpi = (value) => formatRate(value ?? stats?.orders?.conversion_rate ?? 0);
 
     const statCards = isVendor
         ? [
@@ -159,67 +161,18 @@ export default function Dashboard() {
             },
         ]
         : [
-            {
-                title: t('admin.dashboard.totalRevenue'),
-                value: formatCurrency(displayRevenue),
-                suffix: '',
-                icon: DollarSign,
-                gradient: 'from-emerald-500 to-teal-600',
-                bgGradient: 'from-emerald-50 to-teal-50',
-                iconBg: 'bg-emerald-500',
-                change: '+12.5%',
-                changeType: 'positive'
-            },
-            {
-                title: t('admin.dashboard.totalOrders'),
-                value: displayOrdersStats?.total || 0,
-                icon: ShoppingCart,
-                gradient: 'from-blue-500 to-indigo-600',
-                bgGradient: 'from-blue-50 to-indigo-50',
-                iconBg: 'bg-blue-500',
-                change: '+8.2%',
-                changeType: 'positive'
-            },
-            {
-                title: t('admin.dashboard.pendingOrders'),
-                value: displayOrdersStats?.pending || 0,
-                icon: Clock,
-                gradient: 'from-amber-500 to-orange-600',
-                bgGradient: 'from-amber-50 to-orange-50',
-                iconBg: 'bg-amber-500',
-                change: t('admin.dashboard.newOrders'),
-                changeType: 'neutral'
-            },
-            {
-                title: t('admin.dashboard.confirmationRate'),
-                value: formatRate(stats?.orders?.confirmation_rate ?? 0),
-                icon: CheckCircle,
-                gradient: 'from-cyan-500 to-sky-600',
-                bgGradient: 'from-cyan-50 to-sky-50',
-                iconBg: 'bg-cyan-500',
-                change: t('admin.dashboard.tracked'),
-                changeType: 'neutral'
-            },
-            {
-                title: t('admin.dashboard.deliveryRate'),
-                value: formatRate(stats?.orders?.delivery_rate ?? 0),
-                icon: Package,
-                gradient: 'from-emerald-500 to-lime-600',
-                bgGradient: 'from-emerald-50 to-lime-50',
-                iconBg: 'bg-emerald-500',
-                change: t('admin.dashboard.tracked'),
-                changeType: 'neutral'
-            },
-            {
-                title: t('admin.dashboard.lowStockItems'),
-                value: stats?.low_stock_products?.length || 0,
-                icon: AlertTriangle,
-                gradient: 'from-rose-500 to-pink-600',
-                bgGradient: 'from-rose-50 to-pink-50',
-                iconBg: 'bg-rose-500',
-                change: t('admin.dashboard.needsAttention'),
-                changeType: 'negative'
-            }
+            { title: t('admin.dashboard.totalOrders'), value: kpis.total_orders ?? 0, icon: ShoppingCart, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50', iconBg: 'bg-blue-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
+            { title: t('admin.dashboard.pendingOrders'), value: kpis.pending_orders ?? 0, icon: Clock, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50', iconBg: 'bg-amber-500', change: t('admin.dashboard.awaitingAction'), changeType: 'neutral' },
+            { title: t('admin.menu.confirmed'), value: kpis.confirmed_orders ?? 0, icon: CheckCircle, gradient: 'from-cyan-500 to-sky-600', bgGradient: 'from-cyan-50 to-sky-50', iconBg: 'bg-cyan-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
+            { title: t('admin.menu.shipped'), value: kpis.shipped_orders ?? 0, icon: Package, gradient: 'from-indigo-500 to-violet-600', bgGradient: 'from-indigo-50 to-violet-50', iconBg: 'bg-indigo-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
+            { title: t('admin.dashboard.deliveredOrders'), value: kpis.delivered_orders ?? 0, icon: CheckCircle, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50', iconBg: 'bg-emerald-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
+            { title: t('admin.menu.refused'), value: kpis.refused_orders ?? 0, icon: X, gradient: 'from-orange-500 to-red-600', bgGradient: 'from-orange-50 to-red-50', iconBg: 'bg-orange-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
+            { title: t('admin.menu.returned'), value: kpis.returned_orders ?? 0, icon: TrendingDown, gradient: 'from-pink-500 to-rose-600', bgGradient: 'from-pink-50 to-rose-50', iconBg: 'bg-pink-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
+            { title: t('admin.dashboard.totalRevenue'), value: formatCurrency(kpis.total_revenue ?? 0), icon: DollarSign, gradient: 'from-emerald-500 to-lime-600', bgGradient: 'from-emerald-50 to-lime-50', iconBg: 'bg-emerald-500', change: t('admin.dashboard.deliveredRevenue'), changeType: 'positive' },
+            { title: t('admin.dashboard.todayOrders'), value: kpis.today_orders ?? 0, icon: ShoppingCart, gradient: 'from-violet-500 to-fuchsia-600', bgGradient: 'from-violet-50 to-fuchsia-50', iconBg: 'bg-violet-500', change: t('admin.dashboard.today'), changeType: 'neutral' },
+            { title: t('admin.dashboard.todayRevenue'), value: formatCurrency(kpis.today_revenue ?? 0), icon: DollarSign, gradient: 'from-teal-500 to-cyan-600', bgGradient: 'from-teal-50 to-cyan-50', iconBg: 'bg-teal-500', change: t('admin.dashboard.today'), changeType: 'neutral' },
+            { title: t('admin.dashboard.conversionRate'), value: formatRateFromKpi(kpis.conversion_rate), icon: TrendingUp, gradient: 'from-slate-600 to-slate-800', bgGradient: 'from-slate-50 to-slate-100', iconBg: 'bg-slate-700', change: t('admin.dashboard.deliveredVsTotal'), changeType: 'neutral' },
+            { title: t('admin.dashboard.lowStockItems'), value: stats?.low_stock_products?.length || 0, icon: AlertTriangle, gradient: 'from-rose-500 to-pink-600', bgGradient: 'from-rose-50 to-pink-50', iconBg: 'bg-rose-500', change: t('admin.dashboard.needsAttention'), changeType: 'negative' },
         ];
 
     const getStatusColor = (status) => {
@@ -264,7 +217,7 @@ export default function Dashboard() {
             </div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {statCards.map((stat, index) => (
                     <div 
                         key={index} 

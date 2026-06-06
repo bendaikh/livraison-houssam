@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MarketplaceProduct;
+use App\Models\Product;
 use App\Models\Vendor;
 use App\Services\DashboardService;
 use Illuminate\Http\Request;
@@ -93,6 +95,7 @@ class VendorController extends Controller
             $vendorData['user_id'] = $user->id;
             
             $vendor = Vendor::create($vendorData);
+            $this->assignAllActiveProductsToVendor($vendor);
 
             \DB::commit();
 
@@ -230,6 +233,10 @@ class VendorController extends Controller
                 }
             }
 
+            if (($validated['is_active'] ?? $vendor->is_active) && $vendor->marketplaceProducts()->count() === 0) {
+                $this->assignAllActiveProductsToVendor($vendor);
+            }
+
             \DB::commit();
 
             $response = [
@@ -343,5 +350,25 @@ class VendorController extends Controller
             'message' => 'Registration successful. Please wait for admin approval.',
             'vendor' => $vendor
         ], 201);
+    }
+
+    private function assignAllActiveProductsToVendor(Vendor $vendor): void
+    {
+        $productIds = Product::query()
+            ->where('is_active', true)
+            ->pluck('id');
+
+        foreach ($productIds as $productId) {
+            MarketplaceProduct::firstOrCreate(
+                [
+                    'product_id' => $productId,
+                    'vendor_id' => $vendor->id,
+                ],
+                [
+                    'is_active' => true,
+                    'activated_at' => now(),
+                ]
+            );
+        }
     }
 }

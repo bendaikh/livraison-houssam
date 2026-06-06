@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
@@ -33,10 +33,16 @@ const hashKey = (values) => values.join('|').toLowerCase();
 export default function GoogleSheetIntegrationPage() {
     const { t } = useTranslation();
     const { user } = useAuth();
+    const location = useLocation();
     const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
     const [integration, setIntegration] = useState(null);
     const [sheetUrl, setSheetUrl] = useState('');
-    const [apiKeyInput, setApiKeyInput] = useState('');
+    const [googleConnected, setGoogleConnected] = useState(false);
+    const [googleEmail, setGoogleEmail] = useState('');
+    const [spreadsheets, setSpreadsheets] = useState([]);
+    const [selectedSpreadsheetId, setSelectedSpreadsheetId] = useState('');
+    const [loadingSpreadsheets, setLoadingSpreadsheets] = useState(false);
+    const [connectingGoogle, setConnectingGoogle] = useState(false);
     const [tabs, setTabs] = useState([]);
     const [selectedTab, setSelectedTab] = useState('');
     const [headers, setHeaders] = useState([]);
@@ -54,6 +60,16 @@ export default function GoogleSheetIntegrationPage() {
         fetchIntegration();
     }, []);
 
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('connected') === '1') {
+            setMessage({ type: 'success', text: t('admin.apiIntegrations.googleSheet.connectedSuccess') });
+            fetchIntegration();
+        } else if (params.get('error')) {
+            setMessage({ type: 'error', text: params.get('error') });
+        }
+    }, [location.search, t]);
+
     const fetchIntegration = async () => {
         try {
             const response = await api.get('/api-integrations');
@@ -61,14 +77,95 @@ export default function GoogleSheetIntegrationPage() {
             if (gs) {
                 setIntegration(gs);
                 const savedUrl = gs.credentials?.sheet_url || '';
+                const savedSheetId = gs.credentials?.sheet_id || '';
                 if (savedUrl) {
                     setSheetUrl(savedUrl);
                 }
-                setApiKeyInput(gs.credentials?.api_key || '');
+                if (savedSheetId) {
+                    setSelectedSpreadsheetId(savedSheetId);
+                }
+                const oauth = gs.credentials?.oauth || {};
+                setGoogleConnected(Boolean(oauth.access_token));
+                setGoogleEmail(oauth.email || '');
+                if (oauth.access_token) {
+                    loadSpreadsheets(gs);
+                }
             }
         } catch (error) {
             console.error('Error fetching Google Sheet integration', error);
         }
+    };
+
+    const loadSpreadsheets = useCallback(async (activeIntegration = integration) => {
+        if (!activeIntegration?.id) return;
+        setLoadingSpreadsheets(true);
+        try {
+            const response = await api.get(`/api-integrations/${activeIntegration.id}/google/spreadsheets`);
+            const files = response.data.spreadsheets || [];
+            setSpreadsheets(files);
+            setGoogleConnected(Boolean(response.data.connected));
+            if (!selectedSpreadsheetId && files.length > 0) {
+                const preferred = activeIntegration.credentials?.sheet_id
+                    ? files.find((file) => file.id === activeIntegration.credentials.sheet_id)
+                    : files[0];
+                if (preferred) {
+                    setSelectedSpreadsheetId(preferred.id);
+                    setSheetUrl(preferred.url || `https://docs.google.com/spreadsheets/d/${preferred.id}/edit`);
+                }
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: error.response?.data?.message || t('admin.apiIntegrations.googleSheet.failedLoadSpreadsheets') });
+        } finally {
+            setLoadingSpreadsheets(false);
+        }
+    }, [integration, selectedSpreadsheetId, t]);
+
+    const connectWithGoogle = async () => {
+        setConnectingGoogle(true);
+        setMessage({});
+        try {
+            const activeIntegration = await ensureIntegration();
+            const response = await api.get(`/api-integrations/${activeIntegration.id}/google/oauth/url`);
+            window.location.href = response.data.url;
+        } catch (error) {
+            setMessage({ type: 'error', text: error.response?.data?.message || t('admin.apiIntegrations.googleSheet.connectFailed') });
+            setConnectingGoogle(false);
+        }
+    };
+
+    const disconnectGoogle = async () => {
+        if (!integration) return;
+        try {
+            await api.post(`/api-integrations/${integration.id}/google/disconnect`);
+            setGoogleConnected(false);
+            setGoogleEmail('');
+            setSpreadsheets([]);
+            setSelectedSpreadsheetId('');
+            setSheetUrl('');
+            setTabs([]);
+            setSelectedTab('');
+            setMessage({ type: 'success', text: t('admin.apiIntegrations.googleSheet.disconnected') });
+            fetchIntegration();
+        } catch (error) {
+            setMessage({ type: 'error', text: error.response?.data?.message || t('admin.apiIntegrations.googleSheet.disconnectFailed') });
+        }
+    };
+
+    const handleSpreadsheetChange = async (spreadsheetId) => {
+        setSelectedSpreadsheetId(spreadsheetId);
+        const selected = spreadsheets.find((sheet) => sheet.id === spreadsheetId);
+        const nextUrl = selected?.url || (spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` : '');
+        setSheetUrl(nextUrl);
+        setTabs([]);
+        setSelectedTab('');
+        if (!integration || !spreadsheetId) return;
+
+        await saveIntegration(integration, {
+            sheet_id: spreadsheetId,
+            sheet_name: selected?.name || '',
+            sheet_url: nextUrl,
+        });
+        setMessage({ type: 'success', text: t('admin.apiIntegrations.googleSheet.spreadsheetSelected') });
     };
 
     const ensureIntegration = async () => {
@@ -140,18 +237,15 @@ export default function GoogleSheetIntegrationPage() {
 
     const loadTabs = async () => {
         setMessage({});
-        if (!sheetUrl) {
-            setMessage({ type: 'error', text: t('admin.apiIntegrations.googleSheet.pasteUrlFirst') });
+        if (!selectedSpreadsheetId && !sheetUrl) {
+            setMessage({ type: 'error', text: t('admin.apiIntegrations.googleSheet.selectSpreadsheetFirst') });
             return;
         }
         setLoadingTabs(true);
         try {
-            let activeIntegration = await ensureIntegration();
-            if (isAdminUser && apiKeyInput.trim() && apiKeyInput.trim() !== (activeIntegration.credentials?.api_key || '')) {
-                activeIntegration = await saveIntegration(activeIntegration, { api_key: apiKeyInput.trim() });
-            }
+            const activeIntegration = await ensureIntegration();
             const response = await api.get(`/api-integrations/${activeIntegration.id}/google-sheet/tabs`, {
-                params: { sheet_url: sheetUrl },
+                params: { sheet_url: selectedSpreadsheetId || sheetUrl },
             });
             setTabs(response.data.data || []);
             if ((response.data.data || []).length > 0) {
@@ -182,7 +276,7 @@ export default function GoogleSheetIntegrationPage() {
         try {
             const activeIntegration = await ensureIntegration();
             const response = await api.post(`/api-integrations/${activeIntegration.id}/google-sheet/preview`, {
-                sheet_url: sheetUrl,
+                sheet_url: selectedSpreadsheetId || sheetUrl,
                 tab: selectedTab,
                 limit: 200,
             });
@@ -300,8 +394,7 @@ export default function GoogleSheetIntegrationPage() {
         try {
             let activeIntegration = await ensureIntegration();
             const credentials = {
-                api_key: isAdminUser ? (apiKeyInput.trim() || activeIntegration.credentials?.api_key || '') : (activeIntegration.credentials?.api_key || ''),
-                sheet_id: extractSheetId(sheetUrl),
+                sheet_id: selectedSpreadsheetId || extractSheetId(sheetUrl),
                 sheet_url: sheetUrl,
                 range: `${selectedTab}!A1:Z1000`,
                 header_row: 1,
@@ -359,31 +452,63 @@ export default function GoogleSheetIntegrationPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">{t('admin.apiIntegrations.googleSheet.sheetUrl')}</label>
-                        <input
-                            type="text"
-                            value={sheetUrl}
-                            onChange={(e) => setSheetUrl(e.target.value)}
-                            placeholder={t('admin.apiIntegrations.googleSheet.sheetUrlPlaceholder')}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                        />
-                        <p className="text-xs text-gray-500">{t('admin.apiIntegrations.googleSheet.sheetUrlHelp')}</p>
-                    </div>
-
-                    {isAdminUser && (
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">{t('admin.apiIntegrations.googleSheet.apiKey')}</label>
-                            <input
-                                type="password"
-                                value={apiKeyInput}
-                                onChange={(e) => setApiKeyInput(e.target.value)}
-                                placeholder={t('admin.apiIntegrations.googleSheet.apiKeyPlaceholder')}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                            />
-                            <p className="text-xs text-gray-500">{t('admin.apiIntegrations.googleSheet.apiKeyHelp')}</p>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-semibold text-emerald-900">{t('admin.apiIntegrations.googleSheet.googleAccount')}</p>
+                                <p className="text-xs text-emerald-700">
+                                    {googleConnected
+                                        ? t('admin.apiIntegrations.googleSheet.connectedAs', { email: googleEmail || t('admin.apiIntegrations.googleSheet.connected') })
+                                        : t('admin.apiIntegrations.googleSheet.connectHint')}
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {!googleConnected ? (
+                                    <button
+                                        type="button"
+                                        onClick={connectWithGoogle}
+                                        disabled={connectingGoogle}
+                                        className="px-4 py-2 bg-white border border-emerald-300 text-emerald-800 rounded-lg hover:bg-emerald-100 disabled:opacity-50 font-medium"
+                                    >
+                                        {connectingGoogle ? t('admin.apiIntegrations.googleSheet.connecting') : t('admin.apiIntegrations.googleSheet.connectWithGoogle')}
+                                    </button>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => loadSpreadsheets()}
+                                            disabled={loadingSpreadsheets}
+                                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            {loadingSpreadsheets ? t('admin.apiIntegrations.googleSheet.refreshing') : t('admin.apiIntegrations.googleSheet.refreshSpreadsheets')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={disconnectGoogle}
+                                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                                        >
+                                            {t('admin.apiIntegrations.googleSheet.disconnect')}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    )}
+                        {googleConnected && (
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700">{t('admin.apiIntegrations.googleSheet.selectSpreadsheet')}</label>
+                                <select
+                                    value={selectedSpreadsheetId}
+                                    onChange={(e) => handleSpreadsheetChange(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                >
+                                    <option value="">{t('admin.apiIntegrations.googleSheet.chooseSpreadsheet')}</option>
+                                    {spreadsheets.map((sheet) => (
+                                        <option key={sheet.id} value={sheet.id}>{sheet.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="flex flex-wrap gap-3 items-center">
                         <button

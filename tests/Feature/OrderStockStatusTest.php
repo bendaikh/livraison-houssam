@@ -17,13 +17,14 @@ class OrderStockStatusTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_stock_is_not_deducted_on_confirmation_but_is_deducted_on_pickup(): void
+    public function test_stock_is_not_deducted_on_shipped_but_is_deducted_on_delivered(): void
     {
         $product = $this->createProduct(stockQuantity: 10);
         $order = $this->createOrderWithItem($product, quantity: 2, status: 'pending');
         $orderService = app(OrderService::class);
 
         $orderService->updateOrderStatus($order->id, 'confirmed');
+        $orderService->updateOrderStatus($order->id, 'shipped');
 
         $this->assertSame(10, $product->fresh()->stock_quantity);
         $this->assertDatabaseMissing('stock_movements', [
@@ -31,7 +32,7 @@ class OrderStockStatusTest extends TestCase
             'type' => 'out',
         ]);
 
-        $orderService->updateOrderStatus($order->id, 'picked_up');
+        $orderService->updateOrderStatus($order->id, 'delivered');
 
         $this->assertSame(8, $product->fresh()->stock_quantity);
         $this->assertDatabaseHas('stock_movements', [
@@ -42,14 +43,14 @@ class OrderStockStatusTest extends TestCase
         ]);
     }
 
-    public function test_returned_order_restores_stock_only_once(): void
+    public function test_refused_after_delivered_restores_stock_only_once(): void
     {
         $product = $this->createProduct(stockQuantity: 10);
         $order = $this->createOrderWithItem($product, quantity: 3, status: 'pending');
         $orderService = app(OrderService::class);
 
-        $orderService->updateOrderStatus($order->id, 'picked_up');
-        $orderService->updateOrderStatus($order->id, 'returned');
+        $orderService->updateOrderStatus($order->id, 'delivered');
+        $orderService->updateOrderStatus($order->id, 'refused');
         $orderService->updateOrderStatus($order->id, 'cancelled');
 
         $this->assertSame(10, $product->fresh()->stock_quantity);
@@ -62,15 +63,28 @@ class OrderStockStatusTest extends TestCase
         );
     }
 
-    public function test_order_update_endpoint_restores_stock_when_status_changes_to_returned(): void
+    public function test_refused_before_delivered_does_not_restore_stock(): void
+    {
+        $product = $this->createProduct(stockQuantity: 10);
+        $order = $this->createOrderWithItem($product, quantity: 2, status: 'pending');
+        $orderService = app(OrderService::class);
+
+        $orderService->updateOrderStatus($order->id, 'shipped');
+        $orderService->updateOrderStatus($order->id, 'refused');
+
+        $this->assertSame(10, $product->fresh()->stock_quantity);
+        $this->assertDatabaseMissing('stock_movements', [
+            'order_id' => $order->id,
+            'type' => 'out',
+        ]);
+    }
+
+    public function test_order_update_endpoint_deducts_stock_when_status_changes_to_delivered(): void
     {
         $admin = $this->createAdmin();
         $product = $this->createProduct(stockQuantity: 10);
-        $order = $this->createOrderWithItem($product, quantity: 2, status: 'pending');
+        $order = $this->createOrderWithItem($product, quantity: 2, status: 'shipped');
         $client = $order->client;
-        $orderService = app(OrderService::class);
-
-        $orderService->updateOrderStatus($order->id, 'picked_up');
 
         Sanctum::actingAs($admin);
 
@@ -78,7 +92,7 @@ class OrderStockStatusTest extends TestCase
             'client_id' => $client->id,
             'client_name' => $client->name,
             'client_phone' => $client->phone,
-            'status' => 'returned',
+            'status' => 'delivered',
             'source' => 'manual',
             'items' => [
                 [
@@ -93,15 +107,14 @@ class OrderStockStatusTest extends TestCase
         ]);
 
         $response->assertOk();
-        $response->assertJsonPath('status', 'returned');
-        $this->assertSame(10, $product->fresh()->stock_quantity);
-        $this->assertSame(
-            1,
-            StockMovement::query()
-                ->where('order_id', $order->id)
-                ->where('type', 'in')
-                ->count()
-        );
+        $response->assertJsonPath('status', 'delivered');
+        $this->assertSame(8, $product->fresh()->stock_quantity);
+        $this->assertDatabaseHas('stock_movements', [
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'type' => 'out',
+            'quantity' => 2,
+        ]);
     }
 
     private function createAdmin(): User

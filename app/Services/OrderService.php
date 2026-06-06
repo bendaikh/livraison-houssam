@@ -241,9 +241,9 @@ class OrderService
                 }
             }
 
-            // Deduct stock when order moves to picked up (first time only)
+            // Deduct stock when order is delivered (first time only)
             $hasStockDeduction = StockMovement::where('order_id', $orderId)->where('type', 'out')->exists();
-            if ($status === 'picked_up' && !$hasStockDeduction) {
+            if ($status === 'delivered' && !$hasStockDeduction) {
                 try {
                     $this->stockService->deductStockForOrder($orderId);
                 } catch (\Exception $e) {
@@ -255,15 +255,19 @@ class OrderService
                 }
             }
 
-            $restoreStatuses = ['cancelled', 'refused', 'returned', 'no_response'];
             $hasStockRestoration = StockMovement::where('order_id', $orderId)->where('type', 'in')->exists();
 
-            // Restore stock when a picked-up order ends in a return/failure status.
-            if (in_array($status, $restoreStatuses, true) && $oldStatus !== $status && $hasStockDeduction && !$hasStockRestoration) {
+            // Restore stock when a delivered order is moved to refused or returned.
+            if (
+                in_array($status, ['refused', 'returned'], true)
+                && $oldStatus !== $status
+                && $hasStockDeduction
+                && !$hasStockRestoration
+            ) {
                 try {
                     $this->stockService->restoreStockForOrder(
                         $orderId,
-                        "Stock restored after order status changed to {$status} for order #{$order->order_number}"
+                        "Stock restored after delivered order #{$order->order_number} was changed to {$status}"
                     );
                 } catch (\Exception $e) {
                     \Log::error('Failed to restore stock for order: ' . $e->getMessage(), [

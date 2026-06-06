@@ -11,6 +11,7 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\ApiIntegrationController;
+use App\Http\Controllers\GoogleOAuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
@@ -26,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
+Route::get('/google/oauth/callback', [GoogleOAuthController::class, 'callback']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
@@ -156,6 +158,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/api-integrations/{apiIntegration}/track-shipment', [ApiIntegrationController::class, 'trackShipment']);
     Route::get('/api-integrations/{apiIntegration}/cities', [ApiIntegrationController::class, 'getCities']);
     Route::get('/api-integrations/{apiIntegration}/statuses', [ApiIntegrationController::class, 'getStatuses']);
+    Route::get('/api-integrations/{apiIntegration}/google/oauth/url', [GoogleOAuthController::class, 'authorizationUrl']);
+    Route::get('/api-integrations/{apiIntegration}/google/spreadsheets', [GoogleOAuthController::class, 'spreadsheets']);
+    Route::post('/api-integrations/{apiIntegration}/google/disconnect', [GoogleOAuthController::class, 'disconnect']);
     Route::get('/api-integrations/{apiIntegration}/google-sheet/tabs', [ApiIntegrationController::class, 'listGoogleSheetTabs']);
     Route::post('/api-integrations/{apiIntegration}/google-sheet/preview', [ApiIntegrationController::class, 'previewGoogleSheet']);
     Route::post('/api-integrations/custom-api/generate-key', [ApiIntegrationController::class, 'generateCustomApiKey']);

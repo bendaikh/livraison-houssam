@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 class GoogleSheetService
 {
     private string $apiKey = '';
+    private string $accessToken = '';
     private string $sheetId = '';
     private string $range = 'Orders!A1:Z1000';
     private int $headerRow = 1;
@@ -15,6 +16,12 @@ class GoogleSheetService
     public function setApiKey(string $apiKey): self
     {
         $this->apiKey = trim($apiKey);
+        return $this;
+    }
+
+    public function setAccessToken(string $accessToken): self
+    {
+        $this->accessToken = trim($accessToken);
         return $this;
     }
 
@@ -66,9 +73,8 @@ class GoogleSheetService
         $sheetId = $this->extractSheetId($sheetId);
 
         $url = sprintf('https://sheets.googleapis.com/v4/spreadsheets/%s', $sheetId);
-        $response = Http::get($url, [
-            'key' => $this->apiKey,
-            'fields' => 'sheets.properties.title'
+        $response = $this->authorizedRequest('get', $url, [
+            'fields' => 'sheets.properties.title',
         ]);
 
         if (!$response->successful()) {
@@ -117,7 +123,7 @@ class GoogleSheetService
 
         $url = sprintf('https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s', $this->sheetId, $range);
 
-        $response = Http::get($url, ['key' => $this->apiKey]);
+        $response = $this->authorizedRequest('get', $url);
 
         if (!$response->successful()) {
             throw new \Exception('Failed to fetch Google Sheet values: HTTP ' . $response->status() . ' ' . $response->body());
@@ -178,8 +184,17 @@ class GoogleSheetService
 
     private function validateApiKey(): void
     {
-        if (empty($this->apiKey)) {
-            throw new \Exception('Google Sheets API key is missing.');
+        if (empty($this->accessToken) && empty($this->apiKey)) {
+            throw new \Exception('Google Sheets credentials are missing. Connect with Google or provide an API key.');
         }
+    }
+
+    private function authorizedRequest(string $method, string $url, array $query = [])
+    {
+        if (!empty($this->accessToken)) {
+            return Http::withToken($this->accessToken)->{$method}($url, $query);
+        }
+
+        return Http::{$method}($url, array_merge(['key' => $this->apiKey], $query));
     }
 }

@@ -9,7 +9,7 @@ import api from '../utils/api';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle, TrendingUp, Ban, Truck, UserRoundCheck, Globe
+    Search, Moon, Sun, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle, TrendingUp, Ban, Truck, UserRoundCheck, Globe, RefreshCw
 } from 'lucide-react';
 
 const getInitialDarkMode = () => {
@@ -107,7 +107,9 @@ export default function MainLayout() {
                 { path: appPath('/orders/confirmed'), icon: CheckCircle, label: t('admin.menu.confirmed'), description: t('admin.menu.confirmedDesc') },
                 { path: appPath('/orders/shipped'), icon: Package, label: t('admin.menu.shipped'), description: t('admin.menu.shippedDesc') },
                 { path: appPath('/orders/delivered'), icon: CheckCircle, label: t('admin.menu.delivered'), description: t('admin.menu.deliveredDesc') },
-                { path: appPath('/orders/cancelled'), icon: X, label: t('admin.menu.cancelled'), description: t('admin.menu.cancelledDesc') }
+                { path: appPath('/orders/cancelled'), icon: X, label: t('admin.menu.cancelled'), description: t('admin.menu.cancelledDesc') },
+                { path: appPath('/orders/refused'), icon: X, label: t('admin.menu.refused'), description: t('admin.menu.refusedDesc') },
+                { path: appPath('/orders/returned'), icon: RefreshCw, label: t('admin.menu.returned'), description: t('admin.menu.returnedDesc') }
             ]
         },
         { path: appPath('/vendors'), icon: Store, label: t('admin.menu.sellers'), description: t('admin.menu.sellersDesc'), adminOnly: true, hiddenForConfirmationAgent: true, hiddenForDeliveryPerson: true },

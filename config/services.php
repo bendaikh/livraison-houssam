@@ -39,6 +39,15 @@ return [
         'api_key' => env('GOOGLE_SHEETS_API_KEY'),
     ],
 
+    'google' => [
+        'oauth' => [
+            'client_id' => env('GOOGLE_CLIENT_ID'),
+            'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+            'redirect_uri' => env('GOOGLE_REDIRECT_URI'),
+            'frontend_redirect' => env('GOOGLE_OAUTH_FRONTEND_URL', env('APP_URL')),
+        ],
+    ],
+
     'bmdelivery' => [
         'base_url' => env('BMDELIVERY_BASE_URL', 'https://bmdelivery.ma/api'),
         'timeout' => env('BMDELIVERY_TIMEOUT', 20),

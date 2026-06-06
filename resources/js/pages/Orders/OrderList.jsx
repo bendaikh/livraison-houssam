@@ -271,6 +271,22 @@ export default function OrderList({ status = '' }) {
         return status.replace(/_/g, ' ');
     };
 
+    const hasValidTrackingCode = (order) => Boolean(
+        order?.delivery_tracking_code && order.delivery_tracking_code !== 'ko'
+    );
+
+    const getTrackingCodeLabel = (order) => (
+        hasValidTrackingCode(order)
+            ? order.delivery_tracking_code
+            : t('admin.orderList.trackingNone')
+    );
+
+    const getDeliveryStatusLabel = (order) => (
+        order?.delivery_status
+            ? formatDeliveryStatus(order.delivery_status)
+            : t('admin.orderList.deliveryStatusNone')
+    );
+
     const formatStatusLabel = (status) => {
         const labels = {
             no_response: 'no response',
@@ -349,7 +365,7 @@ export default function OrderList({ status = '' }) {
     };
 
     const isAdminStatusLocked = (order) => {
-        if (!isAdminUser) {
+        if (!isAdminUser && !isConfirmationAgentUser) {
             return false;
         }
 
@@ -904,6 +920,9 @@ export default function OrderList({ status = '' }) {
                                     formatCurrency={formatCurrency}
                                     formatDate={formatDate}
                                     formatStatusLabel={formatStatusLabel}
+                                    formatDeliveryStatus={formatDeliveryStatus}
+                                    getTrackingCodeLabel={getTrackingCodeLabel}
+                                    hasValidTrackingCode={hasValidTrackingCode}
                                     actionButtons={deliveryPrimaryActions}
                                     isDarkMode={isDarkMode}
                                     onAction={(actionKey) => {
@@ -1199,7 +1218,7 @@ export default function OrderList({ status = '' }) {
                                 : true;
                         const isResponsibleConfirmationAgent = Boolean(order.confirmation_agent_id)
                             && String(order.confirmation_agent_id) === String(user?.id);
-                        const confirmationStatusLocked = isConfirmationAgentUser && isConfirmationAgentStatusLocked(order);
+                        const confirmationStatusLocked = false;
                         const sellerStatusLocked = isSellerStatusLocked(order);
                         const deliveryWorkflowIsLocked = isDeliveryPersonUser && isDeliveryWorkflowLocked(order);
                         const adminStatusLocked = isAdminStatusLocked(order);
@@ -1253,6 +1272,12 @@ export default function OrderList({ status = '' }) {
                                 <div className={`flex items-center justify-between gap-2 px-3 py-2 border-b ${isBlacklisted ? 'bg-rose-100/70 border-rose-200' : 'bg-gray-50 border-gray-100'}`}>
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                         <span className="text-xs font-bold text-blue-700 truncate">{order.order_number}</span>
+                                        <span
+                                            className={`hidden sm:inline font-mono text-[9px] font-semibold truncate max-w-[100px] ${hasValidTrackingCode(order) ? 'text-indigo-700' : 'text-gray-400'}`}
+                                            title={getTrackingCodeLabel(order)}
+                                        >
+                                            {getTrackingCodeLabel(order)}
+                                        </span>
                                         <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded flex-shrink-0 ${getSourceColor(order.source)}`}>
                                             {getOrderSourceBadge(order.source)}
                                         </span>
@@ -1292,6 +1317,21 @@ export default function OrderList({ status = '' }) {
                                             <p className="font-bold text-gray-900 text-base">{formatCurrency(orderAmount)}</p>
                                             <p className={`text-xs font-semibold ${orderBenefit > 0 ? 'text-green-600' : orderBenefit < 0 ? 'text-red-600' : 'text-gray-500'}`}>
                                                 {orderBenefit > 0 ? '+' : ''}{formatCurrency(orderBenefit)}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-2 py-1.5">
+                                            <p className="text-[9px] font-bold uppercase tracking-wider text-indigo-500">{t('admin.orderList.tracking')}</p>
+                                            <p className={`font-mono text-xs font-semibold break-all ${hasValidTrackingCode(order) ? 'text-indigo-900' : 'text-indigo-400'}`}>
+                                                {getTrackingCodeLabel(order)}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-lg border border-purple-100 bg-purple-50 px-2 py-1.5">
+                                            <p className="text-[9px] font-bold uppercase tracking-wider text-purple-500">{t('admin.orderList.deliveryStatus')}</p>
+                                            <p className={`text-xs font-semibold capitalize ${order.delivery_status ? 'text-purple-900' : 'text-purple-600'}`}>
+                                                {getDeliveryStatusLabel(order)}
                                             </p>
                                         </div>
                                     </div>
@@ -1339,7 +1379,7 @@ export default function OrderList({ status = '' }) {
                                     </div>
 
                                     {/* Delivery Assignment */}
-                                    <div>
+                                    <div className="space-y-2">
                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('admin.orderList.delivery')}</p>
                                         {isConfirmationAgentUser ? (
                                             assignmentScope === 'available' && !order.confirmation_agent_id ? (
@@ -1645,12 +1685,16 @@ function DeliveryPersonOrderCard({
     formatCurrency,
     formatDate,
     formatStatusLabel,
+    formatDeliveryStatus,
+    getTrackingCodeLabel,
+    hasValidTrackingCode,
     actionButtons,
     isDarkMode,
     onAction,
     isLocked,
     lockMessage,
 }) {
+    const { t } = useTranslation();
     const items = (order.items || []).filter((item) => !item.is_upsell);
     const itemSummary = items.length === 0
         ? 'No items'
@@ -1668,12 +1712,28 @@ function DeliveryPersonOrderCard({
                             <span>{order.city || order.client?.city || '-'}</span>
                         </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right space-y-2">
                         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${isDarkMode ? 'bg-slate-800 text-slate-200 border border-slate-700' : 'bg-slate-100 text-slate-700'}`}>
                             {formatStatusLabel(order.status)}
                         </span>
+                        <div>
+                            <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-indigo-300' : 'text-indigo-500'}`}>
+                                {t('admin.orderList.tracking')}
+                            </p>
+                            <p className={`mt-1 font-mono text-xs font-semibold break-all ${hasValidTrackingCode(order) ? (isDarkMode ? 'text-indigo-100' : 'text-indigo-900') : (isDarkMode ? 'text-slate-500' : 'text-slate-400')}`}>
+                                {getTrackingCodeLabel(order)}
+                            </p>
+                        </div>
+                        <div>
+                            <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-purple-300' : 'text-purple-500'}`}>
+                                {t('admin.orderList.deliveryStatus')}
+                            </p>
+                            <span className={`inline-flex mt-1 px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${isDarkMode ? 'bg-purple-950/60 text-purple-200 border border-purple-900' : 'bg-purple-100 text-purple-800'}`}>
+                                {order.delivery_status ? formatDeliveryStatus(order.delivery_status) : t('admin.orderList.deliveryStatusNone')}
+                            </span>
+                        </div>
                         {order.callback_date && (
-                            <p className={`mt-2 text-xs ${isDarkMode ? 'text-amber-300' : 'text-amber-700'}`}>Callback {formatDate(order.callback_date)}</p>
+                            <p className={`text-xs ${isDarkMode ? 'text-amber-300' : 'text-amber-700'}`}>Callback {formatDate(order.callback_date)}</p>
                         )}
                     </div>
                 </div>

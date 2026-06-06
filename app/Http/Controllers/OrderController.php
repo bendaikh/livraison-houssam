@@ -20,6 +20,16 @@ use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
+    private const DEDICATED_ORDER_MENU_STATUSES = [
+        'pending',
+        'confirmed',
+        'shipped',
+        'delivered',
+        'cancelled',
+        'refused',
+        'returned',
+    ];
+
     private const ADMIN_DELIVERY_COMPANY_LOCKED_STATUSES = [
         'picked_up',
         'ready_for_shipping',
@@ -86,6 +96,8 @@ class OrderController extends Controller
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
+        } elseif ($request->get('list_scope') !== 'all') {
+            $query->whereNotIn('status', self::DEDICATED_ORDER_MENU_STATUSES);
         }
 
         if ($request->has('source')) {
@@ -322,12 +334,6 @@ class OrderController extends Controller
         $this->normalizeLegacyItemProductKeys($request);
 
         $this->authorizeOrderAccess($request, $order);
-
-        if ($request->user()?->isConfirmationAgent()) {
-            if (!$this->canConfirmationAgentEditBaseItems($order, $request->user())) {
-                abort(403, 'Confirmation agents must use the confirmation workflow endpoint.');
-            }
-        }
 
         if ($request->user()?->isDeliveryPerson()) {
             abort(403, 'Delivery people cannot edit orders directly.');
@@ -1118,19 +1124,7 @@ class OrderController extends Controller
 
     private function ensureConfirmationAgentCanManuallyUpdateStatus(Request $request, Order $order, ?string $requestedStatus = null): void
     {
-        $user = $request->user();
-
-        if (!$user?->isConfirmationAgent()) {
-            return;
-        }
-
-        if ($requestedStatus !== null && $requestedStatus === $order->status) {
-            return;
-        }
-
-        if ($this->isConfirmationAgentStatusLocked($order, $requestedStatus)) {
-            abort(403, $this->getConfirmationAgentStatusLockMessage($order));
-        }
+        // Confirmation agents use the same status update rules as administrators.
     }
 
     private function ensureSellerCanManuallyUpdateStatus(Request $request, Order $order, ?string $requestedStatus = null): void
@@ -1148,7 +1142,7 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        if (!$user?->isAdmin()) {
+        if (!$user?->isAdmin() && !$user?->isConfirmationAgent()) {
             return;
         }
 
@@ -1353,25 +1347,7 @@ class OrderController extends Controller
 
     private function canConfirmationAgentEditBaseItems(Order $order, ?User $user): bool
     {
-        if (!$user?->isConfirmationAgent()) {
-            return false;
-        }
-
-        $createdByUserId = (int) ($order->created_by_user_id ?? 0);
-
-        if ($createdByUserId <= 0 && $order->source === 'manual') {
-            $createdByUserId = (int) ($order->history()->oldest('id')->value('user_id') ?? 0);
-        }
-
-        if ($createdByUserId !== (int) $user->id) {
-            return false;
-        }
-
-        if (!empty($order->returned_to_confirmation_at)) {
-            return true;
-        }
-
-        return empty($order->confirmed_at) && $order->status === 'pending';
+        return $user?->isConfirmationAgent() ?? false;
     }
 
     private function extractAssignmentPayload(Request $request, array $validated): array

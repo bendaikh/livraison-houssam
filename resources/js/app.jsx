@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from './utils/roles';
 import { appPath } from './constants/appPaths';
+import ScrollToTop from './components/ScrollToTop';
 
 // Layout
 import MainLayout from './layouts/MainLayout';
@@ -146,6 +147,8 @@ function App() {
                         <Route path="orders/shipped" element={<OrderList status="shipped" />} />
                         <Route path="orders/delivered" element={<OrderList status="delivered" />} />
                         <Route path="orders/cancelled" element={<OrderList status="cancelled" />} />
+                        <Route path="orders/refused" element={<OrderList status="refused" />} />
+                        <Route path="orders/returned" element={<OrderList status="returned" />} />
                         <Route path="orders/create" element={<OrderForm />} />
                         <Route path="orders/:id" element={<OrderDetail />} />
                         <Route path="orders/:id/edit" element={<OrderForm />} />
@@ -206,6 +209,7 @@ if (document.getElementById('app')) {
     root.render(
         <React.StrictMode>
             <BrowserRouter>
+                <ScrollToTop />
                 <App />
             </BrowserRouter>
         </React.StrictMode>
