@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class ConfirmationAgentBilling extends Model
 {
     protected $fillable = [
+        'invoice_number',
         'user_id',
         'period_start',
         'period_end',
@@ -16,6 +17,7 @@ class ConfirmationAgentBilling extends Model
         'commission_per_order',
         'total_amount',
         'generated_at',
+        'pdf_path',
         'paid_at',
         'paid_by_id',
         'notes',

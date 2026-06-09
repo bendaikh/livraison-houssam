@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class DeliveryPersonBilling extends Model
 {
     protected $fillable = [
+        'invoice_number',
         'delivery_person_id',
         'period_start',
         'period_end',
@@ -17,6 +18,7 @@ class DeliveryPersonBilling extends Model
         'total_commission',
         'total_due_to_admin',
         'generated_at',
+        'pdf_path',
         'paid_at',
         'paid_by_id',
         'notes',

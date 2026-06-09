@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Support\Utf8Text;
 use App\Models\ConfirmationAgentBilling;
 use App\Models\DeliveryPersonBilling;
 use App\Models\Order;
 use App\Models\SellerBilling;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\Vendor;
 use Carbon\Carbon;
@@ -13,9 +15,16 @@ use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class BillingService
 {
+    public function __construct(
+        private ?InvoicePdfService $invoicePdfService = null
+    ) {
+        $this->invoicePdfService ??= app(InvoicePdfService::class);
+    }
+
     public const ROLE_SELLER = 'seller';
     public const ROLE_CONFIRMATION = 'confirmation';
     public const ROLE_DELIVERY = 'delivery';
@@ -72,8 +81,29 @@ class BillingService
         ];
     }
 
+    public function preview(array $filters = []): array
+    {
+        [$role, $entityId, $periodStart, $periodEnd] = $this->resolveCustomPeriodFilters($filters);
+
+        $orders = $this->getEligibleOrdersForRole($role, $entityId, $periodStart, $periodEnd);
+
+        return [
+            'role' => $role,
+            'entity_id' => $entityId,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
+            'orders_count' => $orders->count(),
+            'orders' => $orders->map(fn (Order $order) => $this->mapPreviewOrder($order, $role))->values(),
+            'summary' => $this->buildPreviewSummary($orders, $role),
+        ];
+    }
+
     public function generate(array $filters = []): array
     {
+        if (!empty($filters['period_start']) && !empty($filters['period_end'])) {
+            return $this->generateCustomPeriodInvoice($filters);
+        }
+
         $month = $this->resolveMonth($filters['month'] ?? null);
         $role = $filters['role'] ?? null;
         $entityId = isset($filters['entity_id']) ? (int) $filters['entity_id'] : null;
@@ -91,6 +121,20 @@ class BillingService
         }
 
         return $this->getAdminDashboard($filters);
+    }
+
+    public function downloadPdf(string $role, int $billingId): array
+    {
+        $billing = $this->findBillingRecord($role, $billingId);
+        $pdfPath = $this->invoicePdfService->generateForBilling($role, $billingId);
+        $billing->update(['pdf_path' => $pdfPath]);
+        $billing = $billing->fresh();
+
+        return [
+            'invoice_number' => $billing->invoice_number,
+            'pdf_path' => $billing->pdf_path,
+            'pdf_url' => Storage::disk('public')->url($billing->pdf_path),
+        ];
     }
 
     public function markPaid(string $role, int $billingId, User $actor, ?string $notes = null): array
@@ -335,11 +379,13 @@ class BillingService
         $deliveredOrders = Order::where('vendor_id', $vendor->id)
             ->where('status', 'delivered')
             ->whereBetween('delivered_at', [$periodStart, $periodEnd])
-            ->whereDoesntHave('sellerBillings', function ($query) use ($billing) {
-                $query->whereNotNull('seller_billings.paid_at')
-                    ->where('seller_billings.id', '!=', $billing->id);
+            ->where(function ($query) use ($billing) {
+                $query->where('seller_invoice_status', Order::INVOICE_NOT_INVOICED)
+                    ->orWhereHas('sellerBillings', function ($billingQuery) use ($billing) {
+                        $billingQuery->where('seller_billings.id', $billing->id);
+                    });
             })
-            ->get(['id', 'total', 'commission_amount']);
+            ->get(['id', 'total', 'commission_amount', 'shipping_cost', 'seller_net_profit']);
 
         $grossSales = (float) $deliveredOrders->sum(fn (Order $order) => (float) $order->total);
         $commissionAmount = (float) $deliveredOrders->sum(fn (Order $order) => (float) $order->commission_amount);
@@ -359,6 +405,10 @@ class BillingService
         $billing->orders()->sync($deliveredOrders->pluck('id'));
         $billing->update($payload);
 
+        if ($touchGeneratedAt) {
+            $this->finalizeInvoiceGeneration(self::ROLE_SELLER, $billing, $deliveredOrders);
+        }
+
         return $billing->fresh(['vendor', 'paidBy']);
     }
 
@@ -367,14 +417,18 @@ class BillingService
         $periodStart = Carbon::parse($billing->period_start)->startOfDay();
         $periodEnd = Carbon::parse($billing->period_end)->endOfDay();
 
-        $deliveredOrderIds = Order::where('confirmation_agent_id', $agent->id)
+        $deliveredOrders = Order::where('confirmation_agent_id', $agent->id)
             ->where('status', 'delivered')
             ->whereBetween('delivered_at', [$periodStart, $periodEnd])
-            ->whereDoesntHave('confirmationBillings', function ($query) use ($billing) {
-                $query->whereNotNull('confirmation_agent_billings.paid_at')
-                    ->where('confirmation_agent_billings.id', '!=', $billing->id);
+            ->where(function ($query) use ($billing) {
+                $query->where('confirmation_invoice_status', Order::INVOICE_NOT_INVOICED)
+                    ->orWhereHas('confirmationBillings', function ($billingQuery) use ($billing) {
+                        $billingQuery->where('confirmation_agent_billings.id', $billing->id);
+                    });
             })
-            ->pluck('id');
+            ->get(['id']);
+
+        $deliveredOrderIds = $deliveredOrders->pluck('id');
 
         $commissionPerOrder = (float) $agent->effective_commission_per_order;
         $payload = [
@@ -389,6 +443,10 @@ class BillingService
 
         $billing->orders()->sync($deliveredOrderIds);
         $billing->update($payload);
+
+        if ($touchGeneratedAt) {
+            $this->finalizeInvoiceGeneration(self::ROLE_CONFIRMATION, $billing, $deliveredOrders);
+        }
 
         return $billing->fresh(['user.role', 'paidBy']);
     }
@@ -491,6 +549,8 @@ class BillingService
             'paid_at' => $billing->paid_at?->toIso8601String(),
             'paid_by_name' => $billing->paidBy?->name,
             'notes' => $billing->notes,
+            'invoice_number' => $billing->invoice_number,
+            'pdf_url' => $billing->pdf_path ? Storage::disk('public')->url($billing->pdf_path) : null,
             'calculation_label' => 'Sum of Seller Net Profits (Prix de vente - Prix produit - Livraison - Fullfilment)',
         ];
     }
@@ -520,6 +580,8 @@ class BillingService
             'paid_at' => $billing->paid_at?->toIso8601String(),
             'paid_by_name' => $billing->paidBy?->name,
             'notes' => $billing->notes,
+            'invoice_number' => $billing->invoice_number,
+            'pdf_url' => $billing->pdf_path ? Storage::disk('public')->url($billing->pdf_path) : null,
             'calculation_label' => sprintf('Monthly commission at %.2f per delivered order', (float) $billing->commission_per_order),
         ];
     }
@@ -549,6 +611,8 @@ class BillingService
             'paid_at' => $billing->paid_at?->toIso8601String(),
             'paid_by_name' => $billing->paidBy?->name,
             'notes' => $billing->notes,
+            'invoice_number' => $billing->invoice_number,
+            'pdf_url' => $billing->pdf_path ? Storage::disk('public')->url($billing->pdf_path) : null,
             'calculation_label' => 'Collected cash minus delivery commission',
         ];
     }
@@ -562,11 +626,13 @@ class BillingService
         return Order::where('delivery_person_id', $deliveryPerson->id)
             ->where('status', 'delivered')
             ->whereBetween('delivered_at', [$periodStart, $periodEnd])
-            ->whereDoesntHave('deliveryPersonBillings', function ($query) use ($currentBillingId) {
-                $query->whereNotNull('delivery_person_billings.paid_at');
+            ->where(function ($query) use ($currentBillingId) {
+                $query->where('delivery_invoice_status', Order::INVOICE_NOT_INVOICED);
 
                 if ($currentBillingId) {
-                    $query->where('delivery_person_billings.id', '!=', $currentBillingId);
+                    $query->orWhereHas('deliveryPersonBillings', function ($billingQuery) use ($currentBillingId) {
+                        $billingQuery->where('delivery_person_billings.id', $currentBillingId);
+                    });
                 }
             })
             ->get(['id', 'collected_amount', 'delivery_person_commission', 'amount_due_to_admin']);
@@ -590,6 +656,10 @@ class BillingService
 
         $billing->orders()->sync($deliveredOrders->pluck('id'));
         $billing->update($payload);
+
+        if ($touchGeneratedAt) {
+            $this->finalizeInvoiceGeneration(self::ROLE_DELIVERY, $billing, $deliveredOrders);
+        }
 
         return $billing->fresh(['deliveryPerson.role', 'paidBy']);
     }
@@ -705,5 +775,246 @@ class BillingService
     {
         return Schema::hasTable('seller_billings')
             && Schema::hasTable('seller_billing_order');
+    }
+
+    private function generateCustomPeriodInvoice(array $filters): array
+    {
+        [$role, $entityId, $periodStart, $periodEnd] = $this->resolveCustomPeriodFilters($filters);
+
+        DB::transaction(function () use ($role, $entityId, $periodStart, $periodEnd) {
+            match ($role) {
+                self::ROLE_SELLER => $this->generateCustomSellerInvoice($entityId, $periodStart, $periodEnd),
+                self::ROLE_CONFIRMATION => $this->generateCustomConfirmationInvoice($entityId, $periodStart, $periodEnd),
+                self::ROLE_DELIVERY => $this->generateCustomDeliveryInvoice($entityId, $periodStart, $periodEnd),
+                default => abort(422, 'Unsupported billing role.'),
+            };
+        });
+
+        return $this->getAdminDashboard($filters);
+    }
+
+    private function generateCustomSellerInvoice(int $vendorId, Carbon $periodStart, Carbon $periodEnd): void
+    {
+        abort_unless($this->sellerBillingTablesExist(), 503, 'Seller billing tables are not available.');
+
+        $vendor = Vendor::query()->where('is_active', true)->findOrFail($vendorId);
+        $billing = SellerBilling::firstOrCreate(
+            [
+                'vendor_id' => $vendor->id,
+                'period_start' => $periodStart->toDateString(),
+                'period_end' => $periodEnd->toDateString(),
+            ],
+            [
+                'billing_frequency' => 'custom',
+            ]
+        );
+
+        abort_if($billing->paid_at, 422, 'This invoice period has already been paid.');
+
+        $this->recalculateSellerBilling($billing, $vendor, true);
+    }
+
+    private function generateCustomConfirmationInvoice(int $userId, Carbon $periodStart, Carbon $periodEnd): void
+    {
+        $agent = User::with('role')->findOrFail($userId);
+        abort_unless($agent->isConfirmationAgent(), 422, 'Selected user is not a confirmation agent.');
+
+        $billing = ConfirmationAgentBilling::firstOrCreate([
+            'user_id' => $agent->id,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
+        ]);
+
+        abort_if($billing->paid_at, 422, 'This invoice period has already been paid.');
+
+        $this->recalculateConfirmationBilling($billing, $agent, true);
+    }
+
+    private function generateCustomDeliveryInvoice(int $userId, Carbon $periodStart, Carbon $periodEnd): void
+    {
+        abort_unless($this->deliveryBillingTablesExist(), 503, 'Delivery billing tables are not available.');
+
+        $person = User::with('role')->findOrFail($userId);
+        abort_unless($person->isDeliveryPerson(), 422, 'Selected user is not a delivery person.');
+
+        $deliveredOrders = $this->getEligibleOrdersForRole(self::ROLE_DELIVERY, $userId, $periodStart, $periodEnd);
+        abort_if($deliveredOrders->isEmpty(), 422, 'No eligible delivered orders found for this period.');
+
+        $billing = DeliveryPersonBilling::firstOrCreate([
+            'delivery_person_id' => $person->id,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
+        ]);
+
+        abort_if($billing->paid_at, 422, 'This invoice period has already been paid.');
+
+        $this->syncDeliveryBillingTotals($billing, $deliveredOrders, true);
+    }
+
+    private function resolveCustomPeriodFilters(array $filters): array
+    {
+        $role = $filters['role'] ?? null;
+        abort_unless(in_array($role, [self::ROLE_SELLER, self::ROLE_CONFIRMATION, self::ROLE_DELIVERY], true), 422, 'A billing role is required.');
+
+        $entityId = (int) ($filters['entity_id'] ?? 0);
+        abort_unless($entityId > 0, 422, 'A user or seller must be selected.');
+
+        $periodStart = Carbon::parse($filters['period_start'])->startOfDay();
+        $periodEnd = Carbon::parse($filters['period_end'])->endOfDay();
+        abort_if($periodEnd->lt($periodStart), 422, 'The end date must be after the start date.');
+
+        return [$role, $entityId, $periodStart, $periodEnd];
+    }
+
+    private function getEligibleOrdersForRole(string $role, int $entityId, Carbon $periodStart, Carbon $periodEnd): EloquentCollection
+    {
+        $query = Order::query()
+            ->with(['client', 'items.product', 'confirmationAgent'])
+            ->where('status', 'delivered')
+            ->whereBetween('delivered_at', [$periodStart, $periodEnd]);
+
+        return match ($role) {
+            self::ROLE_SELLER => $query
+                ->where('vendor_id', $entityId)
+                ->where('seller_invoice_status', Order::INVOICE_NOT_INVOICED)
+                ->get(),
+            self::ROLE_CONFIRMATION => $query
+                ->where('confirmation_agent_id', $entityId)
+                ->where('confirmation_invoice_status', Order::INVOICE_NOT_INVOICED)
+                ->get(),
+            self::ROLE_DELIVERY => $query
+                ->where('delivery_person_id', $entityId)
+                ->where('delivery_invoice_status', Order::INVOICE_NOT_INVOICED)
+                ->get(),
+            default => new EloquentCollection(),
+        };
+    }
+
+    private function mapPreviewOrder(Order $order, string $role): array
+    {
+        $commissionPerOrder = match ($role) {
+            self::ROLE_CONFIRMATION => (float) ($order->confirmationAgent?->effective_commission_per_order ?? 0),
+            self::ROLE_DELIVERY => (float) ($order->delivery_person_commission ?? 0),
+            default => (float) ($order->commission_amount ?? 0),
+        };
+
+        return [
+            'id' => $order->id,
+            'order_number' => $order->order_number,
+            'client_name' => Utf8Text::clean($order->client?->name ?? 'N/A'),
+            'city' => Utf8Text::clean($order->city ?? $order->delivery_city ?? 'N/A'),
+            'products' => $order->items->map(fn ($item) => [
+                'name' => Utf8Text::clean($item->product_name ?? 'Product'),
+                'quantity' => (int) ($item->quantity ?? 1),
+                'unit_price' => (float) ($item->price ?? 0),
+                'total_amount' => (float) ($item->subtotal ?? 0),
+            ])->values(),
+            'order_amount' => (float) ($order->total ?? 0),
+            'commission' => $commissionPerOrder,
+            'seller_invoice_status' => $order->seller_invoice_status,
+            'confirmation_invoice_status' => $order->confirmation_invoice_status,
+            'delivery_invoice_status' => $order->delivery_invoice_status,
+        ];
+    }
+
+    private function buildPreviewSummary(EloquentCollection $orders, string $role): array
+    {
+        if ($role === self::ROLE_SELLER) {
+            $fulfillmentCost = (float) Setting::get('order_fulfillment_cost', 10);
+            $totalSales = 0.0;
+            $totalProductCost = 0.0;
+            $totalDeliveryCost = 0.0;
+            $totalCodFees = 0.0;
+
+            foreach ($orders as $order) {
+                $orderTotal = (float) ($order->total ?? 0);
+                $commission = (float) ($order->commission_amount ?? 0);
+                $productCost = (float) $order->items->sum(function ($item) {
+                    return (float) ($item->product?->getOrderCostAmount() ?? 0) * (float) ($item->quantity ?? 0);
+                });
+                $deliveryCost = (float) ($order->shipping_cost ?? 0) + $fulfillmentCost;
+                $platformCodFee = max(0.0, $commission - $productCost - $deliveryCost);
+
+                $totalSales += $orderTotal;
+                $totalProductCost += $productCost;
+                $totalDeliveryCost += $deliveryCost;
+                $totalCodFees += $platformCodFee;
+            }
+
+            $totalDeductions = $totalProductCost + $totalDeliveryCost + $totalCodFees;
+            $finalAmount = max(0, $totalSales - $totalDeductions);
+
+            return [
+                'total_orders' => $orders->count(),
+                'total_sales' => $totalSales,
+                'total_product_cost' => $totalProductCost,
+                'total_delivery_cost' => $totalDeliveryCost,
+                'total_cod_fees' => $totalCodFees,
+                'total_earnings' => $finalAmount,
+                'total_fees' => $totalDeductions,
+                'final_amount' => $finalAmount,
+            ];
+        }
+
+        if ($role === self::ROLE_CONFIRMATION) {
+            $commissionPerOrder = $orders->isEmpty()
+                ? 0.0
+                : (float) ($orders->first()->confirmationAgent?->effective_commission_per_order ?? 0);
+
+            return [
+                'total_orders' => $orders->count(),
+                'total_sales' => (float) $orders->sum(fn (Order $order) => (float) ($order->total ?? 0)),
+                'total_earnings' => $orders->count() * $commissionPerOrder,
+                'total_fees' => 0.0,
+                'final_amount' => $orders->count() * $commissionPerOrder,
+            ];
+        }
+
+        return [
+            'total_orders' => $orders->count(),
+            'total_sales' => (float) $orders->sum(fn (Order $order) => (float) ($order->collected_amount ?? $order->total ?? 0)),
+            'total_earnings' => (float) $orders->sum(fn (Order $order) => (float) ($order->delivery_person_commission ?? 0)),
+            'total_fees' => (float) $orders->sum(fn (Order $order) => (float) ($order->delivery_person_commission ?? 0)),
+            'final_amount' => (float) $orders->sum(fn (Order $order) => (float) ($order->amount_due_to_admin ?? 0)),
+        ];
+    }
+
+    private function finalizeInvoiceGeneration(string $role, SellerBilling|ConfirmationAgentBilling|DeliveryPersonBilling $billing, EloquentCollection|Collection $orders): void
+    {
+        if (!$billing->invoice_number) {
+            $prefix = match ($role) {
+                self::ROLE_SELLER => 'SLR',
+                self::ROLE_CONFIRMATION => 'CNF',
+                self::ROLE_DELIVERY => 'DLV',
+                default => 'INV',
+            };
+            $billing->invoice_number = $this->invoicePdfService->generateInvoiceNumber($prefix);
+        }
+
+        $statusColumn = match ($role) {
+            self::ROLE_SELLER => 'seller_invoice_status',
+            self::ROLE_CONFIRMATION => 'confirmation_invoice_status',
+            self::ROLE_DELIVERY => 'delivery_invoice_status',
+            default => null,
+        };
+
+        if ($statusColumn && $orders->isNotEmpty()) {
+            Order::whereIn('id', $orders->pluck('id'))->update([$statusColumn => Order::INVOICE_INVOICED]);
+        }
+
+        $billing->save();
+
+        $pdfPath = $this->invoicePdfService->generateForBilling($role, $billing->id);
+        $billing->update(['pdf_path' => $pdfPath]);
+    }
+
+    private function findBillingRecord(string $role, int $billingId): SellerBilling|ConfirmationAgentBilling|DeliveryPersonBilling
+    {
+        return match ($role) {
+            self::ROLE_SELLER => SellerBilling::findOrFail($billingId),
+            self::ROLE_CONFIRMATION => ConfirmationAgentBilling::findOrFail($billingId),
+            self::ROLE_DELIVERY => DeliveryPersonBilling::findOrFail($billingId),
+            default => abort(422, 'Unsupported billing role.'),
+        };
     }
 }

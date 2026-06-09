@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { appPath } from '../../constants/appPaths';
-
 export default function BillingIndexPage() {
     const { t } = useTranslation();
     const { user, loading } = useAuth();

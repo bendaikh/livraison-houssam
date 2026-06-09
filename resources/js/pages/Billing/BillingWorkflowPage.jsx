@@ -19,6 +19,7 @@ import {
     Coins,
     Landmark,
     PackageCheck,
+    Download,
     RefreshCcw,
     Store,
     Truck,
@@ -305,6 +306,27 @@ export default function BillingWorkflowPage({ role }) {
         }
     };
 
+    const handleDownloadPdf = async (record) => {
+        try {
+            const response = await api.get(`/billing/${record.role}/${record.source_id}/pdf`, {
+                responseType: 'blob',
+            });
+
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${record.invoice_number || 'invoice'}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error downloading invoice PDF:', error);
+            alert('Failed to download invoice PDF.');
+        }
+    };
+
     const handleMarkPaid = async (record) => {
         try {
             setMarkingKey(record.key);
@@ -431,6 +453,7 @@ export default function BillingWorkflowPage({ role }) {
                 loading={loading}
                 markingKey={markingKey}
                 onMarkPaid={handleMarkPaid}
+                onDownloadPdf={handleDownloadPdf}
                 formatCurrency={formatCurrency}
                 canManage={isAdmin}
                 paid={false}
@@ -444,6 +467,7 @@ export default function BillingWorkflowPage({ role }) {
                 loading={loading}
                 markingKey={markingKey}
                 onMarkPaid={handleMarkPaid}
+                onDownloadPdf={handleDownloadPdf}
                 formatCurrency={formatCurrency}
                 canManage={isAdmin}
                 paid
@@ -452,7 +476,7 @@ export default function BillingWorkflowPage({ role }) {
     );
 }
 
-function WorkflowSection({ role, title, description, records, loading, markingKey, onMarkPaid, formatCurrency, canManage, paid }) {
+function WorkflowSection({ role, title, description, records, loading, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage, paid }) {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 bg-slate-50">
@@ -467,6 +491,7 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
                     paid={paid}
                     markingKey={markingKey}
                     onMarkPaid={onMarkPaid}
+                    onDownloadPdf={onDownloadPdf}
                     formatCurrency={formatCurrency}
                     canManage={canManage}
                 />
@@ -479,6 +504,7 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
                     paid={paid}
                     markingKey={markingKey}
                     onMarkPaid={onMarkPaid}
+                    onDownloadPdf={onDownloadPdf}
                     formatCurrency={formatCurrency}
                     canManage={canManage}
                 />
@@ -491,6 +517,7 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
                     paid={paid}
                     markingKey={markingKey}
                     onMarkPaid={onMarkPaid}
+                    onDownloadPdf={onDownloadPdf}
                     formatCurrency={formatCurrency}
                     canManage={canManage}
                 />
@@ -499,7 +526,7 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
     );
 }
 
-function DeliveryBillingTable({ records, loading, paid, markingKey, onMarkPaid, formatCurrency, canManage }) {
+function DeliveryBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage }) {
     return (
         <DataTable
             loading={loading}
@@ -516,11 +543,12 @@ function DeliveryBillingTable({ records, loading, paid, markingKey, onMarkPaid, 
             canManage={canManage}
             markingKey={markingKey}
             onMarkPaid={onMarkPaid}
+            onDownloadPdf={onDownloadPdf}
         />
     );
 }
 
-function ConfirmationBillingTable({ records, loading, paid, markingKey, onMarkPaid, formatCurrency, canManage }) {
+function ConfirmationBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage }) {
     return (
         <DataTable
             loading={loading}
@@ -537,11 +565,12 @@ function ConfirmationBillingTable({ records, loading, paid, markingKey, onMarkPa
             canManage={canManage}
             markingKey={markingKey}
             onMarkPaid={onMarkPaid}
+            onDownloadPdf={onDownloadPdf}
         />
     );
 }
 
-function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, formatCurrency, canManage }) {
+function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage }) {
     return (
         <DataTable
             loading={loading}
@@ -559,11 +588,12 @@ function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, fo
             canManage={canManage}
             markingKey={markingKey}
             onMarkPaid={onMarkPaid}
+            onDownloadPdf={onDownloadPdf}
         />
     );
 }
 
-function DataTable({ loading, records, emptyMessage, columns, paid, canManage, markingKey, onMarkPaid }) {
+function DataTable({ loading, records, emptyMessage, columns, paid, canManage, markingKey, onMarkPaid, onDownloadPdf }) {
     return (
         <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
@@ -596,21 +626,32 @@ function DataTable({ loading, records, emptyMessage, columns, paid, canManage, m
                                 </td>
                             ))}
                             <td className="px-5 py-4">
-                                {paid ? (
-                                    <span className="text-sm text-slate-600">
-                                        {record.paid_at ? new Date(record.paid_at).toLocaleString() : '-'}
-                                    </span>
-                                ) : canManage ? (
-                                    <button
-                                        onClick={() => onMarkPaid(record)}
-                                        disabled={markingKey === record.key}
-                                        className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
-                                    >
-                                        {markingKey === record.key ? 'Saving...' : 'Mark Paid'}
-                                    </button>
-                                ) : (
-                                    <StatusBadge status={record.status} />
-                                )}
+                                <div className="flex flex-col gap-2">
+                                    {(record.invoice_number || record.generated_at) && onDownloadPdf && (
+                                        <button
+                                            onClick={() => onDownloadPdf(record)}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50"
+                                        >
+                                            <Download size={14} />
+                                            PDF
+                                        </button>
+                                    )}
+                                    {paid ? (
+                                        <span className="text-sm text-slate-600">
+                                            {record.paid_at ? new Date(record.paid_at).toLocaleString() : '-'}
+                                        </span>
+                                    ) : canManage ? (
+                                        <button
+                                            onClick={() => onMarkPaid(record)}
+                                            disabled={markingKey === record.key}
+                                            className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
+                                        >
+                                            {markingKey === record.key ? 'Saving...' : 'Mark Paid'}
+                                        </button>
+                                    ) : (
+                                        <StatusBadge status={record.status} />
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     ))}

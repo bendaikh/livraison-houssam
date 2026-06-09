@@ -209,7 +209,9 @@ Route::middleware(['auth.api_or_sanctum'])->group(function () {
 
     // Unified billing
     Route::get('/billing', [BillingController::class, 'index']);
+    Route::get('/billing/preview', [BillingController::class, 'preview']);
     Route::post('/billing/generate', [BillingController::class, 'generate']);
+    Route::get('/billing/{role}/{billingId}/pdf', [BillingController::class, 'downloadPdf']);
     Route::patch('/billing/{role}/{billingId}/mark-paid', [BillingController::class, 'markPaid']);
 
     // Confirmation billing

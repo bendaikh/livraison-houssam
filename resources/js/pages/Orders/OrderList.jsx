@@ -287,6 +287,44 @@ export default function OrderList({ status = '' }) {
             : t('admin.orderList.deliveryStatusNone')
     );
 
+    const getInvoiceStatusLabel = (order) => {
+        const invoiceStatus = order.invoice_status;
+        if (!invoiceStatus) {
+            return null;
+        }
+
+        if (invoiceStatus.status) {
+            return invoiceStatus.status === 'invoiced'
+                ? t('admin.orderList.invoiceStatusInvoiced')
+                : t('admin.orderList.invoiceStatusNotInvoiced');
+        }
+
+        const parts = [];
+        if (isAdminUser || isVendorUser) {
+            parts.push(`${t('admin.orderList.invoiceSellerShort')}: ${invoiceStatus.seller === 'invoiced' ? t('admin.orderList.invoiceStatusInvoiced') : t('admin.orderList.invoiceStatusNotInvoiced')}`);
+        }
+        if (isAdminUser || isConfirmationAgentUser) {
+            parts.push(`${t('admin.orderList.invoiceConfirmationShort')}: ${invoiceStatus.confirmation === 'invoiced' ? t('admin.orderList.invoiceStatusInvoiced') : t('admin.orderList.invoiceStatusNotInvoiced')}`);
+        }
+        if (isAdminUser || isDeliveryPersonUser) {
+            parts.push(`${t('admin.orderList.invoiceDeliveryShort')}: ${invoiceStatus.delivery === 'invoiced' ? t('admin.orderList.invoiceStatusInvoiced') : t('admin.orderList.invoiceStatusNotInvoiced')}`);
+        }
+
+        return parts.join(' · ');
+    };
+
+    const getInvoiceStatusBadgeClass = (order) => {
+        const invoiceStatus = order.invoice_status;
+        const statusValue = invoiceStatus?.status
+            || (isVendorUser ? invoiceStatus?.seller : null)
+            || (isConfirmationAgentUser ? invoiceStatus?.confirmation : null)
+            || (isDeliveryPersonUser ? invoiceStatus?.delivery : null);
+
+        return statusValue === 'invoiced'
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+            : 'bg-amber-50 text-amber-700 border-amber-200';
+    };
+
     const formatStatusLabel = (status) => {
         const labels = {
             no_response: 'no response',
@@ -1335,6 +1373,13 @@ export default function OrderList({ status = '' }) {
                                             </p>
                                         </div>
                                     </div>
+
+                                    {order.status === 'delivered' && getInvoiceStatusLabel(order) && (
+                                        <div className={`rounded-lg border px-2 py-1.5 ${getInvoiceStatusBadgeClass(order)}`}>
+                                            <p className="text-[9px] font-bold uppercase tracking-wider opacity-80">{t('admin.orderList.invoiceStatus')}</p>
+                                            <p className="text-xs font-semibold">{getInvoiceStatusLabel(order)}</p>
+                                        </div>
+                                    )}
 
                                     {/* Date & Callback */}
                                     <div className="flex items-center gap-2 text-xs text-gray-500">

@@ -152,9 +152,10 @@ class OrderController extends Controller
         }
 
         $orders = $query->paginate($perPage);
-        $orders->getCollection()->transform(function (Order $order) {
+        $orders->getCollection()->transform(function (Order $order) use ($user) {
             $order->setAttribute('delivery_workflow_locked', $this->isDeliveryWorkflowLocked($order));
             $order->setAttribute('seller_name', $this->resolveSellerName($order));
+            $order->setAttribute('invoice_status', $this->resolveInvoiceStatusForViewer($order, $user));
             $this->attachOrderDisplayTotals($order);
             return $order;
         });
@@ -1697,6 +1698,33 @@ class OrderController extends Controller
         }
 
         return $this->formatSourceWebsiteSellerLabel($order->source_website);
+    }
+
+    private function resolveInvoiceStatusForViewer(Order $order, $user): array
+    {
+        $statuses = [
+            'seller' => $order->seller_invoice_status ?? Order::INVOICE_NOT_INVOICED,
+            'confirmation' => $order->confirmation_invoice_status ?? Order::INVOICE_NOT_INVOICED,
+            'delivery' => $order->delivery_invoice_status ?? Order::INVOICE_NOT_INVOICED,
+        ];
+
+        if ($user?->isAdmin()) {
+            return $statuses;
+        }
+
+        if ($user?->isVendor()) {
+            return ['status' => $statuses['seller']];
+        }
+
+        if ($user?->isConfirmationAgent()) {
+            return ['status' => $statuses['confirmation']];
+        }
+
+        if ($user?->isDeliveryPerson()) {
+            return ['status' => $statuses['delivery']];
+        }
+
+        return $statuses;
     }
 
     private function applyExternalWebsiteContext(Request $request, array $validated): array

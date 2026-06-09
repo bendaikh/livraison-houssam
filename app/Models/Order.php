@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
+    public const INVOICE_NOT_INVOICED = 'not_invoiced';
+    public const INVOICE_INVOICED = 'invoiced';
+
     protected $fillable = [
         'order_number',
         'client_id',
@@ -55,6 +58,9 @@ class Order extends Model
         'out_for_delivery_at',
         'shipped_at',
         'delivered_at',
+        'seller_invoice_status',
+        'confirmation_invoice_status',
+        'delivery_invoice_status',
         'cancelled_at',
         'refused_at',
         'returned_at',
@@ -201,6 +207,16 @@ class Order extends Model
                 $order->whatsapp = $normalizedWhatsapp;
             }
         });
+    }
+
+    public function getInvoiceStatusForRole(string $role): string
+    {
+        return match ($role) {
+            'seller' => $this->seller_invoice_status ?? self::INVOICE_NOT_INVOICED,
+            'confirmation' => $this->confirmation_invoice_status ?? self::INVOICE_NOT_INVOICED,
+            'delivery' => $this->delivery_invoice_status ?? self::INVOICE_NOT_INVOICED,
+            default => self::INVOICE_NOT_INVOICED,
+        };
     }
 
     public function calculateProfit(float $fulfillmentCost = 10.0): float

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -8,6 +9,8 @@ import {
     CheckCircle2,
     Clock3,
     Coins,
+    Download,
+    Eye,
     Landmark,
     PackageCheck,
     RefreshCcw,
@@ -15,6 +18,7 @@ import {
     Truck,
     UserRoundCheck,
     Wallet,
+    X,
 } from 'lucide-react';
 
 const DEFAULT_ROLE = 'delivery';
@@ -93,16 +97,32 @@ function getToneClasses(tone) {
     }[tone];
 }
 
+function getDefaultPeriodDates(monthValue) {
+    const month = monthValue || new Date().toISOString().slice(0, 7);
+    const start = new Date(`${month}-01T00:00:00`);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+
+    return {
+        period_start: start.toISOString().slice(0, 10),
+        period_end: end.toISOString().slice(0, 10),
+    };
+}
+
 export default function AdminBillingDashboard() {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const { formatCurrency } = useSettings();
     const [searchParams, setSearchParams] = useSearchParams();
     const initialRole = WORKFLOWS[searchParams.get('role')] ? searchParams.get('role') : DEFAULT_ROLE;
+    const initialMonth = searchParams.get('month')?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+    const defaultPeriod = getDefaultPeriodDates(initialMonth);
     const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
     const [filters, setFilters] = useState({
-        month: searchParams.get('month')?.slice(0, 7) || new Date().toISOString().slice(0, 7),
+        month: initialMonth,
         role: initialRole,
         entity_id: searchParams.get('entity_id') || '',
+        period_start: defaultPeriod.period_start,
+        period_end: defaultPeriod.period_end,
     });
     const [entities, setEntities] = useState({
         seller: [],
@@ -111,6 +131,9 @@ export default function AdminBillingDashboard() {
     });
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
+    const [previewing, setPreviewing] = useState(false);
+    const [previewData, setPreviewData] = useState(null);
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [markingKey, setMarkingKey] = useState('');
 
     const canView = isAdminRole(user?.role?.slug);
@@ -273,24 +296,90 @@ export default function AdminBillingDashboard() {
         fetchEntities();
     }, [canView]);
 
+    const handlePreview = async () => {
+        if (!filters.entity_id) {
+            alert(t('admin.billing.selectEntityRequired'));
+            return;
+        }
+
+        if (!filters.period_start || !filters.period_end) {
+            alert(t('admin.billing.selectDateRangeRequired'));
+            return;
+        }
+
+        try {
+            setPreviewing(true);
+            const response = await api.get('/billing/preview', {
+                params: {
+                    role: filters.role,
+                    entity_id: filters.entity_id,
+                    period_start: filters.period_start,
+                    period_end: filters.period_end,
+                },
+            });
+
+            setPreviewData(response.data);
+            setShowPreviewModal(true);
+        } catch (error) {
+            console.error('Error previewing invoice:', error);
+            alert(error.response?.data?.message || 'Failed to preview invoice.');
+        } finally {
+            setPreviewing(false);
+        }
+    };
+
     const handleGenerate = async () => {
+        if (!filters.entity_id) {
+            alert(t('admin.billing.selectEntityRequired'));
+            return;
+        }
+
+        if (!filters.period_start || !filters.period_end) {
+            alert(t('admin.billing.selectDateRangeRequired'));
+            return;
+        }
+
         try {
             setGenerating(true);
             const response = await api.post('/billing/generate', {
-                month: filters.month ? `${filters.month}-01` : undefined,
                 role: filters.role,
-                entity_id: filters.entity_id || undefined,
+                entity_id: filters.entity_id,
+                period_start: filters.period_start,
+                period_end: filters.period_end,
             });
 
             setDashboard({
                 ...EMPTY_DASHBOARD,
                 ...response.data,
             });
+            setShowPreviewModal(false);
+            setPreviewData(null);
         } catch (error) {
             console.error('Error generating billing records:', error);
-            alert('Failed to generate billing records.');
+            alert(error.response?.data?.message || 'Failed to generate billing records.');
         } finally {
             setGenerating(false);
+        }
+    };
+
+    const handleDownloadPdf = async (record) => {
+        try {
+            const response = await api.get(`/billing/${record.role}/${record.source_id}/pdf`, {
+                responseType: 'blob',
+            });
+
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${record.invoice_number || 'invoice'}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error downloading invoice PDF:', error);
+            alert('Failed to download invoice PDF.');
         }
     };
 
@@ -323,14 +412,24 @@ export default function AdminBillingDashboard() {
                     <h1 className="text-3xl font-bold text-slate-900">Billing</h1>
                     <p className="text-slate-500 mt-1">Clear admin workflows for delivery cash, confirmation salaries, and seller payouts.</p>
                 </div>
-                <button
-                    onClick={handleGenerate}
-                    disabled={generating}
-                    className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50 ${toneClasses.button}`}
-                >
-                    <RefreshCcw size={18} className={generating ? 'animate-spin' : ''} />
-                    <span>{generating ? 'Generating...' : 'Generate This Workflow'}</span>
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={handlePreview}
+                        disabled={previewing}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 font-semibold disabled:opacity-50"
+                    >
+                        <Eye size={18} />
+                        <span>{previewing ? t('admin.billing.generatingPreview') : t('admin.billing.previewInvoice')}</span>
+                    </button>
+                    <button
+                        onClick={handleGenerate}
+                        disabled={generating}
+                        className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white font-semibold disabled:opacity-50 ${toneClasses.button}`}
+                    >
+                        <RefreshCcw size={18} className={generating ? 'animate-spin' : ''} />
+                        <span>{generating ? t('admin.billing.generatingInvoice') : t('admin.billing.generateInvoice')}</span>
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -389,18 +488,47 @@ export default function AdminBillingDashboard() {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">Month</label>
                         <input
                             type="month"
                             value={filters.month}
-                            onChange={(event) => setFilters((prev) => ({ ...prev, month: event.target.value }))}
+                            onChange={(event) => {
+                                const nextMonth = event.target.value;
+                                const nextPeriod = getDefaultPeriodDates(nextMonth);
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    month: nextMonth,
+                                    period_start: nextPeriod.period_start,
+                                    period_end: nextPeriod.period_end,
+                                }));
+                            }}
                             className="w-full px-3 py-2.5 border border-slate-300 rounded-xl"
                         />
                     </div>
 
                     <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('admin.billing.periodStart')}</label>
+                        <input
+                            type="date"
+                            value={filters.period_start}
+                            onChange={(event) => setFilters((prev) => ({ ...prev, period_start: event.target.value }))}
+                            className="w-full px-3 py-2.5 border border-slate-300 rounded-xl"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">{t('admin.billing.periodEnd')}</label>
+                        <input
+                            type="date"
+                            value={filters.period_end}
+                            onChange={(event) => setFilters((prev) => ({ ...prev, period_end: event.target.value }))}
+                            className="w-full px-3 py-2.5 border border-slate-300 rounded-xl"
+                        />
+                    </div>
+
+                    <div className="xl:col-span-2">
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">{workflow.entityLabel}</label>
                         <select
                             value={filters.entity_id}
@@ -413,17 +541,22 @@ export default function AdminBillingDashboard() {
                             ))}
                         </select>
                     </div>
-
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
-                        <p className="text-sm font-semibold text-slate-700">Current language</p>
-                        <p className="text-xs text-slate-500 mt-2">
-                            {filters.role === 'delivery' && 'Collected, Commission, To return'}
-                            {filters.role === 'confirmation' && 'Delivered orders, Commission per order, Total salary'}
-                            {filters.role === 'seller' && 'Sales, Commission, To pay'}
-                        </p>
-                    </div>
                 </div>
             </div>
+
+            {showPreviewModal && (
+                <InvoicePreviewModal
+                    previewData={previewData}
+                    formatCurrency={formatCurrency}
+                    generating={generating}
+                    onClose={() => {
+                        setShowPreviewModal(false);
+                        setPreviewData(null);
+                    }}
+                    onConfirm={handleGenerate}
+                    t={t}
+                />
+            )}
 
             <WorkflowSection
                 role={filters.role}
@@ -433,8 +566,10 @@ export default function AdminBillingDashboard() {
                 loading={loading}
                 markingKey={markingKey}
                 onMarkPaid={handleMarkPaid}
+                onDownloadPdf={handleDownloadPdf}
                 formatCurrency={formatCurrency}
                 paid={false}
+                t={t}
             />
 
             <WorkflowSection
@@ -445,14 +580,105 @@ export default function AdminBillingDashboard() {
                 loading={loading}
                 markingKey={markingKey}
                 onMarkPaid={handleMarkPaid}
+                onDownloadPdf={handleDownloadPdf}
                 formatCurrency={formatCurrency}
                 paid
+                t={t}
             />
         </div>
     );
 }
 
-function WorkflowSection({ role, title, description, records, loading, markingKey, onMarkPaid, formatCurrency, paid }) {
+function InvoicePreviewModal({ previewData, formatCurrency, generating, onClose, onConfirm, t }) {
+    const summary = previewData?.summary || {};
+    const orders = previewData?.orders || [];
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+            <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-900">{t('admin.billing.previewTitle')}</h3>
+                        <p className="text-sm text-slate-500 mt-1">
+                            {previewData?.period_start} - {previewData?.period_end} · {previewData?.orders_count || 0} orders
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-5 space-y-4">
+                    {orders.length === 0 ? (
+                        <p className="text-slate-500">{t('admin.billing.previewEmpty')}</p>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <PreviewStat label={t('admin.billing.previewOrdersCount')} value={summary.total_orders || 0} />
+                                <PreviewStat label={t('admin.billing.previewSales')} value={formatCurrency(summary.total_sales || 0)} />
+                                <PreviewStat label={t('admin.billing.previewEarningsFees')} value={formatCurrency(summary.total_earnings ?? summary.total_fees ?? 0)} />
+                                <PreviewStat label={t('admin.billing.previewFinalAmount')} value={formatCurrency(summary.final_amount || 0)} />
+                            </div>
+
+                            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                                <table className="min-w-full divide-y divide-slate-200">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">{t('admin.billing.previewOrder')}</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">{t('admin.billing.previewClient')}</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">{t('admin.billing.previewCity')}</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">{t('admin.billing.previewProducts')}</th>
+                                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">{t('admin.billing.previewAmount')}</th>
+                                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">{t('admin.billing.previewCommission')}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200">
+                                        {orders.map((order) => (
+                                            <tr key={order.id}>
+                                                <td className="px-4 py-3 text-sm font-medium text-slate-900">{order.order_number}</td>
+                                                <td className="px-4 py-3 text-sm text-slate-700">{order.client_name}</td>
+                                                <td className="px-4 py-3 text-sm text-slate-700">{order.city}</td>
+                                                <td className="px-4 py-3 text-sm text-slate-700">
+                                                    {(order.products || []).map((product) => product.name).join(', ') || '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">{formatCurrency(order.order_amount || 0)}</td>
+                                                <td className="px-4 py-3 text-sm text-right text-emerald-700">{formatCurrency(order.commission || 0)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-200 bg-slate-50">
+                    <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">
+                        {t('admin.billing.cancel')}
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        disabled={generating || orders.length === 0}
+                        className="px-4 py-2 rounded-xl bg-slate-900 text-white font-semibold disabled:opacity-50"
+                    >
+                        {generating ? t('admin.billing.generatingInvoice') : t('admin.billing.confirmGenerate')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function PreviewStat({ label, value }) {
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">{value}</p>
+        </div>
+    );
+}
+
+function WorkflowSection({ role, title, description, records, loading, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, paid, t }) {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 bg-slate-50">
@@ -467,7 +693,9 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
                     paid={paid}
                     markingKey={markingKey}
                     onMarkPaid={onMarkPaid}
+                    onDownloadPdf={onDownloadPdf}
                     formatCurrency={formatCurrency}
+                    t={t}
                 />
             )}
 
@@ -478,7 +706,9 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
                     paid={paid}
                     markingKey={markingKey}
                     onMarkPaid={onMarkPaid}
+                    onDownloadPdf={onDownloadPdf}
                     formatCurrency={formatCurrency}
+                    t={t}
                 />
             )}
 
@@ -489,20 +719,23 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
                     paid={paid}
                     markingKey={markingKey}
                     onMarkPaid={onMarkPaid}
+                    onDownloadPdf={onDownloadPdf}
                     formatCurrency={formatCurrency}
+                    t={t}
                 />
             )}
         </div>
     );
 }
 
-function DeliveryBillingTable({ records, loading, paid, markingKey, onMarkPaid, formatCurrency }) {
+function DeliveryBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, t }) {
     return (
         <DataTable
             loading={loading}
             records={records}
             emptyMessage="No delivery billing records in this section."
             columns={[
+                { key: 'invoice_number', label: t('admin.billing.invoiceNumber'), render: (record) => <span className="text-sm font-mono text-slate-700">{record.invoice_number || '-'}</span> },
                 { key: 'entity_name', label: 'Delivery person', render: (record) => <TableTitle title={record.entity_name} subtitle={record.calculation_label} /> },
                 { key: 'period', label: 'Date', render: (record) => <span className="text-sm text-slate-600">{formatSingleDate(record.period_start)}</span> },
                 { key: 'gross_amount', label: 'Collected', render: (record) => <AmountCell value={record.gross_amount} formatCurrency={formatCurrency} /> },
@@ -512,17 +745,20 @@ function DeliveryBillingTable({ records, loading, paid, markingKey, onMarkPaid, 
             paid={paid}
             markingKey={markingKey}
             onMarkPaid={onMarkPaid}
+            onDownloadPdf={onDownloadPdf}
+            t={t}
         />
     );
 }
 
-function ConfirmationBillingTable({ records, loading, paid, markingKey, onMarkPaid, formatCurrency }) {
+function ConfirmationBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, t }) {
     return (
         <DataTable
             loading={loading}
             records={records}
             emptyMessage="No confirmation billing records in this section."
             columns={[
+                { key: 'invoice_number', label: t('admin.billing.invoiceNumber'), render: (record) => <span className="text-sm font-mono text-slate-700">{record.invoice_number || '-'}</span> },
                 { key: 'entity_name', label: 'Confirmation agent', render: (record) => <TableTitle title={record.entity_name} subtitle={record.calculation_label} /> },
                 { key: 'period', label: 'Period', render: (record) => <span className="text-sm text-slate-600">{formatPeriodRange(record.period_start, record.period_end)}</span> },
                 { key: 'orders_count', label: 'Delivered orders', render: (record) => <span className="font-semibold text-slate-900">{record.orders_count}</span> },
@@ -532,17 +768,20 @@ function ConfirmationBillingTable({ records, loading, paid, markingKey, onMarkPa
             paid={paid}
             markingKey={markingKey}
             onMarkPaid={onMarkPaid}
+            onDownloadPdf={onDownloadPdf}
+            t={t}
         />
     );
 }
 
-function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, formatCurrency }) {
+function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, t }) {
     return (
         <DataTable
             loading={loading}
             records={records}
             emptyMessage="No seller billing records in this section."
             columns={[
+                { key: 'invoice_number', label: t('admin.billing.invoiceNumber'), render: (record) => <span className="text-sm font-mono text-slate-700">{record.invoice_number || '-'}</span> },
                 { key: 'entity_name', label: 'Seller', render: (record) => <TableTitle title={record.entity_name} subtitle={record.calculation_label} /> },
                 { key: 'period', label: 'Period', render: (record) => <span className="text-sm text-slate-600">{formatPeriodRange(record.period_start, record.period_end)}</span> },
                 { key: 'frequency_label', label: 'Billing cadence', render: (record) => <span className="text-sm font-medium text-slate-700">{record.frequency_label}</span> },
@@ -553,11 +792,13 @@ function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, fo
             paid={paid}
             markingKey={markingKey}
             onMarkPaid={onMarkPaid}
+            onDownloadPdf={onDownloadPdf}
+            t={t}
         />
     );
 }
 
-function DataTable({ loading, records, emptyMessage, columns, paid, markingKey, onMarkPaid }) {
+function DataTable({ loading, records, emptyMessage, columns, paid, markingKey, onMarkPaid, onDownloadPdf, t }) {
     return (
         <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
@@ -593,19 +834,30 @@ function DataTable({ loading, records, emptyMessage, columns, paid, markingKey, 
                                 </td>
                             ))}
                             <td className="px-5 py-4">
-                                {paid ? (
-                                    <span className="text-sm text-slate-600">
-                                        {record.paid_at ? new Date(record.paid_at).toLocaleString() : '-'}
-                                    </span>
-                                ) : (
-                                    <button
-                                        onClick={() => onMarkPaid(record)}
-                                        disabled={markingKey === record.key}
-                                        className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
-                                    >
-                                        {markingKey === record.key ? 'Saving...' : 'Mark Paid'}
-                                    </button>
-                                )}
+                                <div className="flex flex-col gap-2">
+                                    {(record.invoice_number || record.generated_at) && (
+                                        <button
+                                            onClick={() => onDownloadPdf(record)}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50"
+                                        >
+                                            <Download size={14} />
+                                            {t('admin.billing.downloadPdf')}
+                                        </button>
+                                    )}
+                                    {paid ? (
+                                        <span className="text-sm text-slate-600">
+                                            {record.paid_at ? new Date(record.paid_at).toLocaleString() : '-'}
+                                        </span>
+                                    ) : (
+                                        <button
+                                            onClick={() => onMarkPaid(record)}
+                                            disabled={markingKey === record.key}
+                                            className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
+                                        >
+                                            {markingKey === record.key ? 'Saving...' : 'Mark Paid'}
+                                        </button>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     ))}
