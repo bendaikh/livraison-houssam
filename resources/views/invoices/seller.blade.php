@@ -5,23 +5,29 @@
         <thead>
             <tr>
                 <th style="width: 4%;">N°</th>
-                <th style="width: 18%;">Client</th>
-                <th style="width: 14%;">Ville</th>
-                <th style="width: 28%;">Produit</th>
-                <th style="width: 8%;" class="text-center">Qté</th>
-                <th style="width: 12%;" class="text-right">Prix unitaire</th>
-                <th style="width: 12%;" class="text-right">Montant total</th>
+                <th style="width: 14%;">N° Commande</th>
+                <th style="width: 12%;">Ville</th>
+                <th style="width: 16%;">SKU</th>
+                <th style="width: 7%;" class="text-center">Qté</th>
+                <th style="width: 11%;" class="text-right">Prix unitaire</th>
+                <th style="width: 10%;" class="text-right">Frais livraison</th>
+                <th style="width: 11%;" class="text-right">Montant total</th>
             </tr>
         </thead>
         <tbody>
             @foreach($rows as $index => $row)
                 <tr>
                     <td class="text-center">{{ str_pad($index + 1, 2, '0', STR_PAD_LEFT) }}</td>
-                    <td>{{ $row['client_name'] }}</td>
+                    <td>{{ $row['order_id'] }}</td>
                     <td>{{ $row['city'] }}</td>
-                    <td>{{ $row['product'] }}</td>
+                    <td>{{ $row['sku'] }}</td>
                     <td class="text-center">{{ $row['quantity'] }}</td>
                     <td class="text-right">{{ number_format($row['unit_price'], 2, '.', ' ') }} {{ $currency_symbol }}</td>
+                    <td class="text-right">
+                        @if($row['delivery_cost'] !== null)
+                            {{ number_format($row['delivery_cost'], 2, '.', ' ') }} {{ $currency_symbol }}
+                        @endif
+                    </td>
                     <td class="text-right">{{ number_format($row['total_amount'], 2, '.', ' ') }} {{ $currency_symbol }}</td>
                 </tr>
             @endforeach

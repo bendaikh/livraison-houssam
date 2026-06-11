@@ -14,10 +14,18 @@ class ProductController extends Controller
     {
         $query = Product::with(['category', 'vendor', 'marketplaceProducts'])
             ->withSum([
-                'orderItems as sold_units' => function ($orderItemsQuery) {
+                'orderItems as sold_units' => function ($orderItemsQuery) use ($request) {
                     $orderItemsQuery
                         ->join('orders', 'orders.id', '=', 'order_items.order_id')
                         ->whereIn('orders.status', ['confirmed', 'shipped', 'delivered']);
+
+                    if ($request->filled('date_from')) {
+                        $orderItemsQuery->whereDate('orders.created_at', '>=', $request->date_from);
+                    }
+
+                    if ($request->filled('date_to')) {
+                        $orderItemsQuery->whereDate('orders.created_at', '<=', $request->date_to);
+                    }
                 }
             ], 'quantity')
             ->addSelect([

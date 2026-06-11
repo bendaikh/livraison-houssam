@@ -119,7 +119,8 @@ export default function ProfitDashboard() {
     const navigate = useNavigate();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filterPeriod, setFilterPeriod] = useState('all'); // 'all', 'month', 'week'
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
     const [sortBy, setSortBy] = useState('profit'); // 'profit', 'units', 'margin'
     const isVendor = user?.role?.slug === 'vendor';
 
@@ -140,12 +141,16 @@ export default function ProfitDashboard() {
         } else {
             setLoading(false);
         }
-    }, [isVendor]);
+    }, [isVendor, dateFrom, dateTo]);
 
     const fetchProducts = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/products', { params: { per_page: 1000 } });
+            const params = { per_page: 1000 };
+            if (dateFrom) params.date_from = dateFrom;
+            if (dateTo) params.date_to = dateTo;
+
+            const response = await api.get('/products', { params });
             setProducts(response.data.data);
         } catch (error) {
             console.error('Error fetching products:', error);
@@ -344,6 +349,45 @@ export default function ProfitDashboard() {
             {/* Filters and Sort */}
             <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-6">
                 <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                                {t('admin.profitDashboard.dateFrom')}
+                            </label>
+                            <div className="relative">
+                                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                <input
+                                    type="date"
+                                    value={dateFrom}
+                                    onChange={(e) => setDateFrom(e.target.value)}
+                                    className="pl-9 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                                {t('admin.profitDashboard.dateTo')}
+                            </label>
+                            <div className="relative">
+                                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                <input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={(e) => setDateTo(e.target.value)}
+                                    className="pl-9 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                                />
+                            </div>
+                        </div>
+                        {(dateFrom || dateTo) && (
+                            <button
+                                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                                className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-2"
+                            >
+                                <Filter size={14} />
+                                {t('admin.profitDashboard.clearDates')}
+                            </button>
+                        )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() => setSortBy('profit')}

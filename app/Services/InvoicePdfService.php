@@ -57,40 +57,46 @@ class InvoicePdfService
         $totalCodFees = 0.0;
 
         foreach ($billing->orders as $order) {
-            $clientName = $this->text($order->client?->name ?? 'N/A');
+            $orderId = $this->text($order->order_number ?? ('#' . $order->id));
             $city = $this->text($order->city ?? $order->delivery_city ?? 'N/A');
             $orderTotal = (float) ($order->total ?? 0);
             $shippingCost = (float) ($order->shipping_cost ?? 0);
             $commission = (float) ($order->commission_amount ?? 0);
+            $deliveryCost = $shippingCost + $fulfillmentCost;
 
             if ($order->items->isEmpty()) {
                 $rows->push([
-                    'client_name' => $clientName,
+                    'order_id' => $orderId,
                     'city' => $city,
-                    'product' => 'Order ' . $order->order_number,
+                    'sku' => 'N/A',
                     'quantity' => 1,
                     'unit_price' => $orderTotal,
+                    'delivery_cost' => $deliveryCost,
                     'total_amount' => $orderTotal,
                 ]);
             } else {
+                $isFirstItem = true;
+
                 foreach ($order->items as $item) {
                     $unitPrice = (float) ($item->price ?? 0);
                     $quantity = (int) ($item->quantity ?? 1);
                     $lineTotal = (float) ($item->subtotal ?? ($unitPrice * $quantity));
 
                     $rows->push([
-                        'client_name' => $clientName,
+                        'order_id' => $orderId,
                         'city' => $city,
-                        'product' => $this->text($item->product_name ?? 'Product'),
+                        'sku' => $this->text($item->sku ?? $item->product?->sku ?? 'N/A'),
                         'quantity' => $quantity,
                         'unit_price' => $unitPrice,
+                        'delivery_cost' => $isFirstItem ? $deliveryCost : null,
                         'total_amount' => $lineTotal,
                     ]);
+
+                    $isFirstItem = false;
                 }
             }
 
             $productCost = $this->calculateOrderProductCost($order);
-            $deliveryCost = $shippingCost + $fulfillmentCost;
             $platformCodFee = max(0.0, $commission - $productCost - $deliveryCost);
 
             $totalSales += $orderTotal;
