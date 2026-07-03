@@ -9,6 +9,7 @@ import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import { formatDeliveryDispatchFailureMessage, parseDeliveryCitiesResponse } from '../../utils/delivery';
 import { resolveShippingCost, sameCityName } from '../../utils/shipping';
 import { appPath } from '../../constants/appPaths';
+import SearchableSelect from '../../components/SearchableSelect';
 
 const getImageSrc = (imagePath) => {
     if (!imagePath) return null;
@@ -1160,19 +1161,14 @@ export default function OrderForm() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         {t('admin.orderForm.product')} <span className="text-red-500">*</span>
                                     </label>
-                                    <select
-                                        value={item.product_id}
-                                        onChange={(e) => handleProductChange(index, e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        required
-                                    >
-                                        <option value="">{t('admin.orderForm.selectProduct')}</option>
-                                        {availableProducts.map(product => (
-                                            <option key={product.id} value={product.id}>
-                                                {product.name} - {product.sku}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <SearchableSelect
+                                        value={String(item.product_id || '')}
+                                        onChange={(value) => handleProductChange(index, value)}
+                                        placeholder={t('admin.orderForm.searchSelectProduct')}
+                                        options={availableProducts}
+                                        getOptionLabel={(product) => `${product.name} - ${product.sku}`}
+                                        getOptionValue={(product) => product.id}
+                                    />
                                     {selectedProduct && (
                                         <p className="mt-2 text-xs text-slate-500">
                                             {selectedProduct.name}
