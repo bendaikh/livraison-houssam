@@ -571,9 +571,17 @@ export default function OrderDetail() {
                         <p className="text-2xl font-bold capitalize">{formatOrderStatus(order.status)}</p>
                     </div>
                 </div>
-                <div className="text-right">
-                    <p className="text-sm font-medium">{t('admin.orderDetail.orderDate')}</p>
-                    <p className="text-lg">{formatDate(order.created_at)}</p>
+                <div className="text-right space-y-2">
+                    <div>
+                        <p className="text-sm font-medium">{t('admin.orderDetail.orderDate')}</p>
+                        <p className="text-lg">{formatDate(order.created_at)}</p>
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium">{t('admin.orderDetail.deliveryDate')}</p>
+                        <p className={`text-lg ${order.delivered_at ? 'text-emerald-700' : 'text-gray-400'}`}>
+                            {order.delivered_at ? formatDate(order.delivered_at) : '-'}
+                        </p>
+                    </div>
                 </div>
             </div>
 

@@ -13,6 +13,7 @@ class SellerBilling extends Model
         'vendor_id',
         'period_start',
         'period_end',
+        'supplement_sequence',
         'billing_frequency',
         'delivered_orders_count',
         'gross_sales',

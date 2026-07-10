@@ -1381,9 +1381,22 @@ export default function OrderList({ status = '' }) {
                                         </div>
                                     )}
 
-                                    {/* Date & Callback */}
-                                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                                        <span>{formatDate(order.created_at)}</span>
+                                    {/* Dates */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                                            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{t('admin.orderList.orderDate')}</p>
+                                            <p className="text-xs font-medium text-slate-700 mt-0.5">{formatDate(order.created_at)}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-2 py-1.5">
+                                            <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-600">{t('admin.orderList.deliveryDate')}</p>
+                                            <p className={`text-xs font-semibold mt-0.5 ${order.delivered_at ? 'text-emerald-800' : 'text-emerald-400'}`}>
+                                                {order.delivered_at ? formatDate(order.delivered_at) : '-'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {(order.callback_date || isBlacklisted) && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                                         {order.callback_date && (
                                             <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-700">
                                                 {t('admin.orderList.callback')} {formatDate(order.callback_date)}
@@ -1395,6 +1408,7 @@ export default function OrderList({ status = '' }) {
                                             </span>
                                         )}
                                     </div>
+                                    )}
 
                                     {/* Items */}
                                     {primaryItems.length > 0 && (
@@ -1779,6 +1793,16 @@ function DeliveryPersonOrderCard({
                         </div>
                         {order.callback_date && (
                             <p className={`text-xs ${isDarkMode ? 'text-amber-300' : 'text-amber-700'}`}>Callback {formatDate(order.callback_date)}</p>
+                        )}
+                        {order.delivered_at && (
+                            <div>
+                                <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-emerald-300' : 'text-emerald-600'}`}>
+                                    {t('admin.orderList.deliveredAt')}
+                                </p>
+                                <p className={`mt-1 text-xs font-semibold ${isDarkMode ? 'text-emerald-100' : 'text-emerald-800'}`}>
+                                    {formatDate(order.delivered_at)}
+                                </p>
+                            </div>
                         )}
                     </div>
                 </div>

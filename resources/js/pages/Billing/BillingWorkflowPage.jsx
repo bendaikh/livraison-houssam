@@ -344,7 +344,7 @@ export default function BillingWorkflowPage({ role }) {
             });
         } catch (error) {
             console.error('Error marking billing as paid:', error);
-            alert('Failed to mark billing as paid.');
+            alert(error.response?.data?.message || 'Failed to mark billing as paid.');
         } finally {
             setMarkingKey('');
         }
@@ -457,6 +457,7 @@ export default function BillingWorkflowPage({ role }) {
                 formatCurrency={formatCurrency}
                 canManage={isAdmin}
                 paid={false}
+                t={t}
             />
 
             <WorkflowSection
@@ -471,12 +472,13 @@ export default function BillingWorkflowPage({ role }) {
                 formatCurrency={formatCurrency}
                 canManage={isAdmin}
                 paid
+                t={t}
             />
         </div>
     );
 }
 
-function WorkflowSection({ role, title, description, records, loading, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage, paid }) {
+function WorkflowSection({ role, title, description, records, loading, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage, paid, t }) {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 bg-slate-50">
@@ -520,6 +522,7 @@ function WorkflowSection({ role, title, description, records, loading, markingKe
                     onDownloadPdf={onDownloadPdf}
                     formatCurrency={formatCurrency}
                     canManage={canManage}
+                    t={t}
                 />
             )}
         </div>
@@ -570,7 +573,7 @@ function ConfirmationBillingTable({ records, loading, paid, markingKey, onMarkPa
     );
 }
 
-function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage }) {
+function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, onDownloadPdf, formatCurrency, canManage, t }) {
     return (
         <DataTable
             loading={loading}
@@ -578,7 +581,28 @@ function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, on
             emptyMessage="No seller billing records in this section."
             columns={[
                 { key: 'entity_name', label: 'Seller', render: (record) => <TableTitle title={record.entity_name} subtitle={record.calculation_label} /> },
-                { key: 'period', label: 'Period', render: (record) => <span className="text-sm text-slate-600">{formatPeriodRange(record.period_start, record.period_end)}</span> },
+                {
+                    key: 'period',
+                    label: 'Period',
+                    render: (record) => (
+                        <div>
+                            <span className="text-sm text-slate-600">{formatPeriodRange(record.period_start, record.period_end)}</span>
+                            {record.delivery_date_start && record.delivery_date_end && (
+                                <span className="block text-xs font-medium text-emerald-700 mt-1">
+                                    {t('admin.billing.deliveryDates')}: {formatPeriodRange(record.delivery_date_start, record.delivery_date_end)}
+                                </span>
+                            )}
+                            <span className="block text-xs text-slate-400 mt-0.5">
+                                {t('admin.billing.periodByDeliveryDate')}
+                            </span>
+                            {record.is_supplement && (
+                                <span className="block text-xs font-medium text-blue-600 mt-1">
+                                    {t('admin.billing.supplementalInvoice', { number: record.supplement_sequence })}
+                                </span>
+                            )}
+                        </div>
+                    ),
+                },
                 { key: 'frequency_label', label: 'Billing cadence', render: (record) => <span className="text-sm font-medium text-slate-700">{record.frequency_label}</span> },
                 { key: 'gross_amount', label: 'Revenue', render: (record) => <AmountCell value={record.gross_amount} formatCurrency={formatCurrency} /> },
                 { key: 'fee_amount', label: 'Platform Fee', render: (record) => <AmountCell value={record.fee_amount} formatCurrency={formatCurrency} tone="orange" /> },
@@ -589,11 +613,12 @@ function SellerBillingTable({ records, loading, paid, markingKey, onMarkPaid, on
             markingKey={markingKey}
             onMarkPaid={onMarkPaid}
             onDownloadPdf={onDownloadPdf}
+            t={t}
         />
     );
 }
 
-function DataTable({ loading, records, emptyMessage, columns, paid, canManage, markingKey, onMarkPaid, onDownloadPdf }) {
+function DataTable({ loading, records, emptyMessage, columns, paid, canManage, markingKey, onMarkPaid, onDownloadPdf, t }) {
     return (
         <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
@@ -641,13 +666,20 @@ function DataTable({ loading, records, emptyMessage, columns, paid, canManage, m
                                             {record.paid_at ? new Date(record.paid_at).toLocaleString() : '-'}
                                         </span>
                                     ) : canManage ? (
-                                        <button
-                                            onClick={() => onMarkPaid(record)}
-                                            disabled={markingKey === record.key}
-                                            className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
-                                        >
-                                            {markingKey === record.key ? 'Saving...' : 'Mark Paid'}
-                                        </button>
+                                        <>
+                                            <button
+                                                onClick={() => onMarkPaid(record)}
+                                                disabled={markingKey === record.key || (record.role === 'seller' && record.can_mark_paid === false)}
+                                                className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {markingKey === record.key ? 'Saving...' : 'Mark Paid'}
+                                            </button>
+                                            {!paid && record.role === 'seller' && record.can_mark_paid === false && (
+                                                <span className="text-xs text-amber-700 max-w-[180px]">
+                                                    {t('admin.billing.payAfterPeriodEnd', { date: formatSingleDate(record.period_end) })}
+                                                </span>
+                                            )}
+                                        </>
                                     ) : (
                                         <StatusBadge status={record.status} />
                                     )}

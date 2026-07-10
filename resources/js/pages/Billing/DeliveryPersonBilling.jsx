@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { appPath } from '../../constants/appPaths';
 import api from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,6 +8,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { isAdminRole, isDeliveryPersonRole } from '../../utils/roles';
 
 export default function DeliveryPersonBilling() {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const { formatCurrency } = useSettings();
     const [billings, setBillings] = useState([]);
@@ -277,8 +279,8 @@ export default function DeliveryPersonBilling() {
                                                                         <p className="text-sm text-slate-500">
                                                                             {order.client?.name || 'Client'} • {order.client?.phone || '-'}
                                                                         </p>
-                                                                        <p className="text-xs text-slate-400 mt-1">
-                                                                            Delivered {order.delivered_at ? new Date(order.delivered_at).toLocaleString() : '-'}
+                                                                        <p className="text-xs font-semibold text-emerald-700 mt-1">
+                                                                            {t('admin.orderList.deliveredAt')}: {order.delivered_at ? new Date(order.delivered_at).toLocaleString() : '-'}
                                                                         </p>
                                                                         {order.confirmation_agent?.name && (
                                                                             <p className="text-xs text-slate-500 mt-1">

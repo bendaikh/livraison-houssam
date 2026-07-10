@@ -110,7 +110,11 @@ class InvoicePdfService
 
         return array_merge($this->companyContext(), [
             'role' => BillingService::ROLE_SELLER,
-            'role_label' => 'Seller Invoice',
+            'role_label' => ((int) ($billing->supplement_sequence ?? 0) > 0)
+                ? 'Seller Invoice (Supplement #' . (int) $billing->supplement_sequence . ')'
+                : 'Seller Invoice',
+            'is_supplement' => (int) ($billing->supplement_sequence ?? 0) > 0,
+            'supplement_sequence' => (int) ($billing->supplement_sequence ?? 0),
             'invoice_number' => $billing->invoice_number ?? $this->fallbackInvoiceNumber($billing->id, 'SELL'),
             'generated_at' => $billing->generated_at ?? now(),
             'period_start' => $billing->period_start,

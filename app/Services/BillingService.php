@@ -147,6 +147,136 @@ class BillingService
         };
     }
 
+    /**
+     * Reconcile every seller invoice: refresh unpaid invoices, create supplemental
+     * invoices for orders delivered after a period was already paid, and regenerate
+     * PDFs so stored files always match the linked orders.
+     *
+     * Safe to run repeatedly in production. Paid primary invoices are never modified;
+     * missed orders are captured on a new supplemental invoice instead.
+     *
+     * @return array{vendors:int, supplements_created:int, pdfs_regenerated:int, orders_reassigned:int}
+     */
+    public function reconcileSellerBillings(?int $vendorId = null, ?\Closure $onProgress = null): array
+    {
+        $stats = ['vendors' => 0, 'supplements_created' => 0, 'pdfs_regenerated' => 0, 'orders_reassigned' => 0];
+
+        if (!$this->sellerBillingTablesExist()) {
+            return $stats;
+        }
+
+        $vendors = Vendor::query()
+            ->where('is_active', true)
+            ->when($vendorId, fn ($query) => $query->where('id', $vendorId))
+            ->orderBy('id')
+            ->get();
+
+        foreach ($vendors as $vendor) {
+            $stats['vendors']++;
+
+            $months = $this->collectSellerReconcileMonths($vendor);
+
+            if ($months->isEmpty()) {
+                continue;
+            }
+
+            $supplementIdsBefore = SellerBilling::query()
+                ->where('vendor_id', $vendor->id)
+                ->where('supplement_sequence', '>', 0)
+                ->pluck('id')
+                ->all();
+
+            foreach ($months as $month) {
+                DB::transaction(function () use ($vendor, $month) {
+                    SellerBilling::query()
+                        ->where('vendor_id', $vendor->id)
+                        ->whereNull('paid_at')
+                        ->whereDate('period_start', '<=', $month->copy()->endOfMonth()->toDateString())
+                        ->whereDate('period_end', '>=', $month->copy()->startOfMonth()->toDateString())
+                        ->get()
+                        ->each(fn (SellerBilling $billing) => $this->recalculateSellerBilling($billing, $vendor, false));
+
+                    $this->syncSupplementalSellerBillingsForVendor($vendor, $month);
+                });
+            }
+
+            $supplementIdsAfter = SellerBilling::query()
+                ->where('vendor_id', $vendor->id)
+                ->where('supplement_sequence', '>', 0)
+                ->pluck('id')
+                ->all();
+
+            $newSupplements = array_diff($supplementIdsAfter, $supplementIdsBefore);
+            $stats['supplements_created'] += count($newSupplements);
+
+            $regenerated = $this->regenerateSellerBillingPdfs($vendor->id);
+            $stats['pdfs_regenerated'] += $regenerated['pdfs'];
+            $stats['orders_reassigned'] += $regenerated['orders'];
+
+            if ($onProgress) {
+                $onProgress($vendor, count($newSupplements), $regenerated['pdfs']);
+            }
+        }
+
+        return $stats;
+    }
+
+    private function collectSellerReconcileMonths(Vendor $vendor): Collection
+    {
+        $months = collect();
+
+        $push = function (?string $date) use ($months) {
+            if (!$date) {
+                return;
+            }
+
+            $month = Carbon::parse($date)->startOfMonth();
+            $months->put($month->format('Y-m'), $month);
+        };
+
+        SellerBilling::query()
+            ->where('vendor_id', $vendor->id)
+            ->get(['period_start'])
+            ->each(fn (SellerBilling $billing) => $push($billing->period_start?->toDateString()));
+
+        Order::query()
+            ->where('vendor_id', $vendor->id)
+            ->where('status', 'delivered')
+            ->where('seller_invoice_status', Order::INVOICE_NOT_INVOICED)
+            ->whereNotNull('delivered_at')
+            ->pluck('delivered_at')
+            ->each(fn ($deliveredAt) => $push((string) $deliveredAt));
+
+        return $months->values();
+    }
+
+    private function regenerateSellerBillingPdfs(int $vendorId): array
+    {
+        $result = ['pdfs' => 0, 'orders' => 0];
+
+        SellerBilling::query()
+            ->where('vendor_id', $vendorId)
+            ->where('delivered_orders_count', '>', 0)
+            ->get()
+            ->each(function (SellerBilling $billing) use (&$result) {
+                if (!$billing->invoice_number) {
+                    $billing->invoice_number = $this->invoicePdfService->generateInvoiceNumber('SLR');
+                }
+
+                $linkedOrderIds = $billing->orders()->pluck('orders.id');
+                $reassigned = Order::whereIn('id', $linkedOrderIds)
+                    ->where('seller_invoice_status', Order::INVOICE_NOT_INVOICED)
+                    ->update(['seller_invoice_status' => Order::INVOICE_INVOICED]);
+                $result['orders'] += (int) $reassigned;
+
+                $pdfPath = $this->invoicePdfService->generateForBilling(self::ROLE_SELLER, $billing->id);
+                $billing->update(['pdf_path' => $pdfPath]);
+                $result['pdfs']++;
+            });
+
+        return $result;
+    }
+
     private function refreshUnpaidBillings(Carbon $month, ?string $role, ?int $entityId): void
     {
         if (($role === null || $role === self::ROLE_SELLER) && $this->sellerBillingTablesExist()) {
@@ -163,6 +293,11 @@ class BillingService
 
                     $this->recalculateSellerBilling($billing, $billing->vendor, false);
                 });
+
+            $this->syncSupplementalSellerBillings(
+                $month,
+                $entityId && $role === self::ROLE_SELLER ? $entityId : null
+            );
         }
 
         if ($role === null || $role === self::ROLE_CONFIRMATION) {
@@ -270,6 +405,7 @@ class BillingService
                             'vendor_id' => $vendor->id,
                             'period_start' => $period['period_start']->toDateString(),
                             'period_end' => $period['period_end']->toDateString(),
+                            'supplement_sequence' => 0,
                         ],
                         [
                             'billing_frequency' => $vendor->billing_frequency ?: 'weekly',
@@ -407,6 +543,10 @@ class BillingService
 
         if ($touchGeneratedAt) {
             $this->finalizeInvoiceGeneration(self::ROLE_SELLER, $billing, $deliveredOrders);
+        } elseif ($billing->invoice_number && $deliveredOrders->isNotEmpty()) {
+            Order::whereIn('id', $deliveredOrders->pluck('id'))
+                ->where('seller_invoice_status', Order::INVOICE_NOT_INVOICED)
+                ->update(['seller_invoice_status' => Order::INVOICE_INVOICED]);
         }
 
         return $billing->fresh(['vendor', 'paidBy']);
@@ -471,6 +611,8 @@ class BillingService
 
         $billing = SellerBilling::with(['vendor', 'paidBy'])->findOrFail($billingId);
 
+        $this->assertSellerBillingPayable($billing);
+
         if (!$billing->paid_at && $billing->vendor) {
             $this->recalculateSellerBilling($billing, $billing->vendor, false);
         }
@@ -526,6 +668,8 @@ class BillingService
 
     private function mapSellerBilling(SellerBilling $billing): array
     {
+        [$deliveryDateStart, $deliveryDateEnd] = $this->resolveSellerBillingDeliveryDates($billing);
+
         return [
             'key' => self::ROLE_SELLER . '-' . $billing->id,
             'source_id' => $billing->id,
@@ -537,6 +681,11 @@ class BillingService
             'frequency_label' => $this->frequencyLabel($billing->billing_frequency ?: 'weekly'),
             'period_start' => $billing->period_start?->toDateString(),
             'period_end' => $billing->period_end?->toDateString(),
+            'delivery_date_start' => $deliveryDateStart,
+            'delivery_date_end' => $deliveryDateEnd,
+            'supplement_sequence' => (int) ($billing->supplement_sequence ?? 0),
+            'is_supplement' => (int) ($billing->supplement_sequence ?? 0) > 0,
+            'can_mark_paid' => $this->canMarkSellerBillingPaid($billing),
             'orders_count' => (int) $billing->delivered_orders_count,
             'rate_amount' => null,
             'gross_amount' => (float) $billing->gross_sales,
@@ -552,6 +701,22 @@ class BillingService
             'invoice_number' => $billing->invoice_number,
             'pdf_url' => $billing->pdf_path ? Storage::disk('public')->url($billing->pdf_path) : null,
             'calculation_label' => 'Sum of Seller Net Profits (Prix de vente - Prix produit - Livraison - Fullfilment)',
+        ];
+    }
+
+    private function resolveSellerBillingDeliveryDates(SellerBilling $billing): array
+    {
+        $deliveredAt = $billing->orders()
+            ->whereNotNull('delivered_at')
+            ->pluck('delivered_at');
+
+        if ($deliveredAt->isEmpty()) {
+            return [null, null];
+        }
+
+        return [
+            Carbon::parse($deliveredAt->min())->toDateString(),
+            Carbon::parse($deliveredAt->max())->toDateString(),
         ];
     }
 
@@ -715,6 +880,164 @@ class BillingService
             : Carbon::now()->startOfMonth();
     }
 
+    private function sellerBillingPeriodHasEnded(SellerBilling $billing): bool
+    {
+        return Carbon::parse($billing->period_end)->endOfDay()->isPast();
+    }
+
+    private function canMarkSellerBillingPaid(SellerBilling $billing): bool
+    {
+        return !$billing->paid_at
+            && $this->sellerBillingPeriodHasEnded($billing)
+            && (int) $billing->delivered_orders_count > 0;
+    }
+
+    private function assertSellerBillingPayable(SellerBilling $billing): void
+    {
+        abort_unless(
+            $this->sellerBillingPeriodHasEnded($billing),
+            422,
+            'Seller invoices can only be marked as paid after the billing period ends.'
+        );
+
+        abort_if(
+            (int) $billing->delivered_orders_count === 0,
+            422,
+            'Cannot mark an empty seller invoice as paid.'
+        );
+    }
+
+    private function syncSupplementalSellerBillings(Carbon $month, ?int $vendorId = null): void
+    {
+        if (!$this->sellerBillingTablesExist()) {
+            return;
+        }
+
+        Vendor::query()
+            ->where('is_active', true)
+            ->when($vendorId, fn ($query) => $query->where('id', $vendorId))
+            ->get()
+            ->each(fn (Vendor $vendor) => $this->syncSupplementalSellerBillingsForVendor($vendor, $month));
+    }
+
+    private function syncSupplementalSellerBillingsForVendor(Vendor $vendor, Carbon $month): void
+    {
+        $monthStart = $month->copy()->startOfMonth()->startOfDay();
+        $monthEnd = $month->copy()->endOfMonth()->endOfDay();
+        $frequency = $vendor->billing_frequency ?: 'weekly';
+        $periodKeys = collect();
+
+        SellerBilling::query()
+            ->where('vendor_id', $vendor->id)
+            ->whereDate('period_start', '<=', $monthEnd->toDateString())
+            ->whereDate('period_end', '>=', $monthStart->toDateString())
+            ->get(['period_start', 'period_end'])
+            ->each(function (SellerBilling $billing) use ($periodKeys) {
+                $periodKeys->put(
+                    $billing->period_start->toDateString() . ':' . $billing->period_end->toDateString(),
+                    [
+                        'period_start' => Carbon::parse($billing->period_start)->startOfDay(),
+                        'period_end' => Carbon::parse($billing->period_end)->endOfDay(),
+                    ]
+                );
+            });
+
+        Order::query()
+            ->where('vendor_id', $vendor->id)
+            ->where('status', 'delivered')
+            ->where('seller_invoice_status', Order::INVOICE_NOT_INVOICED)
+            ->whereBetween('delivered_at', [$monthStart, $monthEnd])
+            ->get(['delivered_at'])
+            ->each(function (Order $order) use ($frequency, $periodKeys) {
+                [$periodStart, $periodEnd] = $this->resolveSellerPeriod(
+                    Carbon::parse($order->delivered_at),
+                    $frequency
+                );
+
+                $periodKeys->put(
+                    $periodStart->toDateString() . ':' . $periodEnd->toDateString(),
+                    [
+                        'period_start' => $periodStart->copy()->startOfDay(),
+                        'period_end' => $periodEnd->copy()->endOfDay(),
+                    ]
+                );
+            });
+
+        foreach ($periodKeys as $period) {
+            $this->ensureSupplementalSellerBillingForPeriod($vendor, $period['period_start'], $period['period_end']);
+        }
+    }
+
+    private function ensureSupplementalSellerBillingForPeriod(Vendor $vendor, Carbon $periodStart, Carbon $periodEnd): void
+    {
+        $hasPaidBilling = SellerBilling::query()
+            ->where('vendor_id', $vendor->id)
+            ->whereDate('period_start', $periodStart->toDateString())
+            ->whereDate('period_end', $periodEnd->toDateString())
+            ->whereNotNull('paid_at')
+            ->exists();
+
+        if (!$hasPaidBilling) {
+            return;
+        }
+
+        $orphanOrders = Order::query()
+            ->where('vendor_id', $vendor->id)
+            ->where('status', 'delivered')
+            ->where('seller_invoice_status', Order::INVOICE_NOT_INVOICED)
+            ->whereBetween('delivered_at', [$periodStart, $periodEnd])
+            ->exists();
+
+        if (!$orphanOrders) {
+            $this->deleteEmptyUnpaidSupplementalBillings($vendor, $periodStart, $periodEnd);
+
+            return;
+        }
+
+        $unpaidSupplement = SellerBilling::query()
+            ->where('vendor_id', $vendor->id)
+            ->whereDate('period_start', $periodStart->toDateString())
+            ->whereDate('period_end', $periodEnd->toDateString())
+            ->where('supplement_sequence', '>', 0)
+            ->whereNull('paid_at')
+            ->first();
+
+        if ($unpaidSupplement) {
+            $this->recalculateSellerBilling($unpaidSupplement, $vendor, false);
+
+            return;
+        }
+
+        $nextSequence = ((int) SellerBilling::query()
+            ->where('vendor_id', $vendor->id)
+            ->whereDate('period_start', $periodStart->toDateString())
+            ->whereDate('period_end', $periodEnd->toDateString())
+            ->max('supplement_sequence')) + 1;
+
+        $billing = SellerBilling::create([
+            'vendor_id' => $vendor->id,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
+            'supplement_sequence' => max(1, $nextSequence),
+            'billing_frequency' => $vendor->billing_frequency ?: 'weekly',
+            'notes' => 'Supplemental invoice for orders delivered after the primary invoice was paid.',
+        ]);
+
+        $this->recalculateSellerBilling($billing, $vendor, true);
+    }
+
+    private function deleteEmptyUnpaidSupplementalBillings(Vendor $vendor, Carbon $periodStart, Carbon $periodEnd): void
+    {
+        SellerBilling::query()
+            ->where('vendor_id', $vendor->id)
+            ->whereDate('period_start', $periodStart->toDateString())
+            ->whereDate('period_end', $periodEnd->toDateString())
+            ->where('supplement_sequence', '>', 0)
+            ->whereNull('paid_at')
+            ->where('delivered_orders_count', 0)
+            ->delete();
+    }
+
     private function buildSellerPeriodsForMonth(Carbon $month, string $frequency): Collection
     {
         $cursor = $month->copy()->startOfMonth();
@@ -803,6 +1126,7 @@ class BillingService
                 'vendor_id' => $vendor->id,
                 'period_start' => $periodStart->toDateString(),
                 'period_end' => $periodEnd->toDateString(),
+                'supplement_sequence' => 0,
             ],
             [
                 'billing_frequency' => 'custom',
@@ -911,6 +1235,7 @@ class BillingService
             ])->values(),
             'order_amount' => (float) ($order->total ?? 0),
             'commission' => $commissionPerOrder,
+            'delivered_at' => $order->delivered_at?->toIso8601String(),
             'seller_invoice_status' => $order->seller_invoice_status,
             'confirmation_invoice_status' => $order->confirmation_invoice_status,
             'delivery_invoice_status' => $order->delivery_invoice_status,
