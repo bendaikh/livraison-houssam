@@ -101,7 +101,7 @@ export default function ConfirmationWorkflowForm() {
             setLoading(true);
             const [orderResponse, productsResponse, deliveryPersonsResponse, deliveryCompaniesResponse] = await Promise.all([
                 api.get(`/orders/${id}`),
-                api.get('/products?is_active=1'),
+                api.get('/products', { params: { is_active: 1, per_page: 1000 } }),
                 api.get('/delivery-persons'),
                 api.get('/orders/delivery-companies/available'),
             ]);

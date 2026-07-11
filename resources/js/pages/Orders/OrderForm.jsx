@@ -212,7 +212,9 @@ export default function OrderForm() {
 
     const fetchProducts = async () => {
         try {
-            const response = await api.get('/products?is_active=1');
+            const response = await api.get('/products', {
+                params: { is_active: 1, per_page: 1000 },
+            });
             setProducts(response.data.data || response.data);
         } catch (error) {
             console.error('Error fetching products:', error);
