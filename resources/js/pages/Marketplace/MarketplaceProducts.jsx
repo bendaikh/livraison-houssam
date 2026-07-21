@@ -38,7 +38,7 @@ export default function MarketplaceProducts() {
         try {
             setLoading(true);
             const [productsRes, statsRes] = await Promise.all([
-                api.get('/marketplace', { params: { search: searchTerm, is_marketplace_active: 1 } }),
+                api.get('/marketplace', { params: { search: searchTerm, is_marketplace_active: 1, per_page: 500 } }),
                 api.get('/marketplace/statistics'),
             ]);
             setProducts(productsRes.data.data);

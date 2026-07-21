@@ -286,9 +286,13 @@ class MarketplaceController extends Controller
     public function statistics()
     {
         $stats = [
-            'total_products' => Product::where('is_active', true)->count(),
-            'assigned_products' => Product::whereHas('marketplaceProducts')->count(),
+            'total_products' => Product::where('is_active', true)
+                ->where('is_marketplace_active', true)->count(),
+            'assigned_products' => Product::where('is_active', true)
+                ->where('is_marketplace_active', true)
+                ->whereHas('marketplaceProducts')->count(),
             'unassigned_products' => Product::where('is_active', true)
+                ->where('is_marketplace_active', true)
                 ->whereDoesntHave('marketplaceProducts')->count(),
             'total_vendors' => Vendor::where('is_active', true)->count(),
             'active_assignments' => MarketplaceProduct::where('is_active', true)->count(),
