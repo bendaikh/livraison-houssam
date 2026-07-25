@@ -1182,7 +1182,9 @@
       "google_sheet": "جداول Google",
       "delivery_company": "شركة التوصيل",
       "marketplace": "السوق",
-      "whatsapp": "واتساب"
+      "whatsapp": "واتساب",
+      "custom_api": "API",
+      "website": "الموقع"
     },
     "orderForm": {
       "orderUpdate": "تحديث الطلب",

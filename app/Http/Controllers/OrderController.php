@@ -104,8 +104,8 @@ class OrderController extends Controller
             $query->where('source', $request->source);
         }
 
-        if ($request->has('vendor_id')) {
-            $query->where('vendor_id', $request->vendor_id);
+        if ($request->filled('vendor_id')) {
+            $this->applyVendorFilter($query, (int) $request->vendor_id);
         }
 
         if ($request->has('delivery_agent_id')) {
@@ -1788,16 +1788,78 @@ class OrderController extends Controller
         ], fn ($value) => $value !== null && $value !== []);
     }
 
+    private function applyVendorFilter($query, int $vendorId): void
+    {
+        $vendor = Vendor::find($vendorId);
+        $storeLabels = $this->vendorStoreMatchLabels($vendor);
+
+        $query->where(function ($vendorQuery) use ($vendorId, $storeLabels) {
+            $vendorQuery->where('vendor_id', $vendorId);
+
+            if ($storeLabels === []) {
+                return;
+            }
+
+            // API/website orders may show the seller from source_website while vendor_id is still null.
+            $vendorQuery->orWhere(function ($unlinkedQuery) use ($storeLabels) {
+                $unlinkedQuery->whereNull('vendor_id')
+                    ->where(function ($websiteQuery) use ($storeLabels) {
+                        foreach ($storeLabels as $label) {
+                            $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $label) . '%';
+                            $websiteQuery->orWhere('source_website->store_name', 'like', $like)
+                                ->orWhere('source_website->name', 'like', $like)
+                                ->orWhere('source_website->subdomain', 'like', $like)
+                                ->orWhere('source_website->owner->company_name', 'like', $like)
+                                ->orWhere('source_website->owner->name', 'like', $like);
+                        }
+                    });
+            });
+        });
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function vendorStoreMatchLabels(?Vendor $vendor): array
+    {
+        if (!$vendor) {
+            return [];
+        }
+
+        $labels = [];
+        foreach ([$vendor->company_name, $vendor->name] as $raw) {
+            $value = trim((string) $raw);
+            if ($value === '') {
+                continue;
+            }
+
+            $labels[] = $value;
+
+            // "Prixvado (Houssam Achhab)" / "Prixvado Store" → also match "Prixvado"
+            if (preg_match('/^([^\(\-\|]+)/u', $value, $matches)) {
+                $token = trim($matches[1]);
+                $token = preg_replace('/\b(store|shop|boutique)\b$/iu', '', $token) ?? $token;
+                $token = trim($token);
+                if (mb_strlen($token) >= 3) {
+                    $labels[] = $token;
+                }
+            }
+        }
+
+        $labels = array_values(array_unique(array_filter($labels, function ($label) {
+            return mb_strlen(trim((string) $label)) >= 3;
+        })));
+
+        usort($labels, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+
+        return $labels;
+    }
+
     private function resolveVendorFromWebsite(array $website): ?int
     {
         $owner = is_array($website['owner'] ?? null) ? $website['owner'] : [];
 
-        if (!empty($owner['id'])) {
-            $vendor = Vendor::find((int) $owner['id']);
-            if ($vendor) {
-                return $vendor->id;
-            }
-        }
+        // Prefer identity fields from the payload. Do not trust external owner.id as our vendor PK.
 
         if (!empty($owner['email'])) {
             $email = trim((string) $owner['email']);
@@ -1825,22 +1887,63 @@ class OrderController extends Controller
         }
 
         if (!empty($owner['company_name'])) {
-            $companyName = trim((string) $owner['company_name']);
-            $vendor = Vendor::where('company_name', $companyName)->first();
-            if ($vendor) {
-                return $vendor->id;
+            $vendorId = $this->findVendorIdByStoreLabel((string) $owner['company_name']);
+            if ($vendorId) {
+                return $vendorId;
             }
         }
 
         if (!empty($owner['name'])) {
-            $ownerName = trim((string) $owner['name']);
-            $vendor = Vendor::where('name', $ownerName)->first();
-            if ($vendor) {
-                return $vendor->id;
+            $vendorId = $this->findVendorIdByStoreLabel((string) $owner['name']);
+            if ($vendorId) {
+                return $vendorId;
+            }
+        }
+
+        foreach (['store_name', 'name', 'subdomain'] as $field) {
+            if (empty($website[$field])) {
+                continue;
+            }
+
+            $vendorId = $this->findVendorIdByStoreLabel((string) $website[$field]);
+            if ($vendorId) {
+                return $vendorId;
             }
         }
 
         return null;
+    }
+
+    private function findVendorIdByStoreLabel(string $label): ?int
+    {
+        $label = trim($label);
+        if (mb_strlen($label) < 3) {
+            return null;
+        }
+
+        $vendor = Vendor::query()
+            ->where(function ($query) use ($label) {
+                $query->whereRaw('LOWER(name) = ?', [mb_strtolower($label)])
+                    ->orWhereRaw('LOWER(company_name) = ?', [mb_strtolower($label)]);
+            })
+            ->first();
+
+        if ($vendor) {
+            return $vendor->id;
+        }
+
+        $vendor = Vendor::query()
+            ->where(function ($query) use ($label) {
+                $query->where('name', 'like', '%' . $label . '%')
+                    ->orWhere('company_name', 'like', '%' . $label . '%');
+            })
+            ->orderByRaw('CASE WHEN LOWER(company_name) LIKE ? THEN 0 WHEN LOWER(name) LIKE ? THEN 1 ELSE 2 END', [
+                mb_strtolower($label) . '%',
+                mb_strtolower($label) . '%',
+            ])
+            ->first();
+
+        return $vendor?->id;
     }
 
     private function formatSourceWebsiteSellerLabel(mixed $sourceWebsite): ?string

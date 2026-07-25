@@ -54,7 +54,9 @@ export default function OrderList({ status = '' }) {
         google_sheet: 0,
         delivery_company: 0,
         marketplace: 0,
-        whatsapp: 0
+        whatsapp: 0,
+        custom_api: 0,
+        website: 0,
     });
     const [vendors, setVendors] = useState([]);
     const [filters, setFilters] = useState({
@@ -186,7 +188,9 @@ export default function OrderList({ status = '' }) {
                 google_sheet: fetchedOrders.filter(o => o.source === 'google_sheet').length,
                 delivery_company: fetchedOrders.filter(o => o.source === 'delivery_company').length,
                 marketplace: fetchedOrders.filter(o => o.source === 'marketplace').length,
-                whatsapp: fetchedOrders.filter(o => o.source === 'whatsapp').length
+                whatsapp: fetchedOrders.filter(o => o.source === 'whatsapp').length,
+                custom_api: fetchedOrders.filter(o => o.source === 'custom_api').length,
+                website: fetchedOrders.filter(o => o.source === 'website').length,
             };
             setStats(orderStats);
         } catch (error) {
@@ -1101,7 +1105,7 @@ export default function OrderList({ status = '' }) {
             )}
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-9 gap-2 mb-3">
                 <div 
                     onClick={() => setFilters({ ...filters, source: '', page: 1 })}
                     className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-gray-400"
@@ -1151,6 +1155,20 @@ export default function OrderList({ status = '' }) {
                     <p className="text-[10px] text-emerald-600 mb-0.5 font-medium uppercase">{t('admin.orderSources.whatsapp')}</p>
                     <p className="text-base font-bold text-emerald-900">{stats.whatsapp}</p>
                 </div>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'custom_api', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-indigo-500"
+                >
+                    <p className="text-[10px] text-indigo-600 mb-0.5 font-medium uppercase">{t('admin.orderSources.custom_api')}</p>
+                    <p className="text-base font-bold text-indigo-900">{stats.custom_api}</p>
+                </div>
+                <div 
+                    onClick={() => setFilters({ ...filters, source: 'website', page: 1 })}
+                    className="bg-white rounded-lg p-2 shadow-sm hover:shadow transition-all cursor-pointer border-l-2 border-cyan-500"
+                >
+                    <p className="text-[10px] text-cyan-600 mb-0.5 font-medium uppercase">{t('admin.orderSources.website')}</p>
+                    <p className="text-base font-bold text-cyan-900">{stats.website}</p>
+                </div>
             </div>
 
             {/* Filters */}
@@ -1191,6 +1209,8 @@ export default function OrderList({ status = '' }) {
                         <option value="delivery_company">{t('admin.orderSources.delivery_company')}</option>
                         <option value="marketplace">{t('admin.orderSources.marketplace')}</option>
                         <option value="whatsapp">{t('admin.orderSources.whatsapp')}</option>
+                        <option value="custom_api">{t('admin.orderSources.custom_api')}</option>
+                        <option value="website">{t('admin.orderSources.website')}</option>
                     </select>
                     {!isDeliveryPersonUser && !isVendorUser && (
                         <select

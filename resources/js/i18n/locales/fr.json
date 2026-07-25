@@ -1189,7 +1189,9 @@
       "google_sheet": "Google Sheets",
       "delivery_company": "Société de livraison",
       "marketplace": "Marketplace",
-      "whatsapp": "WhatsApp"
+      "whatsapp": "WhatsApp",
+      "custom_api": "API",
+      "website": "Website"
     },
     "orderForm": {
       "orderUpdate": "Mise à jour de la commande",

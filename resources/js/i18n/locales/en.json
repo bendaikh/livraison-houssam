@@ -1189,7 +1189,9 @@
       "google_sheet": "Google Sheets",
       "delivery_company": "Delivery Company",
       "marketplace": "Marketplace",
-      "whatsapp": "WhatsApp"
+      "whatsapp": "WhatsApp",
+      "custom_api": "API",
+      "website": "Website"
     },
     "orderForm": {
       "orderUpdate": "Order Update",
