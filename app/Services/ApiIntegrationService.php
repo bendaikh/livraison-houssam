@@ -756,6 +756,8 @@ class ApiIntegrationService
                     'notes' => $pick(['notes','comment','comments']),
                     'whatsapp' => $pick(['whatsapp']),
                 ]);
+
+                $this->orderService->applySellerFinancials($existing->fresh(['items.product']));
             });
 
             return ['order' => $existing->fresh(['items', 'client']), 'created' => false];

@@ -74,16 +74,7 @@ class OrderService
                 ]);
             }
 
-            // Calculate seller net profit and update commission if vendor order
-            if ($order->vendor_id) {
-                $order->load('items.product');
-                $fulfillmentCost = (float) \App\Models\Setting::get('order_fulfillment_cost', 10.0);
-                $sellerNetProfit = $order->calculateProfit($fulfillmentCost);
-                $order->update([
-                    'seller_net_profit' => $sellerNetProfit,
-                    'commission_amount' => $order->total - $sellerNetProfit,
-                ]);
-            }
+            $this->applySellerFinancials($order);
 
             // Create history entry
             $this->addHistory($order->id, $order->status, 'Order created');
@@ -162,16 +153,7 @@ class OrderService
                 ]);
             }
 
-            // Calculate seller net profit and update commission if vendor order
-            if ($order->vendor_id) {
-                $order->load('items.product');
-                $fulfillmentCost = (float) \App\Models\Setting::get('order_fulfillment_cost', 10.0);
-                $sellerNetProfit = $order->calculateProfit($fulfillmentCost);
-                $order->update([
-                    'seller_net_profit' => $sellerNetProfit,
-                    'commission_amount' => $order->total - $sellerNetProfit,
-                ]);
-            }
+            $this->applySellerFinancials($order);
 
             // Create history entry
             $this->addHistory($order->id, $order->status, 'Order updated');
@@ -1076,6 +1058,33 @@ class OrderService
         return [
             'confirmation_assigned_at' => $nextAgentId ? now() : null,
         ];
+    }
+
+    /**
+     * Platform fee = product cost + shipping + fulfillment.
+     * No extra Frais COD / percentage commission is applied here.
+     */
+    public function applySellerFinancials(Order $order): Order
+    {
+        if (!$order->vendor_id) {
+            $order->update([
+                'seller_net_profit' => 0,
+                'commission_amount' => 0,
+            ]);
+
+            return $order->fresh(['items.product', 'client', 'vendor']);
+        }
+
+        $order->loadMissing('items.product');
+        $fulfillmentCost = (float) \App\Models\Setting::get('order_fulfillment_cost', 10.0);
+        $sellerNetProfit = $order->calculateProfit($fulfillmentCost);
+
+        $order->update([
+            'seller_net_profit' => $sellerNetProfit,
+            'commission_amount' => (float) $order->total - $sellerNetProfit,
+        ]);
+
+        return $order->fresh(['items.product', 'client', 'vendor']);
     }
 
     private function calculateOrderTotals(array $items, array $data, ?Order $order = null): array

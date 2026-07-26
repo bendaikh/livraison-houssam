@@ -119,7 +119,11 @@ class InvoicePdfService
             'generated_at' => $billing->generated_at ?? now(),
             'period_start' => $billing->period_start,
             'period_end' => $billing->period_end,
-            'entity_name' => $this->text($billing->vendor?->name ?? 'Seller'),
+            'entity_name' => $this->text(
+                $billing->vendor?->company_name
+                    ?: $billing->vendor?->name
+                    ?: 'Seller'
+            ),
             'entity_phone' => $this->text($billing->vendor?->phone),
             'entity_email' => $this->text($billing->vendor?->email),
             'rows' => $rows,
