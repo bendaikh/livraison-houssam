@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Vendor;
 use App\Support\MoroccanPhone;
 use App\Support\OrderTotals;
+use App\Services\ClientIntelligenceService;
 use App\Services\DeliveryStatusMapper;
 use App\Services\OrderService;
 use App\Services\ShippingPriceService;
@@ -47,6 +48,7 @@ class OrderController extends Controller
         private OrderService $orderService,
         private ShippingPriceService $shippingPriceService,
         private DeliveryStatusMapper $deliveryStatusMapper,
+        private ClientIntelligenceService $clientIntelligenceService,
     ) {}
 
     public function index(Request $request)
@@ -160,6 +162,7 @@ class OrderController extends Controller
             return $order;
         });
         $this->attachBlacklistMetadata($request, $orders->getCollection());
+        $this->attachClientIntelligenceSummaries($orders->getCollection());
 
         return response()->json($orders);
     }
@@ -324,6 +327,7 @@ class OrderController extends Controller
         ]);
         $this->attachShippingPricingMetadata($order, 'show');
         $this->attachBlacklistMetadata(request(), $order);
+        $this->attachClientIntelligenceSummaries($order);
         $order->setAttribute('seller_name', $this->resolveSellerName($order));
         $this->attachOrderDisplayTotals($order);
 
@@ -1412,6 +1416,42 @@ class OrderController extends Controller
         $order->setAttribute('shipping_included_in_price', $display['shipping_included_in_price']);
         $order->setAttribute('display_subtotal', $display['display_subtotal']);
         $order->setAttribute('display_total', $display['display_total']);
+    }
+
+    private function attachClientIntelligenceSummaries(Order|Collection $orders): void
+    {
+        $collection = $orders instanceof Order ? collect([$orders]) : $orders;
+
+        $phones = $collection->map(function (Order $order) {
+            return MoroccanPhone::normalize($order->phone)
+                ?: MoroccanPhone::normalize($order->client?->phone);
+        })->filter()->unique()->values();
+
+        $summaries = $this->clientIntelligenceService->summarizeMany($phones);
+
+        $collection->each(function (Order $order) use ($summaries) {
+            $phone = MoroccanPhone::normalize($order->phone)
+                ?: MoroccanPhone::normalize($order->client?->phone);
+
+            $summary = $phone !== '' ? ($summaries[$phone] ?? null) : null;
+
+            $order->setAttribute('client_intelligence', $summary ? [
+                'phone' => $summary['phone'],
+                'total_orders' => $summary['total_orders'],
+                'delivered_orders' => $summary['delivered_orders'],
+                'cancelled_orders' => $summary['cancelled_orders'],
+                'returned_orders' => $summary['returned_orders'],
+                'total_spent' => $summary['total_spent'],
+                'sellers_count' => $summary['sellers_count'],
+                'cancel_rate' => $summary['cancel_rate'],
+                'return_rate' => $summary['return_rate'],
+                'delivery_rate' => $summary['delivery_rate'],
+                'first_order_at' => $summary['first_order_at'],
+                'latest_order_at' => $summary['latest_order_at'],
+                'indicators' => $summary['indicators'],
+                'reliability' => $summary['reliability'],
+            ] : null);
+        });
     }
 
     private function attachBlacklistMetadata(Request $request, Order|Collection $orders): void

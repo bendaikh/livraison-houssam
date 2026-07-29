@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { formatOrderSource } from '../../utils/orderSource';
 import { resolveOrderDisplayTotals } from '../../utils/orderTotals';
+import ClientHistoryModal, { ClientIntelligenceIndicators } from '../../components/ClientHistoryModal';
 
 export default function OrderDetail() {
     const { id } = useParams();
@@ -24,6 +25,7 @@ export default function OrderDetail() {
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [resettingAssignment, setResettingAssignment] = useState(false);
+    const [clientHistoryOpen, setClientHistoryOpen] = useState(false);
     const autoSyncPerformed = useRef(false);
     const printRef = useRef(null);
     const isAdminUser = isAdminRole(user?.role?.slug);
@@ -683,7 +685,15 @@ export default function OrderDetail() {
                         <div className="space-y-3">
                             <div>
                                 <p className="text-sm text-gray-500">{t('admin.orderDetail.name')}</p>
-                                <p className="font-semibold text-gray-900">{order.client?.name || 'N/A'}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-semibold text-gray-900">{order.client?.name || 'N/A'}</p>
+                                    {(order.client?.phone || order.phone) && (
+                                        <ClientIntelligenceIndicators
+                                            summary={order.client_intelligence}
+                                            onOpenHistory={() => setClientHistoryOpen(true)}
+                                        />
+                                    )}
+                                </div>
                             </div>
                             <div className="flex items-center space-x-2">
                                 <Phone size={16} className="text-gray-400" />
@@ -923,6 +933,13 @@ export default function OrderDetail() {
                     )}
                 </div>
             </div>
+
+            <ClientHistoryModal
+                isOpen={clientHistoryOpen}
+                phone={order.client?.phone || order.phone || ''}
+                clientName={order.client?.name || ''}
+                onClose={() => setClientHistoryOpen(false)}
+            />
         </div>
     );
 }

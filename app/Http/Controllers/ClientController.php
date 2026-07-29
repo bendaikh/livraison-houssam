@@ -3,10 +3,35 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Services\ClientIntelligenceService;
+use App\Support\MoroccanPhone;
 use Illuminate\Http\Request;
 
 class ClientController extends Controller
 {
+    public function __construct(
+        private ClientIntelligenceService $clientIntelligenceService,
+    ) {}
+
+    public function intelligence(Request $request)
+    {
+        $validated = $request->validate([
+            'phone' => 'required|string|max:30',
+        ]);
+
+        $phone = MoroccanPhone::normalize($validated['phone']);
+
+        if ($phone === '') {
+            return response()->json([
+                'message' => 'A valid phone number is required.',
+            ], 422);
+        }
+
+        return response()->json(
+            $this->clientIntelligenceService->profile($phone)
+        );
+    }
+
     public function index(Request $request)
     {
         $query = Client::query();

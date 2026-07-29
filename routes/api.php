@@ -112,6 +112,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('categories', CategoryController::class);
 
     // Clients
+    Route::get('/client-intelligence', [ClientController::class, 'intelligence']);
     Route::apiResource('clients', ClientController::class);
 
     // Vendors

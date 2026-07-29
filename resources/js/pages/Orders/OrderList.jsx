@@ -6,6 +6,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X } from 'lucide-react';
 import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
+import ClientHistoryModal, { ClientIntelligenceIndicators } from '../../components/ClientHistoryModal';
 import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { calculateOrderProfit, getFulfillmentPrice } from '../../utils/profit';
 import { formatDeliveryDispatchFailureMessage } from '../../utils/delivery';
@@ -37,6 +38,11 @@ export default function OrderList({ status = '' }) {
         callbackDate: '',
         errors: {},
         saving: false,
+    });
+    const [clientHistoryModal, setClientHistoryModal] = useState({
+        isOpen: false,
+        phone: '',
+        clientName: '',
     });
     const [assignmentScope, setAssignmentScope] = useState('my');
     const [pagination, setPagination] = useState({
@@ -1027,6 +1033,12 @@ export default function OrderList({ status = '' }) {
                 preferredCity={pendingStatusChange?.preferredCity}
                 preferredDeliveryPersonId={pendingStatusChange?.preferredDeliveryPersonId}
             />
+            <ClientHistoryModal
+                isOpen={clientHistoryModal.isOpen}
+                phone={clientHistoryModal.phone}
+                clientName={clientHistoryModal.clientName}
+                onClose={() => setClientHistoryModal({ isOpen: false, phone: '', clientName: '' })}
+            />
 
             {/* Header */}
             <div className="flex justify-between items-center mb-3">
@@ -1359,8 +1371,21 @@ export default function OrderList({ status = '' }) {
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0 flex-1">
                                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t('admin.orderList.client')}</p>
-                                            <p className="font-semibold text-gray-900 text-sm truncate">{order.client?.name || '-'}</p>
-                                            <p className="text-gray-500 text-xs truncate">{order.client?.phone || '-'}</p>
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <p className="font-semibold text-gray-900 text-sm truncate">{order.client?.name || '-'}</p>
+                                                {(order.client?.phone || order.phone) && (
+                                                    <ClientIntelligenceIndicators
+                                                        compact
+                                                        summary={order.client_intelligence}
+                                                        onOpenHistory={() => setClientHistoryModal({
+                                                            isOpen: true,
+                                                            phone: order.client?.phone || order.phone,
+                                                            clientName: order.client?.name || '',
+                                                        })}
+                                                    />
+                                                )}
+                                            </div>
+                                            <p className="text-gray-500 text-xs truncate">{order.client?.phone || order.phone || '-'}</p>
                                             <p className="text-gray-400 text-xs truncate">{order.city || order.client?.city || '-'}</p>
                                         </div>
                                         <div className="text-right flex-shrink-0">
