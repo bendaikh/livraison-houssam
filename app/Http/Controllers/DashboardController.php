@@ -14,18 +14,20 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $period = $request->get('period', 'daily');
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
         $user = $request->user();
         $vendorId = null;
 
         if ($user && $user->isConfirmationAgent()) {
             return response()->json(
-                $this->dashboardService->getConfirmationAgentStatistics($period, $user)
+                $this->dashboardService->getConfirmationAgentStatistics($period, $user, $dateFrom, $dateTo)
             );
         }
 
         if ($user && $user->isDeliveryPerson()) {
             return response()->json(
-                $this->dashboardService->getDeliveryPersonStatistics($period, $user)
+                $this->dashboardService->getDeliveryPersonStatistics($period, $user, $dateFrom, $dateTo)
             );
         }
 
@@ -34,7 +36,7 @@ class DashboardController extends Controller
             $vendorId = $vendor?->id;
         }
 
-        $statistics = $this->dashboardService->getStatistics($period, $vendorId);
+        $statistics = $this->dashboardService->getStatistics($period, $vendorId, $dateFrom, $dateTo);
 
         return response()->json($statistics);
     }

@@ -20,3 +20,8 @@ Schedule::command('orders:sync-delivery-statuses --provider=tawsilex')
 Schedule::command('delivery-billings:generate-daily')
     ->dailyAt('00:00')
     ->withoutOverlapping();
+
+// Auto-import new Google Sheet orders every 5 minutes.
+Schedule::command('google-sheet:sync')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();

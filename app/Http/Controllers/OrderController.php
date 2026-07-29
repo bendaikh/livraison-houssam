@@ -1686,14 +1686,14 @@ class OrderController extends Controller
     private function resolveSellerName(Order $order): ?string
     {
         if ($order->relationLoaded('vendor') && $order->vendor) {
-            return $order->vendor->name ?: $order->vendor->company_name;
+            return $order->vendor->company_name ?: $order->vendor->name;
         }
 
         if ($order->vendor_id) {
             $vendor = Vendor::find($order->vendor_id);
 
             if ($vendor) {
-                return $vendor->name ?: $vendor->company_name;
+                return $vendor->company_name ?: $vendor->name;
             }
         }
 
@@ -1953,16 +1953,12 @@ class OrderController extends Controller
         }
 
         $storeLabel = trim((string) ($sourceWebsite['store_name'] ?? $sourceWebsite['name'] ?? ''));
-        $owner = is_array($sourceWebsite['owner'] ?? null) ? $sourceWebsite['owner'] : [];
-        $ownerLabel = trim((string) ($owner['company_name'] ?? $owner['name'] ?? ''));
-
-        if ($storeLabel !== '' && $ownerLabel !== '' && strcasecmp($storeLabel, $ownerLabel) !== 0) {
-            return "{$storeLabel} ({$ownerLabel})";
-        }
-
         if ($storeLabel !== '') {
             return $storeLabel;
         }
+
+        $owner = is_array($sourceWebsite['owner'] ?? null) ? $sourceWebsite['owner'] : [];
+        $ownerLabel = trim((string) ($owner['company_name'] ?? $owner['name'] ?? ''));
 
         return $ownerLabel !== '' ? $ownerLabel : null;
     }

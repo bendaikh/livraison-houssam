@@ -10,7 +10,6 @@ use App\Models\Product;
 use App\Models\Vendor;
 use App\Support\MoroccanPhone;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 use App\Services\GoogleSheetService;
 use Carbon\Carbon;
 
@@ -116,12 +115,30 @@ class ApiIntegrationService
         }
     }
 
-    public function syncGoogleSheetOrders(int $integrationId)
+    public function syncGoogleSheetOrders(int $integrationId, ?string $connectionKey = null)
     {
         $integration = ApiIntegration::findOrFail($integrationId);
 
         if (!$integration->is_active) {
             throw new \Exception('Integration is not active');
+        }
+
+        $connections = $this->getConnectedGoogleSheets($integration);
+
+        if ($connectionKey) {
+            $connections = array_values(array_filter(
+                $connections,
+                fn (array $connection) => ($connection['key'] ?? '') === $connectionKey
+            ));
+        } else {
+            $connections = array_values(array_filter(
+                $connections,
+                fn (array $connection) => ($connection['auto_sync'] ?? true) !== false
+            ));
+        }
+
+        if ($connections === []) {
+            throw new \Exception('Connect at least one spreadsheet and tab before syncing.');
         }
 
         $log = ApiImportLog::create([
@@ -133,53 +150,91 @@ class ApiIntegrationService
         ]);
 
         try {
-            $credentials = $integration->credentials;
-            $sheetId = $credentials['sheet_id'] ?? '';
-            $range = $credentials['range'] ?? 'Orders!A1:Z1000';
-            $headerRow = (int)($credentials['header_row'] ?? 1);
-
-            if (!$sheetId) {
-                throw new \Exception('Select a Google spreadsheet before syncing.');
-            }
-
-            $this->configureGoogleSheetService($integration, $sheetId, $range, $headerRow);
-            $rows = $this->googleSheetService->fetchRows();
-
-            $log->update(['total_records' => count($rows)]);
-
             $created = 0;
             $duplicates = 0;
             $failed = 0;
+            $totalRecords = 0;
             $errors = [];
+            $sheetSummaries = [];
 
-            foreach ($rows as $row) {
+            foreach ($connections as $connection) {
+                $sheetId = (string) ($connection['sheet_id'] ?? '');
+                $range = (string) ($connection['range'] ?? '');
+                $headerRow = (int) ($connection['header_row'] ?? 1);
+                $sheetKey = (string) ($connection['key'] ?? ($sheetId . '|' . ($connection['tab'] ?? '')));
+                $sheetLabel = trim(($connection['sheet_name'] ?? $sheetId) . ' / ' . ($connection['tab'] ?? ''));
+
+                if ($sheetId === '' || $range === '') {
+                    $failed++;
+                    $errors[] = [
+                        'row' => $sheetLabel,
+                        'error' => 'Missing spreadsheet or tab configuration.',
+                    ];
+                    continue;
+                }
+
                 try {
-                    $result = $this->importGoogleSheetRow($row, $integration);
-                    if ($result['created']) {
-                        $created++;
-                    } else {
-                        $duplicates++;
+                    $this->configureGoogleSheetService($integration, $sheetId, $range, $headerRow);
+                    $rows = $this->googleSheetService->fetchRows();
+                    $totalRecords += count($rows);
+
+                    $sheetCreated = 0;
+                    $sheetDuplicates = 0;
+                    $sheetFailed = 0;
+
+                    foreach ($rows as $row) {
+                        try {
+                            $result = $this->importGoogleSheetRow($row, $integration, $sheetKey);
+                            if ($result['created']) {
+                                $created++;
+                                $sheetCreated++;
+                            } else {
+                                $duplicates++;
+                                $sheetDuplicates++;
+                            }
+                        } catch (\Exception $e) {
+                            $failed++;
+                            $sheetFailed++;
+                            $errors[] = [
+                                'row' => ($row['__row_number'] ?? 'unknown') . " ({$sheetLabel})",
+                                'error' => $e->getMessage(),
+                            ];
+
+                            Log::error('Failed to import Google Sheet row', [
+                                'connection' => $sheetKey,
+                                'row' => $row,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
                     }
+
+                    $sheetMessage = "Created {$sheetCreated}, duplicates {$sheetDuplicates}, failed {$sheetFailed}";
+                    $sheetSummaries[] = "{$sheetLabel}: {$sheetMessage}";
+                    $this->touchConnectedGoogleSheet($integration, $sheetKey, $sheetMessage);
                 } catch (\Exception $e) {
                     $failed++;
                     $errors[] = [
-                        'row' => $row['__row_number'] ?? 'unknown',
+                        'row' => $sheetLabel,
                         'error' => $e->getMessage(),
                     ];
-
-                    Log::error('Failed to import Google Sheet row', [
-                        'row' => $row,
+                    $this->touchConnectedGoogleSheet($integration, $sheetKey, $e->getMessage());
+                    Log::error('Failed to sync Google Sheet connection', [
+                        'integration_id' => $integrationId,
+                        'connection' => $sheetKey,
                         'error' => $e->getMessage(),
                     ]);
                 }
             }
 
+            $integration->refresh();
             $log->update([
                 'status' => $failed === 0 ? 'success' : ($created > 0 ? 'partial' : 'failed'),
+                'total_records' => $totalRecords,
                 'successful_records' => $created,
                 'failed_records' => $failed,
                 'errors' => $errors,
-                'message' => "Created {$created}, duplicates {$duplicates}, failed {$failed}",
+                'message' => "Created {$created}, duplicates {$duplicates}, failed {$failed}"
+                    . ($sheetSummaries !== [] ? ' | ' . implode(' ; ', $sheetSummaries) : ''),
             ]);
 
             $integration->update(['last_sync_at' => now()]);
@@ -192,6 +247,190 @@ class ApiIntegrationService
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getConnectedGoogleSheets(ApiIntegration $integration): array
+    {
+        $settings = $integration->settings ?? [];
+        $connected = $settings['connected_sheets'] ?? [];
+
+        if (!is_array($connected)) {
+            $connected = [];
+        }
+
+        $normalized = [];
+        foreach ($connected as $connection) {
+            if (!is_array($connection)) {
+                continue;
+            }
+
+            $sheetId = trim((string) ($connection['sheet_id'] ?? ''));
+            $tab = trim((string) ($connection['tab'] ?? ''));
+            if ($sheetId === '' || $tab === '') {
+                continue;
+            }
+
+            $key = (string) ($connection['key'] ?? ($sheetId . '|' . $tab));
+            $normalized[$key] = [
+                'key' => $key,
+                'sheet_id' => $sheetId,
+                'sheet_name' => (string) ($connection['sheet_name'] ?? ''),
+                'sheet_url' => (string) ($connection['sheet_url'] ?? ''),
+                'tab' => $tab,
+                'range' => (string) ($connection['range'] ?? ($tab . '!A:Z')),
+                'header_row' => (int) ($connection['header_row'] ?? 1),
+                'auto_sync' => (bool) ($connection['auto_sync'] ?? true),
+                'last_sync_at' => $connection['last_sync_at'] ?? null,
+                'last_sync_message' => $connection['last_sync_message'] ?? null,
+            ];
+        }
+
+        // Migrate legacy single-sheet config into the multi-connection list.
+        $credentials = $integration->credentials ?? [];
+        $legacySheetId = trim((string) ($credentials['sheet_id'] ?? ''));
+        $legacyRange = trim((string) ($credentials['range'] ?? ''));
+        $legacyTab = trim((string) ($settings['selected_tab'] ?? ''));
+
+        if ($legacyTab === '' && $legacyRange !== '' && str_contains($legacyRange, '!')) {
+            $legacyTab = trim(explode('!', $legacyRange, 2)[0]);
+        }
+
+        if ($legacySheetId !== '' && $legacyTab !== '') {
+            $legacyKey = $legacySheetId . '|' . $legacyTab;
+            if (!isset($normalized[$legacyKey])) {
+                $normalized[$legacyKey] = [
+                    'key' => $legacyKey,
+                    'sheet_id' => $legacySheetId,
+                    'sheet_name' => (string) ($credentials['sheet_name'] ?? ''),
+                    'sheet_url' => (string) ($credentials['sheet_url'] ?? ''),
+                    'tab' => $legacyTab,
+                    'range' => $legacyRange !== '' ? $legacyRange : ($legacyTab . '!A:Z'),
+                    'header_row' => (int) ($credentials['header_row'] ?? 1),
+                    'auto_sync' => (bool) ($settings['auto_sync'] ?? true),
+                    'last_sync_at' => $integration->last_sync_at?->toIso8601String(),
+                    'last_sync_message' => null,
+                ];
+
+                $settings['connected_sheets'] = array_values($normalized);
+                $settings['auto_sync'] = true;
+                $integration->update(['settings' => $settings]);
+            }
+        }
+
+        return array_values($normalized);
+    }
+
+    public function addConnectedGoogleSheet(ApiIntegration $integration, array $payload): array
+    {
+        $sheetId = trim((string) ($payload['sheet_id'] ?? ''));
+        $tab = trim((string) ($payload['tab'] ?? ''));
+        $sheetName = trim((string) ($payload['sheet_name'] ?? ''));
+        $sheetUrl = trim((string) ($payload['sheet_url'] ?? ''));
+
+        if ($sheetId === '' || $tab === '') {
+            throw new \InvalidArgumentException('Spreadsheet and tab are required.');
+        }
+
+        $key = $sheetId . '|' . $tab;
+        $settings = $integration->settings ?? [];
+        $connected = $this->getConnectedGoogleSheets($integration);
+        $byKey = [];
+        foreach ($connected as $connection) {
+            $byKey[$connection['key']] = $connection;
+        }
+
+        $byKey[$key] = [
+            'key' => $key,
+            'sheet_id' => $sheetId,
+            'sheet_name' => $sheetName,
+            'sheet_url' => $sheetUrl !== ''
+                ? $sheetUrl
+                : "https://docs.google.com/spreadsheets/d/{$sheetId}/edit",
+            'tab' => $tab,
+            'range' => $tab . '!A:Z',
+            'header_row' => 1,
+            'auto_sync' => true,
+            'last_sync_at' => $byKey[$key]['last_sync_at'] ?? null,
+            'last_sync_message' => $byKey[$key]['last_sync_message'] ?? null,
+        ];
+
+        $settings['connected_sheets'] = array_values($byKey);
+        $settings['auto_sync'] = true;
+        $settings['selected_tab'] = $tab;
+
+        $credentials = $integration->credentials ?? [];
+        // Keep legacy fields pointing at the latest connected sheet for older tooling.
+        $credentials['sheet_id'] = $sheetId;
+        $credentials['sheet_name'] = $sheetName;
+        $credentials['sheet_url'] = $byKey[$key]['sheet_url'];
+        $credentials['range'] = $byKey[$key]['range'];
+        $credentials['header_row'] = 1;
+
+        $integration->update([
+            'settings' => $settings,
+            'credentials' => $credentials,
+            'is_active' => true,
+        ]);
+
+        return $byKey[$key];
+    }
+
+    public function removeConnectedGoogleSheet(ApiIntegration $integration, string $connectionKey): void
+    {
+        $settings = $integration->settings ?? [];
+        $connected = array_values(array_filter(
+            $this->getConnectedGoogleSheets($integration),
+            fn (array $connection) => ($connection['key'] ?? '') !== $connectionKey
+        ));
+
+        $settings['connected_sheets'] = $connected;
+        if ($connected === []) {
+            $settings['selected_tab'] = null;
+        }
+
+        $credentials = $integration->credentials ?? [];
+        if ($connected !== []) {
+            $latest = $connected[array_key_last($connected)];
+            $credentials['sheet_id'] = $latest['sheet_id'];
+            $credentials['sheet_name'] = $latest['sheet_name'];
+            $credentials['sheet_url'] = $latest['sheet_url'];
+            $credentials['range'] = $latest['range'];
+            $settings['selected_tab'] = $latest['tab'];
+        } else {
+            unset($credentials['sheet_id'], $credentials['sheet_name'], $credentials['sheet_url'], $credentials['range']);
+        }
+
+        $integration->update([
+            'settings' => $settings,
+            'credentials' => $credentials,
+        ]);
+    }
+
+    private function touchConnectedGoogleSheet(ApiIntegration $integration, string $connectionKey, string $message): void
+    {
+        $settings = $integration->settings ?? [];
+        $connected = $this->getConnectedGoogleSheets($integration);
+        $updated = false;
+
+        foreach ($connected as &$connection) {
+            if (($connection['key'] ?? '') !== $connectionKey) {
+                continue;
+            }
+            $connection['last_sync_at'] = now()->toISOString();
+            $connection['last_sync_message'] = $message;
+            $updated = true;
+        }
+        unset($connection);
+
+        if (!$updated) {
+            return;
+        }
+
+        $settings['connected_sheets'] = $connected;
+        $integration->update(['settings' => $settings]);
     }
 
     private function importShopifyOrder(array $shopifyOrder, ?ApiIntegration $integration = null)
@@ -617,7 +856,7 @@ class ApiIntegrationService
         return Product::whereRaw('LOWER(name) = ?', [mb_strtolower($clean)])->first();
     }
 
-    private function importGoogleSheetRow(array $row, ApiIntegration $integration)
+    private function importGoogleSheetRow(array $row, ApiIntegration $integration, ?string $sheetKey = null)
     {
         // Helper to get first non-empty column by aliases
         $pick = function (array $aliases, $default = null) use ($row) {
@@ -703,6 +942,16 @@ class ApiIntegrationService
             (string)$numericPrice,
         ]));
         $computedExternalId = $externalId ?? $hashId;
+        if ($sheetKey) {
+            $namespacedId = 'gs:' . $sheetKey . ':' . $computedExternalId;
+            $existing = Order::where('external_order_id', $namespacedId)->first()
+                ?? Order::where('external_order_id', $computedExternalId)->first();
+            $computedExternalId = $existing && $existing->external_order_id === $computedExternalId
+                ? $computedExternalId
+                : $namespacedId;
+        } else {
+            $existing = Order::where('external_order_id', $computedExternalId)->first();
+        }
         $client = $this->getOrCreateClient([
             'name' => $clientName ?: 'Sheet Client ' . ($row['__row_number'] ?? ''),
             'email' => $pick(['email','client_email']),
@@ -723,44 +972,9 @@ class ApiIntegrationService
 
         $matchedProduct = $this->findProductByName($productName);
 
-        $existing = Order::where('external_order_id', $computedExternalId)->first();
         if ($existing) {
-            // Keep duplicate detection aligned with import results by updating the matched order in place.
-            DB::transaction(function () use ($existing, $client, $city, $address, $numericPrice, $quantity, $productName, $matchedProduct, $vendorId, $source, $shopifyName, $status, $pick) {
-                $existing->items()->delete();
-                $existing->items()->create([
-                    'product_id' => $matchedProduct?->id,
-                    'product_name' => $productName,
-                    'sku' => $matchedProduct?->sku ?? $pick(['sku']),
-                    'quantity' => $quantity,
-                    'price' => $numericPrice,
-                    'subtotal' => $numericPrice * $quantity,
-                ]);
-
-                $existing->update([
-                    'client_id' => $client->id,
-                    'client_phone' => $client->phone,
-                    'vendor_id' => $vendorId,
-                    'source' => $source,
-                    'shopify_name' => $shopifyName,
-                    'status' => $status,
-                    'shipping_address' => $address,
-                    'city' => $city ?: $address,
-                    'subtotal' => $numericPrice * $quantity,
-                    'shipping_cost' => 0,
-                    'shipping_included_in_price' => true,
-                    'tax' => 0,
-                    'discount' => 0,
-                    'total' => $numericPrice * $quantity,
-                    'phone' => $client->phone,
-                    'notes' => $pick(['notes','comment','comments']),
-                    'whatsapp' => $pick(['whatsapp']),
-                ]);
-
-                $this->orderService->applySellerFinancials($existing->fresh(['items.product']));
-            });
-
-            return ['order' => $existing->fresh(['items', 'client']), 'created' => false];
+            // Auto-sync and manual sync only create new orders; never overwrite existing ones.
+            return ['order' => $existing, 'created' => false];
         }
 
         $items = [[

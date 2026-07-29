@@ -6,13 +6,23 @@ import { CheckCircle, Clock, Package, Truck, XCircle, Wallet, CalendarDays, Phon
 import { useSettings } from '../../contexts/SettingsContext';
 import { appPath } from '../../constants/appPaths';
 
-export default function ConfirmationAgentDashboard({ stats, period, setPeriod }) {
+export default function ConfirmationAgentDashboard({
+    stats,
+    period,
+    setPeriod,
+    dateFrom = '',
+    dateTo = '',
+    setDateFrom = () => {},
+    setDateTo = () => {},
+    clearDateFilters = () => {},
+}) {
     const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const daily = stats?.confirmation_agent?.today || {};
     const commission = stats?.confirmation_agent?.commission || {};
     const todoToday = stats?.confirmation_agent?.todo_today || [];
     const latestInvoice = stats?.confirmation_agent?.latest_invoice;
+    const hasCustomDates = Boolean(dateFrom || dateTo);
 
     const cards = [
         { label: t('admin.dashboard.confirmed'), value: stats?.orders?.confirmed || 0, icon: CheckCircle, tone: 'text-cyan-700 bg-cyan-50 border-cyan-100' },
@@ -25,25 +35,56 @@ export default function ConfirmationAgentDashboard({ stats, period, setPeriod })
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800">{t('admin.dashboard.confirmationDashboard')}</h1>
-                    <p className="text-slate-500 mt-1">{t('admin.dashboard.confirmationDashboardDesc')}</p>
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800">{t('admin.dashboard.confirmationDashboard')}</h1>
+                        <p className="text-slate-500 mt-1">{t('admin.dashboard.confirmationDashboardDesc')}</p>
+                    </div>
+                    <div className="flex items-center bg-white rounded-2xl p-1.5 shadow-sm border border-slate-200/50">
+                        {['daily', 'monthly', 'yearly'].map((value) => (
+                            <button
+                                key={value}
+                                onClick={() => setPeriod(value)}
+                                className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                                    !hasCustomDates && period === value
+                                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                }`}
+                            >
+                                {t(`admin.dashboard.${value}`)}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div className="flex items-center bg-white rounded-2xl p-1.5 shadow-sm border border-slate-200/50">
-                    {['daily', 'monthly', 'yearly'].map((value) => (
+                <div className="flex flex-wrap items-end gap-3 bg-white rounded-2xl p-4 shadow-sm border border-slate-200/50">
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('admin.dashboard.dateFrom')}</label>
+                        <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className="px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('admin.dashboard.dateTo')}</label>
+                        <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className="px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                    </div>
+                    {hasCustomDates && (
                         <button
-                            key={value}
-                            onClick={() => setPeriod(value)}
-                            className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-                                period === value
-                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                            }`}
+                            type="button"
+                            onClick={clearDateFilters}
+                            className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200"
                         >
-                            {t(`admin.dashboard.${value}`)}
+                            {t('admin.dashboard.clearDates')}
                         </button>
-                    ))}
+                    )}
                 </div>
             </div>
 

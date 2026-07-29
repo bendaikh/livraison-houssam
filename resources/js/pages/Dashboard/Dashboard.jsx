@@ -6,7 +6,7 @@ import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown, FileText, X } from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown, FileText, X, Calendar } from 'lucide-react';
 import ConfirmationAgentDashboard from './ConfirmationAgentDashboard';
 import DeliveryPersonDashboard from './DeliveryPersonDashboard';
 import { isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
@@ -16,6 +16,8 @@ export default function Dashboard() {
     const { formatCurrency } = useSettings();
     const { user } = useAuth();
     const [period, setPeriod] = useState('daily');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -23,18 +25,22 @@ export default function Dashboard() {
     const isVendor = user?.role?.slug === 'vendor';
     const isConfirmationAgent = isConfirmationAgentRole(user?.role?.slug);
     const isDeliveryPerson = isDeliveryPersonRole(user?.role?.slug);
+    const hasCustomDates = Boolean(dateFrom || dateTo);
 
     useEffect(() => {
         fetchDashboardData();
-    }, [period]);
+    }, [period, dateFrom, dateTo]);
 
     const fetchDashboardData = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            const response = await api.get(`/dashboard?period=${period}`);
-            console.log('Dashboard data received:', response.data);
+            const params = new URLSearchParams();
+            params.set('period', period);
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            const response = await api.get(`/dashboard?${params.toString()}`);
             setStats(response.data);
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
@@ -44,6 +50,17 @@ export default function Dashboard() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handlePeriodChange = (nextPeriod) => {
+        setDateFrom('');
+        setDateTo('');
+        setPeriod(nextPeriod);
+    };
+
+    const clearDateFilters = () => {
+        setDateFrom('');
+        setDateTo('');
     };
 
     if (loading) {
@@ -69,11 +86,33 @@ export default function Dashboard() {
     }
 
     if (isConfirmationAgent) {
-        return <ConfirmationAgentDashboard stats={stats} period={period} setPeriod={setPeriod} />;
+        return (
+            <ConfirmationAgentDashboard
+                stats={stats}
+                period={period}
+                setPeriod={handlePeriodChange}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                setDateFrom={setDateFrom}
+                setDateTo={setDateTo}
+                clearDateFilters={clearDateFilters}
+            />
+        );
     }
 
     if (isDeliveryPerson) {
-        return <DeliveryPersonDashboard stats={stats} period={period} setPeriod={setPeriod} />;
+        return (
+            <DeliveryPersonDashboard
+                stats={stats}
+                period={period}
+                setPeriod={handlePeriodChange}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                setDateFrom={setDateFrom}
+                setDateTo={setDateTo}
+                clearDateFilters={clearDateFilters}
+            />
+        );
     }
 
     const toRateNumber = (value) => {
@@ -105,6 +144,9 @@ export default function Dashboard() {
         ? sellerOverview.total_profit || 0
         : (stats?.revenue?.profit || 0);
     const formatRateFromKpi = (value) => formatRate(value ?? stats?.orders?.conversion_rate ?? 0);
+    const periodLabel = hasCustomDates
+        ? t('admin.dashboard.customRange')
+        : t(`admin.dashboard.${period}`);
 
     const statCards = isVendor
         ? [
@@ -126,7 +168,7 @@ export default function Dashboard() {
                 gradient: 'from-blue-500 to-indigo-600',
                 bgGradient: 'from-blue-50 to-indigo-50',
                 iconBg: 'bg-blue-500',
-                change: t('admin.dashboard.sellerScoped'),
+                change: periodLabel,
                 changeType: 'neutral'
             },
             {
@@ -146,7 +188,7 @@ export default function Dashboard() {
                 gradient: 'from-amber-500 to-orange-600',
                 bgGradient: 'from-amber-50 to-orange-50',
                 iconBg: 'bg-amber-500',
-                change: t('admin.dashboard.sellerScoped'),
+                change: periodLabel,
                 changeType: 'neutral'
             },
             {
@@ -156,18 +198,18 @@ export default function Dashboard() {
                 gradient: 'from-cyan-500 to-sky-600',
                 bgGradient: 'from-cyan-50 to-sky-50',
                 iconBg: 'bg-cyan-500',
-                change: t('admin.dashboard.sellerScoped'),
+                change: periodLabel,
                 changeType: 'neutral'
             },
         ]
         : [
-            { title: t('admin.dashboard.totalOrders'), value: kpis.total_orders ?? 0, icon: ShoppingCart, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50', iconBg: 'bg-blue-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
-            { title: t('admin.dashboard.pendingOrders'), value: kpis.pending_orders ?? 0, icon: Clock, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50', iconBg: 'bg-amber-500', change: t('admin.dashboard.awaitingAction'), changeType: 'neutral' },
-            { title: t('admin.menu.confirmed'), value: kpis.confirmed_orders ?? 0, icon: CheckCircle, gradient: 'from-cyan-500 to-sky-600', bgGradient: 'from-cyan-50 to-sky-50', iconBg: 'bg-cyan-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
-            { title: t('admin.menu.shipped'), value: kpis.shipped_orders ?? 0, icon: Package, gradient: 'from-indigo-500 to-violet-600', bgGradient: 'from-indigo-50 to-violet-50', iconBg: 'bg-indigo-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
-            { title: t('admin.dashboard.deliveredOrders'), value: kpis.delivered_orders ?? 0, icon: CheckCircle, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50', iconBg: 'bg-emerald-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
-            { title: t('admin.menu.refused'), value: kpis.refused_orders ?? 0, icon: X, gradient: 'from-orange-500 to-red-600', bgGradient: 'from-orange-50 to-red-50', iconBg: 'bg-orange-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
-            { title: t('admin.menu.returned'), value: kpis.returned_orders ?? 0, icon: TrendingDown, gradient: 'from-pink-500 to-rose-600', bgGradient: 'from-pink-50 to-rose-50', iconBg: 'bg-pink-500', change: t('admin.dashboard.allTime'), changeType: 'neutral' },
+            { title: t('admin.dashboard.totalOrders'), value: kpis.total_orders ?? 0, icon: ShoppingCart, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50', iconBg: 'bg-blue-500', change: periodLabel, changeType: 'neutral' },
+            { title: t('admin.dashboard.pendingOrders'), value: kpis.pending_orders ?? 0, icon: Clock, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50', iconBg: 'bg-amber-500', change: periodLabel, changeType: 'neutral' },
+            { title: t('admin.menu.confirmed'), value: kpis.confirmed_orders ?? 0, icon: CheckCircle, gradient: 'from-cyan-500 to-sky-600', bgGradient: 'from-cyan-50 to-sky-50', iconBg: 'bg-cyan-500', change: periodLabel, changeType: 'neutral' },
+            { title: t('admin.menu.shipped'), value: kpis.shipped_orders ?? 0, icon: Package, gradient: 'from-indigo-500 to-violet-600', bgGradient: 'from-indigo-50 to-violet-50', iconBg: 'bg-indigo-500', change: periodLabel, changeType: 'neutral' },
+            { title: t('admin.dashboard.deliveredOrders'), value: kpis.delivered_orders ?? 0, icon: CheckCircle, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50', iconBg: 'bg-emerald-500', change: periodLabel, changeType: 'neutral' },
+            { title: t('admin.menu.refused'), value: kpis.refused_orders ?? 0, icon: X, gradient: 'from-orange-500 to-red-600', bgGradient: 'from-orange-50 to-red-50', iconBg: 'bg-orange-500', change: periodLabel, changeType: 'neutral' },
+            { title: t('admin.menu.returned'), value: kpis.returned_orders ?? 0, icon: TrendingDown, gradient: 'from-pink-500 to-rose-600', bgGradient: 'from-pink-50 to-rose-50', iconBg: 'bg-pink-500', change: periodLabel, changeType: 'neutral' },
             { title: t('admin.dashboard.totalRevenue'), value: formatCurrency(kpis.total_revenue ?? 0), icon: DollarSign, gradient: 'from-emerald-500 to-lime-600', bgGradient: 'from-emerald-50 to-lime-50', iconBg: 'bg-emerald-500', change: t('admin.dashboard.deliveredRevenue'), changeType: 'positive' },
             { title: t('admin.dashboard.todayOrders'), value: kpis.today_orders ?? 0, icon: ShoppingCart, gradient: 'from-violet-500 to-fuchsia-600', bgGradient: 'from-violet-50 to-fuchsia-50', iconBg: 'bg-violet-500', change: t('admin.dashboard.today'), changeType: 'neutral' },
             { title: t('admin.dashboard.todayRevenue'), value: formatCurrency(kpis.today_revenue ?? 0), icon: DollarSign, gradient: 'from-teal-500 to-cyan-600', bgGradient: 'from-teal-50 to-cyan-50', iconBg: 'bg-teal-500', change: t('admin.dashboard.today'), changeType: 'neutral' },
@@ -194,25 +236,62 @@ export default function Dashboard() {
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800">{t('admin.menu.dashboard')}</h1>
-                    <p className="text-slate-500 mt-1">{t('admin.dashboard.welcome')}, {user?.name}!</p>
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800">{t('admin.menu.dashboard')}</h1>
+                        <p className="text-slate-500 mt-1">{t('admin.dashboard.welcome')}, {user?.name}!</p>
+                    </div>
+                    <div className="flex items-center bg-white rounded-2xl p-1.5 shadow-sm border border-slate-200/50">
+                        {['daily', 'monthly', 'yearly'].map((p) => (
+                            <button
+                                key={p}
+                                onClick={() => handlePeriodChange(p)}
+                                className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                                    !hasCustomDates && period === p
+                                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
+                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                }`}
+                            >
+                                {t(`admin.dashboard.${p}`)}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div className="flex items-center bg-white rounded-2xl p-1.5 shadow-sm border border-slate-200/50">
-                    {['daily', 'monthly', 'yearly'].map((p) => (
+                <div className="flex flex-wrap items-end gap-3 bg-white rounded-2xl p-4 shadow-sm border border-slate-200/50">
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('admin.dashboard.dateFrom')}</label>
+                        <div className="relative">
+                            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            <input
+                                type="date"
+                                value={dateFrom}
+                                onChange={(e) => setDateFrom(e.target.value)}
+                                className="pl-9 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('admin.dashboard.dateTo')}</label>
+                        <div className="relative">
+                            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            <input
+                                type="date"
+                                value={dateTo}
+                                onChange={(e) => setDateTo(e.target.value)}
+                                className="pl-9 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                    </div>
+                    {hasCustomDates && (
                         <button
-                            key={p}
-                            onClick={() => setPeriod(p)}
-                            className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-                                period === p
-                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                            }`}
+                            type="button"
+                            onClick={clearDateFilters}
+                            className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all"
                         >
-                            {t(`admin.dashboard.${p}`)}
+                            {t('admin.dashboard.clearDates')}
                         </button>
-                    ))}
+                    )}
                 </div>
             </div>
 

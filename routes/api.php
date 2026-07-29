@@ -163,6 +163,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/api-integrations/{apiIntegration}/google/disconnect', [GoogleOAuthController::class, 'disconnect']);
     Route::get('/api-integrations/{apiIntegration}/google-sheet/tabs', [ApiIntegrationController::class, 'listGoogleSheetTabs']);
     Route::post('/api-integrations/{apiIntegration}/google-sheet/preview', [ApiIntegrationController::class, 'previewGoogleSheet']);
+    Route::get('/api-integrations/{apiIntegration}/google-sheet/connections', [ApiIntegrationController::class, 'listGoogleSheetConnections']);
+    Route::post('/api-integrations/{apiIntegration}/google-sheet/connections', [ApiIntegrationController::class, 'storeGoogleSheetConnection']);
+    Route::delete('/api-integrations/{apiIntegration}/google-sheet/connections/{connectionKey}', [ApiIntegrationController::class, 'destroyGoogleSheetConnection'])->where('connectionKey', '.*');
     Route::post('/api-integrations/custom-api/generate-key', [ApiIntegrationController::class, 'generateCustomApiKey']);
 
     // Users & Roles (Admin and SuperAdmin only)

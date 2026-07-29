@@ -6,12 +6,22 @@ import { CheckCircle, PhoneOff, Ban, Package, Landmark, Coins, CalendarDays, Rot
 import { useSettings } from '../../contexts/SettingsContext';
 import { appPath } from '../../constants/appPaths';
 
-export default function DeliveryPersonDashboard({ stats, period, setPeriod }) {
+export default function DeliveryPersonDashboard({
+    stats,
+    period,
+    setPeriod,
+    dateFrom = '',
+    dateTo = '',
+    setDateFrom = () => {},
+    setDateTo = () => {},
+    clearDateFilters = () => {},
+}) {
     const { t } = useTranslation();
     const { formatCurrency } = useSettings();
     const [isDarkMode, setIsDarkMode] = useState(() => (
         typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
     ));
+    const hasCustomDates = Boolean(dateFrom || dateTo);
 
     useEffect(() => {
         if (typeof document === 'undefined') {
@@ -92,27 +102,58 @@ export default function DeliveryPersonDashboard({ stats, period, setPeriod }) {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 className={`text-3xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{t('admin.dashboard.deliveryDashboard')}</h1>
-                    <p className={`mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{t('admin.dashboard.deliveryDashboardDesc')}</p>
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h1 className={`text-3xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{t('admin.dashboard.deliveryDashboard')}</h1>
+                        <p className={`mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{t('admin.dashboard.deliveryDashboardDesc')}</p>
+                    </div>
+                    <div className={isDarkMode ? 'flex items-center rounded-2xl border border-slate-800 bg-slate-900/80 p-1.5 shadow-lg shadow-black/10' : 'flex items-center rounded-2xl border border-slate-200/50 bg-white p-1.5 shadow-sm'}>
+                        {['daily', 'monthly', 'yearly'].map((value) => (
+                            <button
+                                key={value}
+                                onClick={() => setPeriod(value)}
+                                className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                                    !hasCustomDates && period === value
+                                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25'
+                                        : isDarkMode
+                                            ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                            >
+                                {t(`admin.dashboard.${value}`)}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div className={isDarkMode ? 'flex items-center rounded-2xl border border-slate-800 bg-slate-900/80 p-1.5 shadow-lg shadow-black/10' : 'flex items-center rounded-2xl border border-slate-200/50 bg-white p-1.5 shadow-sm'}>
-                    {['daily', 'monthly', 'yearly'].map((value) => (
+                <div className={isDarkMode ? 'flex flex-wrap items-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4' : 'flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200/50 bg-white p-4 shadow-sm'}>
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{t('admin.dashboard.dateFrom')}</label>
+                        <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className={isDarkMode ? 'px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-slate-100 text-sm' : 'px-3 py-2.5 border border-slate-300 rounded-xl text-sm'}
+                        />
+                    </div>
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{t('admin.dashboard.dateTo')}</label>
+                        <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className={isDarkMode ? 'px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-slate-100 text-sm' : 'px-3 py-2.5 border border-slate-300 rounded-xl text-sm'}
+                        />
+                    </div>
+                    {hasCustomDates && (
                         <button
-                            key={value}
-                            onClick={() => setPeriod(value)}
-                            className={`px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-                                period === value
-                                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25'
-                                    : isDarkMode
-                                        ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                            }`}
+                            type="button"
+                            onClick={clearDateFilters}
+                            className={isDarkMode ? 'px-4 py-2.5 rounded-xl text-sm font-medium text-slate-200 bg-slate-800 hover:bg-slate-700' : 'px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200'}
                         >
-                            {t(`admin.dashboard.${value}`)}
+                            {t('admin.dashboard.clearDates')}
                         </button>
-                    ))}
+                    )}
                 </div>
             </div>
 

@@ -19,29 +19,13 @@ use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
-    public function getStatistics(string $period = 'daily', $vendorId = null)
+    public function getStatistics(string $period = 'daily', $vendorId = null, ?string $dateFrom = null, ?string $dateTo = null)
     {
-        $dateRange = $this->getDateRange($period);
-        
-        // Check if there are any orders in the date range
-        $ordersInRange = Order::whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
-        if ($vendorId) {
-            $ordersInRange->where('vendor_id', $vendorId);
-        }
-        
-        // If no orders in range, expand to show all orders
-        if ($ordersInRange->count() === 0) {
-            $dateRange = [
-                'start' => $vendorId
-                    ? (Order::where('vendor_id', $vendorId)->min('created_at') ?: Carbon::now()->subYear())
-                    : (Order::min('created_at') ?: Carbon::now()->subYear()),
-                'end' => Carbon::now(),
-            ];
-        }
+        $dateRange = $this->getDateRange($period, $dateFrom, $dateTo);
 
         return [
-            'seller_overview' => $vendorId ? $this->getSellerOverviewStats($vendorId) : null,
-            'kpis' => $this->getBusinessKpis($vendorId),
+            'seller_overview' => $vendorId ? $this->getSellerOverviewStats($vendorId, $dateRange) : null,
+            'kpis' => $this->getBusinessKpis($vendorId, $dateRange),
             'sales' => $this->getSalesStats($dateRange, $vendorId),
             'orders' => $this->getOrdersStats($dateRange, $vendorId),
             'revenue' => $this->getRevenueStats($dateRange, $vendorId),
@@ -49,19 +33,22 @@ class DashboardService
             'expenses' => $vendorId ? 0 : $this->getExpensesStats($dateRange), // Vendors don't see expenses
             'low_stock_products' => $vendorId ? [] : $this->getLowStockProducts(), // Vendors don't see stock
             'recent_orders' => $this->getRecentOrders($vendorId),
-            'charts' => $this->getChartsData($period, $vendorId),
+            'charts' => $this->getChartsData($period, $vendorId, $dateRange, $dateFrom || $dateTo),
             'clients' => $this->getClientsStats($dateRange, $vendorId),
             'vendors' => $vendorId ? [] : $this->getVendorsStats(), // Vendors don't see other vendors
             'products' => $this->getProductsStats($vendorId),
             'top_products' => $this->getTopProducts($dateRange, $vendorId),
             'top_clients' => $this->getTopClients($dateRange, $vendorId),
             'top_vendors' => $vendorId ? [] : $this->getTopVendors($dateRange), // Vendors don't see this
+            'period' => $period,
+            'date_from' => $dateRange['start']->toDateString(),
+            'date_to' => $dateRange['end']->toDateString(),
         ];
     }
 
-    public function getConfirmationAgentStatistics(string $period, User $user): array
+    public function getConfirmationAgentStatistics(string $period, User $user, ?string $dateFrom = null, ?string $dateTo = null): array
     {
-        $dateRange = $this->getDateRange($period);
+        $dateRange = $this->getDateRange($period, $dateFrom, $dateTo);
         $baseQuery = Order::where('confirmation_agent_id', $user->id)
             ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
 
@@ -174,10 +161,14 @@ class DashboardService
         ];
     }
 
-    public function getSellerOverviewStats(int $vendorId): array
+    public function getSellerOverviewStats(int $vendorId, ?array $dateRange = null): array
     {
         $baseQuery = Order::where('vendor_id', $vendorId);
-        $profitOrders = Order::where('vendor_id', $vendorId)->with(['items.product'])->get();
+        if ($dateRange) {
+            $baseQuery->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        }
+
+        $profitOrders = (clone $baseQuery)->with(['items.product'])->get();
 
         return [
             'orders' => [
@@ -195,7 +186,7 @@ class DashboardService
         ];
     }
 
-    public function getDeliveryPersonStatistics(string $period, User $user): array
+    public function getDeliveryPersonStatistics(string $period, User $user, ?string $dateFrom = null, ?string $dateTo = null): array
     {
         if (
             !Schema::hasColumn('orders', 'collected_amount')
@@ -242,7 +233,7 @@ class DashboardService
             ];
         }
 
-        $dateRange = $this->getDateRange($period);
+        $dateRange = $this->getDateRange($period, $dateFrom, $dateTo);
         $baseQuery = Order::where('delivery_person_id', $user->id)
             ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
         $todayStart = Carbon::today();
@@ -361,25 +352,43 @@ class DashboardService
         ];
     }
 
-    private function getDateRange(string $period)
+    private function getDateRange(string $period, ?string $dateFrom = null, ?string $dateTo = null)
     {
-        return match($period) {
+        if ($dateFrom || $dateTo) {
+            $start = $dateFrom
+                ? Carbon::parse($dateFrom)->startOfDay()
+                : Carbon::parse($dateTo)->startOfDay();
+            $end = $dateTo
+                ? Carbon::parse($dateTo)->endOfDay()
+                : Carbon::parse($dateFrom)->endOfDay();
+
+            if ($start->gt($end)) {
+                [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
+            }
+
+            return [
+                'start' => $start,
+                'end' => $end,
+            ];
+        }
+
+        return match ($period) {
             'daily' => [
-                'start' => Carbon::now()->subDays(7),
-                'end' => Carbon::now(),
+                'start' => Carbon::today()->startOfDay(),
+                'end' => Carbon::today()->endOfDay(),
             ],
             'monthly' => [
                 'start' => Carbon::now()->startOfMonth(),
-                'end' => Carbon::now(),
+                'end' => Carbon::now()->endOfDay(),
             ],
             'yearly' => [
                 'start' => Carbon::now()->startOfYear(),
-                'end' => Carbon::now(),
+                'end' => Carbon::now()->endOfDay(),
             ],
             default => [
-                'start' => Carbon::now()->subDays(7),
-                'end' => Carbon::now(),
-            ]
+                'start' => Carbon::today()->startOfDay(),
+                'end' => Carbon::today()->endOfDay(),
+            ],
         };
     }
 
@@ -395,16 +404,23 @@ class DashboardService
         return $query->sum('total');
     }
 
-    private function getBusinessKpis($vendorId = null): array
+    private function getBusinessKpis($vendorId = null, ?array $dateRange = null): array
     {
         $baseQuery = Order::query();
         if ($vendorId) {
             $baseQuery->where('vendor_id', $vendorId);
         }
+        if ($dateRange) {
+            $baseQuery->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
+        }
 
         $todayStart = Carbon::today();
         $todayEnd = Carbon::today()->endOfDay();
-        $todayQuery = (clone $baseQuery)->whereBetween('created_at', [$todayStart, $todayEnd]);
+        $todayBase = Order::query();
+        if ($vendorId) {
+            $todayBase->where('vendor_id', $vendorId);
+        }
+        $todayQuery = $todayBase->whereBetween('created_at', [$todayStart, $todayEnd]);
         $deliveredQuery = (clone $baseQuery)->where('status', 'delivered');
 
         $totalOrders = (clone $baseQuery)->count();
@@ -620,29 +636,40 @@ class DashboardService
             && Schema::hasTable('seller_billing_order');
     }
 
-    private function getChartsData(string $period, $vendorId = null)
+    private function getChartsData(string $period, $vendorId = null, ?array $dateRange = null, bool $hasCustomDates = false)
     {
-        $days = match($period) {
-            'daily' => 24, // hours
-            'monthly' => 30,
-            'yearly' => 12,
-            default => 7
-        };
+        if ($hasCustomDates && $dateRange) {
+            $days = max(1, (int) $dateRange['start']->diffInDays($dateRange['end']) + 1);
+
+            if ($days <= 1) {
+                return $this->getHourlyChartData($vendorId, $dateRange['start']);
+            }
+
+            if ($days <= 62) {
+                return $this->getDailyChartDataForRange($dateRange, $vendorId);
+            }
+
+            return $this->getMonthlyChartDataForRange($dateRange, $vendorId);
+        }
 
         if ($period === 'daily') {
             return $this->getHourlyChartData($vendorId);
-        } elseif ($period === 'yearly') {
+        }
+
+        if ($period === 'yearly') {
             return $this->getMonthlyChartData($vendorId);
         }
 
-        return $this->getDailyChartData($days, $vendorId);
+        return $this->getDailyChartData(Carbon::now()->daysInMonth, $vendorId);
     }
 
-    private function getHourlyChartData($vendorId = null)
+    private function getHourlyChartData($vendorId = null, ?Carbon $day = null)
     {
         $data = [];
-        for ($i = 23; $i >= 0; $i--) {
-            $hourStart = Carbon::now()->subHours($i);
+        $baseDay = ($day ?? Carbon::today())->copy()->startOfDay();
+
+        for ($i = 0; $i < 24; $i++) {
+            $hourStart = $baseDay->copy()->addHours($i);
             $hourEnd = $hourStart->copy()->addHour();
 
             $ordersBase = Order::whereBetween('created_at', [$hourStart, $hourEnd]);
@@ -692,6 +719,37 @@ class DashboardService
         return $data;
     }
 
+    private function getDailyChartDataForRange(array $dateRange, $vendorId = null)
+    {
+        $data = [];
+        $cursor = $dateRange['start']->copy()->startOfDay();
+        $end = $dateRange['end']->copy()->startOfDay();
+
+        while ($cursor->lte($end)) {
+            $ordersBase = Order::whereDate('created_at', $cursor);
+            if ($vendorId) {
+                $ordersBase->where('vendor_id', $vendorId);
+            }
+
+            $salesQuery = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $totalOrders = (clone $ordersBase)->count();
+            $confirmedOrders = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered'])->count();
+            $deliveredOrders = (clone $ordersBase)->where('status', 'delivered')->count();
+
+            $data[] = [
+                'label' => $cursor->format('M d'),
+                'sales' => $salesQuery->sum('total'),
+                'orders' => $totalOrders,
+                'confirmationRate' => $this->calculateRate($confirmedOrders, $totalOrders),
+                'deliveryRate' => $this->calculateRate($deliveredOrders, $totalOrders),
+            ];
+
+            $cursor->addDay();
+        }
+
+        return $data;
+    }
+
     private function getMonthlyChartData($vendorId = null)
     {
         $data = [];
@@ -716,6 +774,38 @@ class DashboardService
                 'deliveryRate' => $this->calculateRate($deliveredOrders, $totalOrders),
             ];
         }
+        return $data;
+    }
+
+    private function getMonthlyChartDataForRange(array $dateRange, $vendorId = null)
+    {
+        $data = [];
+        $cursor = $dateRange['start']->copy()->startOfMonth();
+        $end = $dateRange['end']->copy()->startOfMonth();
+
+        while ($cursor->lte($end)) {
+            $ordersBase = Order::whereYear('created_at', $cursor->year)
+                ->whereMonth('created_at', $cursor->month);
+            if ($vendorId) {
+                $ordersBase->where('vendor_id', $vendorId);
+            }
+
+            $salesQuery = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered']);
+            $totalOrders = (clone $ordersBase)->count();
+            $confirmedOrders = (clone $ordersBase)->whereIn('status', ['confirmed', 'shipped', 'delivered'])->count();
+            $deliveredOrders = (clone $ordersBase)->where('status', 'delivered')->count();
+
+            $data[] = [
+                'label' => $cursor->format('M Y'),
+                'sales' => $salesQuery->sum('total'),
+                'orders' => $totalOrders,
+                'confirmationRate' => $this->calculateRate($confirmedOrders, $totalOrders),
+                'deliveryRate' => $this->calculateRate($deliveredOrders, $totalOrders),
+            ];
+
+            $cursor->addMonth();
+        }
+
         return $data;
     }
 
@@ -749,7 +839,7 @@ class DashboardService
             return $data;
         }
 
-        $days = $period === 'monthly' ? 30 : 7;
+        $days = $period === 'monthly' ? Carbon::now()->daysInMonth : 1;
         $data = [];
 
         for ($i = $days - 1; $i >= 0; $i--) {
@@ -789,7 +879,7 @@ class DashboardService
             return $data;
         }
 
-        $days = $period === 'monthly' ? 30 : 7;
+        $days = $period === 'monthly' ? Carbon::now()->daysInMonth : 1;
         $data = [];
 
         for ($i = $days - 1; $i >= 0; $i--) {

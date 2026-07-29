@@ -498,8 +498,8 @@ export default function OrderDetail() {
         shippingCost,
     } = resolveOrderDisplayTotals(order);
     const sellerName = order.seller_name
-        || order.vendor?.name
         || order.vendor?.company_name
+        || order.vendor?.name
         || (() => {
             const website = order.source_website;
             if (!website) return null;

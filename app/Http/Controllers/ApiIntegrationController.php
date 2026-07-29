@@ -116,12 +116,17 @@ class ApiIntegrationController extends Controller
         return response()->json(['message' => 'Integration deleted successfully']);
     }
 
-    public function sync(ApiIntegration $apiIntegration)
+    public function sync(Request $request, ApiIntegration $apiIntegration)
     {
         try {
+            $connectionKey = $request->input('connection_key');
+
             $log = match($apiIntegration->type) {
                 'shopify' => $this->apiIntegrationService->syncShopifyOrders($apiIntegration->id),
-                'google_sheet' => $this->apiIntegrationService->syncGoogleSheetOrders($apiIntegration->id),
+                'google_sheet' => $this->apiIntegrationService->syncGoogleSheetOrders(
+                    $apiIntegration->id,
+                    $connectionKey
+                ),
                 'delivery' => $this->apiIntegrationService->syncDeliveryCompanyOrders($apiIntegration->id),
                 default => throw new \Exception('Invalid integration type')
             };
@@ -130,6 +135,9 @@ class ApiIntegrationController extends Controller
                 'success' => true,
                 'message' => 'Sync completed',
                 'log' => $log,
+                'connected_sheets' => $apiIntegration->type === 'google_sheet'
+                    ? $this->apiIntegrationService->getConnectedGoogleSheets($apiIntegration->fresh())
+                    : null,
             ]);
         } catch (\Exception $e) {
             \Log::error('Sync failed in ApiIntegrationController', [
@@ -323,6 +331,54 @@ class ApiIntegrationController extends Controller
             return response()->json([
                 'message' => 'Failed to preview sheet: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function listGoogleSheetConnections(ApiIntegration $apiIntegration)
+    {
+        return response()->json([
+            'data' => $this->apiIntegrationService->getConnectedGoogleSheets($apiIntegration),
+        ]);
+    }
+
+    public function storeGoogleSheetConnection(Request $request, ApiIntegration $apiIntegration)
+    {
+        $validated = $request->validate([
+            'sheet_id' => 'required|string',
+            'tab' => 'required|string',
+            'sheet_name' => 'nullable|string',
+            'sheet_url' => 'nullable|string',
+        ]);
+
+        try {
+            $connection = $this->apiIntegrationService->addConnectedGoogleSheet($apiIntegration, $validated);
+
+            return response()->json([
+                'message' => 'Spreadsheet connected',
+                'connection' => $connection,
+                'connected_sheets' => $this->apiIntegrationService->getConnectedGoogleSheets($apiIntegration->fresh()),
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function destroyGoogleSheetConnection(ApiIntegration $apiIntegration, string $connectionKey)
+    {
+        try {
+            $decodedKey = urldecode($connectionKey);
+            $this->apiIntegrationService->removeConnectedGoogleSheet($apiIntegration, $decodedKey);
+
+            return response()->json([
+                'message' => 'Spreadsheet disconnected',
+                'connected_sheets' => $this->apiIntegrationService->getConnectedGoogleSheets($apiIntegration->fresh()),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
         }
     }
 

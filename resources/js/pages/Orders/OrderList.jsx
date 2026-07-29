@@ -549,14 +549,7 @@ export default function OrderList({ status = '' }) {
             return '';
         }
 
-        const storeLabel = website.store_name || website.name || '';
-        const ownerLabel = website.owner?.company_name || website.owner?.name || '';
-
-        if (storeLabel && ownerLabel && storeLabel !== ownerLabel) {
-            return `${storeLabel} (${ownerLabel})`;
-        }
-
-        return storeLabel || ownerLabel || '';
+        return website.store_name || website.name || website.owner?.company_name || website.owner?.name || '';
     };
 
     const getSellerLabel = (order) => {
@@ -569,26 +562,26 @@ export default function OrderList({ status = '' }) {
             return websiteLabel;
         }
 
-        if (order.vendor?.name) {
-            return order.vendor.name;
-        }
-
         if (order.vendor?.company_name) {
             return order.vendor.company_name;
         }
 
+        if (order.vendor?.name) {
+            return order.vendor.name;
+        }
+
         if (order.vendor_id) {
             const matchedVendor = vendors.find((vendor) => String(vendor.id) === String(order.vendor_id));
-            if (matchedVendor?.name) {
-                return matchedVendor.name;
-            }
             if (matchedVendor?.company_name) {
                 return matchedVendor.company_name;
+            }
+            if (matchedVendor?.name) {
+                return matchedVendor.name;
             }
         }
 
         if (user?.vendor?.id && String(order.vendor_id) === String(user.vendor.id)) {
-            return user.vendor.name || user.name || '';
+            return user.vendor.company_name || user.vendor.name || user.name || '';
         }
 
         return '';
