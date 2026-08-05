@@ -4,11 +4,15 @@ import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useAuth } from '../../contexts/AuthContext';
+import { isAdminRole, isVendorRole } from '../../utils/roles';
 import { Copy, Key, RefreshCw, Eye, EyeOff, Code, BookOpen } from 'lucide-react';
 
 export default function CustomApiIntegrationPage() {
     const { t } = useTranslation();
     const { user } = useAuth();
+    const roleSlug = user?.role?.slug;
+    const isAdminUser = isAdminRole(roleSlug);
+    const isVendorUser = isVendorRole(roleSlug);
     const [integration, setIntegration] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -22,18 +26,41 @@ export default function CustomApiIntegrationPage() {
 
     useEffect(() => {
         fetchIntegration();
-    }, []);
+    }, [user?.vendor?.id, roleSlug]);
+
+    const resolveOwnCustomApi = (integrations) => {
+        const list = Array.isArray(integrations) ? integrations : [];
+        const customApis = list.filter((i) => i.provider === 'custom_api' || i.type === 'custom_api');
+
+        // Superadmin/admin system key: vendor_id must be null (used by Prixvado for sellers)
+        if (isAdminUser) {
+            return customApis.find((i) => i.vendor_id == null) || null;
+        }
+
+        // Seller key: must match this seller (used by Prixvado for orders)
+        if (isVendorUser && user?.vendor?.id) {
+            return customApis.find((i) => Number(i.vendor_id) === Number(user.vendor.id)) || null;
+        }
+
+        return null;
+    };
 
     const fetchIntegration = async () => {
         try {
             setLoading(true);
             const response = await api.get('/api-integrations');
-            const customApiIntegration = response.data.find(i => i.provider === 'custom_api');
+            const customApiIntegration = resolveOwnCustomApi(response.data);
             if (customApiIntegration) {
                 setIntegration(customApiIntegration);
                 setFormData({
                     name: customApiIntegration.name,
                     is_active: customApiIntegration.is_active,
+                });
+            } else {
+                setIntegration(null);
+                setFormData({
+                    name: 'Custom API Integration',
+                    is_active: true,
                 });
             }
         } catch (error) {
@@ -57,8 +84,11 @@ export default function CustomApiIntegrationPage() {
                 credentials: integration?.credentials || {},
             };
 
-            if (user?.vendor?.id) {
+            // Seller custom API is owned by the seller; admin custom API stays system-owned (no vendor_id)
+            if (isVendorUser && user?.vendor?.id) {
                 payload.vendor_id = user.vendor.id;
+            } else if (isAdminUser) {
+                payload.vendor_id = null;
             }
 
             if (integration) {

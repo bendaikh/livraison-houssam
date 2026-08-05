@@ -26,15 +26,21 @@ class ApiIntegrationController extends Controller
             $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
             
             if ($vendor) {
-                // Show only e-commerce style integrations linked to this vendor or general ones
+                // Vendors see their own integrations only.
+                // Superadmin custom_api (vendor_id null) must stay separate from seller custom_api.
                 $query->whereIn('type', ['shopify', 'google_sheet', 'custom_api'])
                       ->where(function ($q) use ($vendor) {
                           $q->where('vendor_id', $vendor->id)
-                            ->orWhereNull('vendor_id');
+                            ->orWhere(function ($shared) {
+                                // Legacy shared shopify/sheets may be null-owned; never share custom_api
+                                $shared->whereNull('vendor_id')
+                                    ->whereIn('type', ['shopify', 'google_sheet']);
+                            });
                       });
             } else {
                 // If vendor profile not found, show only Shopify/Google Sheet/Custom API types
-                $query->whereIn('type', ['shopify', 'google_sheet', 'custom_api']);
+                $query->whereIn('type', ['shopify', 'google_sheet', 'custom_api'])
+                      ->whereRaw('1 = 0');
             }
         }
         
@@ -63,8 +69,36 @@ class ApiIntegrationController extends Controller
 
         $validated['credentials'] = $validated['credentials'] ?? [];
 
-        if (empty($validated['vendor_id'])) {
-            $user = auth()->user();
+        $user = auth()->user();
+        $isCustomApi = ($validated['type'] ?? null) === 'custom_api'
+            || ($validated['provider'] ?? null) === 'custom_api';
+
+        if ($isCustomApi) {
+            // Superadmin custom API is system-owned (vendor_id null).
+            // Seller custom API is always scoped to that seller.
+            if ($user && $user->role?->slug === 'vendor') {
+                $vendor = Vendor::where('user_id', $user->id)->first();
+                if (!$vendor) {
+                    return response()->json(['message' => 'Vendor profile not found'], 403);
+                }
+                $validated['vendor_id'] = $vendor->id;
+            } else {
+                $validated['vendor_id'] = null;
+            }
+
+            $existingQuery = ApiIntegration::where('provider', 'custom_api');
+            if (!empty($validated['vendor_id'])) {
+                $existingQuery->where('vendor_id', $validated['vendor_id']);
+            } else {
+                $existingQuery->whereNull('vendor_id');
+            }
+
+            if ($existingQuery->exists()) {
+                return response()->json([
+                    'message' => 'A Custom API integration already exists for this account.',
+                ], 422);
+            }
+        } elseif (empty($validated['vendor_id'])) {
             if ($user && $user->role?->slug === 'vendor') {
                 $vendor = Vendor::where('user_id', $user->id)->first();
                 if ($vendor) {
@@ -95,8 +129,25 @@ class ApiIntegrationController extends Controller
             'settings' => 'nullable|array',
         ]);
 
-        if (empty($validated['vendor_id']) && ($apiIntegration->provider === 'custom_api' || ($validated['provider'] ?? null) === 'custom_api')) {
-            $user = auth()->user();
+        $user = auth()->user();
+        $isCustomApi = $apiIntegration->provider === 'custom_api'
+            || ($validated['provider'] ?? null) === 'custom_api';
+
+        if ($isCustomApi) {
+            if ($user && $user->role?->slug === 'vendor') {
+                $vendor = Vendor::where('user_id', $user->id)->first();
+                if (!$vendor || (int) $apiIntegration->vendor_id !== (int) $vendor->id) {
+                    return response()->json(['message' => 'Unauthorized to update this integration'], 403);
+                }
+                // Sellers cannot reassign ownership of their custom API
+                $validated['vendor_id'] = $vendor->id;
+            } else {
+                // Superadmin/admin custom API stays system-owned (separate from sellers)
+                if ($apiIntegration->vendor_id === null) {
+                    $validated['vendor_id'] = null;
+                }
+            }
+        } elseif (empty($validated['vendor_id'])) {
             if ($user && $user->role?->slug === 'vendor') {
                 $vendor = Vendor::where('user_id', $user->id)->first();
                 if ($vendor) {
@@ -112,6 +163,15 @@ class ApiIntegrationController extends Controller
 
     public function destroy(ApiIntegration $apiIntegration)
     {
+        $user = auth()->user();
+
+        if ($apiIntegration->provider === 'custom_api' && $user?->role?->slug === 'vendor') {
+            $vendor = Vendor::where('user_id', $user->id)->first();
+            if (!$vendor || (int) $apiIntegration->vendor_id !== (int) $vendor->id) {
+                return response()->json(['message' => 'Unauthorized to delete this integration'], 403);
+            }
+        }
+
         $apiIntegration->delete();
         return response()->json(['message' => 'Integration deleted successfully']);
     }
@@ -390,29 +450,50 @@ class ApiIntegrationController extends Controller
 
         try {
             $user = auth()->user();
+            $roleSlug = $user?->role?->slug;
+            $isVendor = $roleSlug === 'vendor';
+            $isAdmin = in_array($roleSlug, ['admin', 'superadmin'], true);
             
             // If integration_id is provided, find it, otherwise create new one
             if (!empty($validated['integration_id'])) {
                 $integration = ApiIntegration::findOrFail($validated['integration_id']);
+
+                if ($integration->provider !== 'custom_api') {
+                    return response()->json([
+                        'message' => 'Integration is not a Custom API integration',
+                    ], 400);
+                }
                 
-                // Check if user has permission to access this integration
-                if ($integration->vendor_id && $user->role->slug === 'vendor') {
+                // Vendors may only regenerate their own seller custom API key
+                if ($isVendor) {
                     $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
-                    if (!$vendor || $integration->vendor_id !== $vendor->id) {
+                    if (!$vendor || (int) $integration->vendor_id !== (int) $vendor->id) {
                         return response()->json([
                             'message' => 'Unauthorized to access this integration',
                         ], 403);
                     }
                 }
+
+                // Admins regenerating from the Custom API page should only touch the system key
+                if ($isAdmin && $integration->vendor_id !== null) {
+                    return response()->json([
+                        'message' => 'Unauthorized to access this seller Custom API integration',
+                    ], 403);
+                }
             } else {
-                // Find existing custom_api integration or create new one
+                // Find the caller's own custom_api integration (admin = null vendor_id, seller = their vendor_id)
                 $query = ApiIntegration::where('provider', 'custom_api');
                 
-                if ($user->role->slug === 'vendor') {
+                if ($isVendor) {
                     $vendor = \App\Models\Vendor::where('user_id', $user->id)->first();
-                    if ($vendor) {
-                        $query->where('vendor_id', $vendor->id);
+                    if (!$vendor) {
+                        return response()->json([
+                            'message' => 'Vendor profile not found',
+                        ], 403);
                     }
+                    $query->where('vendor_id', $vendor->id);
+                } else {
+                    $query->whereNull('vendor_id');
                 }
                 
                 $integration = $query->first();

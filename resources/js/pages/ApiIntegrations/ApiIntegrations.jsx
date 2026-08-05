@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useAuth } from '../../contexts/AuthContext';
+import { isAdminRole, isVendorRole } from '../../utils/roles';
 
 export default function ApiIntegrations() {
     const { t } = useTranslation();
@@ -12,7 +13,8 @@ export default function ApiIntegrations() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     
-    const isVendor = user?.role?.slug === 'vendor';
+    const isVendor = isVendorRole(user?.role?.slug);
+    const isAdminUser = isAdminRole(user?.role?.slug);
 
     useEffect(() => {
         fetchIntegrations();
@@ -33,6 +35,17 @@ export default function ApiIntegrations() {
     };
 
     const getIntegrationByProvider = (provider) => {
+        if (provider === 'custom_api') {
+            if (isAdminUser) {
+                return integrations.find((i) => i.provider === provider && i.vendor_id == null);
+            }
+            if (isVendor && user?.vendor?.id) {
+                return integrations.find(
+                    (i) => i.provider === provider && Number(i.vendor_id) === Number(user.vendor.id)
+                );
+            }
+            return null;
+        }
         return integrations.find(i => i.provider === provider);
     };
 
