@@ -19,7 +19,7 @@ class VendorController extends Controller
     {
         $query = Vendor::query();
 
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $query->where(function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%')
                   ->orWhere('email', 'like', '%' . $request->search . '%')
@@ -27,14 +27,25 @@ class VendorController extends Controller
             });
         }
 
+        // Stats for the current search (ignoring active/inactive filter)
+        $statsQuery = clone $query;
+        $stats = [
+            'total' => (clone $statsQuery)->count(),
+            'active' => (clone $statsQuery)->where('is_active', true)->count(),
+            'inactive' => (clone $statsQuery)->where('is_active', false)->count(),
+            'total_sales' => (float) (clone $statsQuery)->sum('total_sales'),
+        ];
+
         if ($request->has('is_active')) {
             $query->where('is_active', $request->is_active);
         }
 
-        $perPage = $request->get('per_page', 15);
+        $perPage = max(1, min((int) $request->get('per_page', 15), 100));
         $vendors = $query->latest()->paginate($perPage);
 
-        return response()->json($vendors);
+        return response()->json(array_merge($vendors->toArray(), [
+            'stats' => $stats,
+        ]));
     }
 
     /**

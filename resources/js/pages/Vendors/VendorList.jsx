@@ -21,6 +21,22 @@ export default function VendorList() {
     const [showModal, setShowModal] = useState(false);
     const [editingVendor, setEditingVendor] = useState(null);
     const [filterStatus, setFilterStatus] = useState('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [perPage] = useState(15);
+    const [pagination, setPagination] = useState({
+        current_page: 1,
+        last_page: 1,
+        per_page: 15,
+        total: 0,
+        from: 0,
+        to: 0,
+    });
+    const [stats, setStats] = useState({
+        total: 0,
+        active: 0,
+        inactive: 0,
+        totalSales: 0,
+    });
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -39,18 +55,39 @@ export default function VendorList() {
 
     useEffect(() => {
         fetchVendors();
-    }, [searchTerm, filterStatus]);
+    }, [searchTerm, filterStatus, currentPage, perPage]);
 
     const fetchVendors = async () => {
         try {
             setLoading(true);
-            const params = { search: searchTerm };
+            const params = {
+                search: searchTerm || undefined,
+                page: currentPage,
+                per_page: perPage,
+            };
             
             if (filterStatus === 'active') params.is_active = 1;
             if (filterStatus === 'inactive') params.is_active = 0;
             
             const response = await api.get('/vendors', { params });
-            setVendors(response.data.data || response.data);
+            const payload = response.data;
+            setVendors(payload.data || payload);
+            setPagination({
+                current_page: payload.current_page || 1,
+                last_page: payload.last_page || 1,
+                per_page: payload.per_page || perPage,
+                total: payload.total || 0,
+                from: payload.from || 0,
+                to: payload.to || 0,
+            });
+            if (payload.stats) {
+                setStats({
+                    total: payload.stats.total || 0,
+                    active: payload.stats.active || 0,
+                    inactive: payload.stats.inactive || 0,
+                    totalSales: parseFloat(payload.stats.total_sales) || 0,
+                });
+            }
         } catch (error) {
             console.error('Error fetching vendors:', error);
         } finally {
@@ -79,9 +116,10 @@ export default function VendorList() {
                 await api.put(`/vendors/${editingVendor.id}`, formData);
             } else {
                 await api.post('/vendors', formData);
+                setCurrentPage(1);
             }
             
-            fetchVendors();
+            await fetchVendors();
             handleCloseModal();
         } catch (error) {
             if (error.response?.data?.errors) {
@@ -153,11 +191,9 @@ export default function VendorList() {
         return digitsOnly.replace(/(.{4})/g, '$1 ').trim();
     };
 
-    const stats = {
-        total: vendors.length,
-        active: vendors.filter(v => v.is_active).length,
-        inactive: vendors.filter(v => !v.is_active).length,
-        totalSales: vendors.reduce((sum, v) => sum + (parseFloat(v.total_sales) || 0), 0)
+    const goToPage = (page) => {
+        if (page < 1 || page > pagination.last_page || page === currentPage) return;
+        setCurrentPage(page);
     };
 
     return (
@@ -241,7 +277,10 @@ export default function VendorList() {
                                 type="text"
                                 placeholder="Search by name, email, or company..."
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value);
+                                    setCurrentPage(1);
+                                }}
                                 className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
                             />
                         </div>
@@ -250,7 +289,10 @@ export default function VendorList() {
                     {/* Filter Buttons */}
                     <div className="flex items-center gap-2">
                         <button
-                            onClick={() => setFilterStatus('all')}
+                            onClick={() => {
+                                setFilterStatus('all');
+                                setCurrentPage(1);
+                            }}
                             className={`px-4 py-2.5 rounded-xl font-medium transition-all ${
                                 filterStatus === 'all'
                                     ? 'bg-orange-600 text-white shadow-lg shadow-orange-500/30'
@@ -260,7 +302,10 @@ export default function VendorList() {
                             All
                         </button>
                         <button
-                            onClick={() => setFilterStatus('active')}
+                            onClick={() => {
+                                setFilterStatus('active');
+                                setCurrentPage(1);
+                            }}
                             className={`px-4 py-2.5 rounded-xl font-medium transition-all ${
                                 filterStatus === 'active'
                                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30'
@@ -270,7 +315,10 @@ export default function VendorList() {
                             Active
                         </button>
                         <button
-                            onClick={() => setFilterStatus('inactive')}
+                            onClick={() => {
+                                setFilterStatus('inactive');
+                                setCurrentPage(1);
+                            }}
                             className={`px-4 py-2.5 rounded-xl font-medium transition-all ${
                                 filterStatus === 'inactive'
                                     ? 'bg-slate-600 text-white shadow-lg shadow-slate-500/30'
@@ -309,6 +357,7 @@ export default function VendorList() {
                     )}
                 </div>
             ) : (
+                <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredVendors.map((vendor) => (
                         <div
@@ -445,6 +494,63 @@ export default function VendorList() {
                         </div>
                     ))}
                 </div>
+
+                {pagination.last_page > 1 && (
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200/50 p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <span className="text-sm font-medium text-slate-600">
+                            Showing {pagination.from}-{pagination.to} of {pagination.total} sellers
+                        </span>
+                        <div className="flex gap-2 flex-wrap justify-center">
+                            <button
+                                onClick={() => goToPage(pagination.current_page - 1)}
+                                disabled={pagination.current_page === 1}
+                                className={`px-3 py-2 rounded-xl font-medium text-sm transition-all ${
+                                    pagination.current_page === 1
+                                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                        : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                }`}
+                            >
+                                ◀ Previous
+                            </button>
+                            {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
+                                .filter(
+                                    (page) =>
+                                        page === 1 ||
+                                        page === pagination.last_page ||
+                                        (page >= pagination.current_page - 1 && page <= pagination.current_page + 1)
+                                )
+                                .map((page, index, array) => (
+                                    <React.Fragment key={page}>
+                                        {index > 0 && array[index - 1] !== page - 1 && (
+                                            <span className="px-2 text-slate-400">•••</span>
+                                        )}
+                                        <button
+                                            onClick={() => goToPage(page)}
+                                            className={`px-3 py-2 rounded-xl font-medium text-sm transition-all ${
+                                                pagination.current_page === page
+                                                    ? 'bg-orange-600 text-white shadow-lg shadow-orange-500/30'
+                                                    : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                            }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </React.Fragment>
+                                ))}
+                            <button
+                                onClick={() => goToPage(pagination.current_page + 1)}
+                                disabled={pagination.current_page === pagination.last_page}
+                                className={`px-3 py-2 rounded-xl font-medium text-sm transition-all ${
+                                    pagination.current_page === pagination.last_page
+                                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                        : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                }`}
+                            >
+                                Next ▶
+                            </button>
+                        </div>
+                    </div>
+                )}
+                </>
             )}
 
             {/* Modal */}
