@@ -9,9 +9,7 @@ import { Copy, Key, RefreshCw, Eye, EyeOff, Code, BookOpen } from 'lucide-react'
 export default function CustomApiIntegrationPage() {
     const { t } = useTranslation();
     const { user } = useAuth();
-    const isAdminUser = ['admin', 'superadmin'].includes(user?.role?.slug);
     const [integration, setIntegration] = useState(null);
-    const [vendors, setVendors] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isGeneratingKey, setIsGeneratingKey] = useState(false);
@@ -19,25 +17,12 @@ export default function CustomApiIntegrationPage() {
     const [formData, setFormData] = useState({
         name: 'Custom API Integration',
         is_active: true,
-        vendor_id: '',
     });
     const [message, setMessage] = useState({ type: '', text: '' });
 
     useEffect(() => {
         fetchIntegration();
-        if (isAdminUser) {
-            fetchVendors();
-        }
-    }, [isAdminUser]);
-
-    const fetchVendors = async () => {
-        try {
-            const response = await api.get('/vendors');
-            setVendors(response.data?.data || response.data || []);
-        } catch (error) {
-            console.error('Error fetching vendors:', error);
-        }
-    };
+    }, []);
 
     const fetchIntegration = async () => {
         try {
@@ -49,13 +34,7 @@ export default function CustomApiIntegrationPage() {
                 setFormData({
                     name: customApiIntegration.name,
                     is_active: customApiIntegration.is_active,
-                    vendor_id: customApiIntegration.vendor_id ? String(customApiIntegration.vendor_id) : (user?.vendor?.id ? String(user.vendor.id) : ''),
                 });
-            } else if (user?.vendor?.id) {
-                setFormData((prev) => ({
-                    ...prev,
-                    vendor_id: String(user.vendor.id),
-                }));
             }
         } catch (error) {
             console.error('Error fetching integration:', error);
@@ -75,9 +54,12 @@ export default function CustomApiIntegrationPage() {
                 type: 'custom_api',
                 provider: 'custom_api',
                 is_active: formData.is_active,
-                vendor_id: formData.vendor_id ? Number(formData.vendor_id) : (user?.vendor?.id || null),
                 credentials: integration?.credentials || {},
             };
+
+            if (user?.vendor?.id) {
+                payload.vendor_id = user.vendor.id;
+            }
 
             if (integration) {
                 await api.put(`/api-integrations/${integration.id}`, payload);
@@ -138,7 +120,6 @@ export default function CustomApiIntegrationPage() {
             setFormData({
                 name: 'Custom API Integration',
                 is_active: true,
-                vendor_id: user?.vendor?.id ? String(user.vendor.id) : '',
             });
         } catch (error) {
             setMessage({
@@ -286,30 +267,6 @@ export default function CustomApiIntegrationPage() {
                                     required
                                 />
                             </div>
-
-                            {isAdminUser && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        {t('admin.orderForm.seller')}
-                                    </label>
-                                    <select
-                                        value={formData.vendor_id}
-                                        onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                        required
-                                    >
-                                        <option value="">{t('admin.orderForm.selectSeller')}</option>
-                                        {vendors.map((vendor) => (
-                                            <option key={vendor.id} value={vendor.id}>
-                                                {vendor.name || vendor.company_name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        {t('admin.apiIntegrations.customApi.sellerHint')}
-                                    </p>
-                                </div>
-                            )}
 
                             <div className="flex items-center">
                                 <input
