@@ -152,7 +152,7 @@ export default function CustomApiIntegrationPage() {
         {
             method: 'POST',
             path: '/api/orders',
-            description: 'Create a new order',
+            description: 'Create a new order (optional vendor_id to assign seller)',
             color: 'green',
         },
         {
@@ -172,6 +172,12 @@ export default function CustomApiIntegrationPage() {
             path: '/api/orders/{id}/status',
             description: 'Update order status',
             color: 'yellow',
+        },
+        {
+            method: 'GET',
+            path: '/api/sellers',
+            description: 'Get all sellers (vendors) — use id as vendor_id on orders',
+            color: 'blue',
         },
         {
             method: 'GET',
