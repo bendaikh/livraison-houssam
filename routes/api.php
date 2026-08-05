@@ -56,6 +56,9 @@ Route::middleware('auth.custom_api')->prefix('external')->group(function () {
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::patch('/orders/{order}', [OrderController::class, 'update']);
     Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus']);
+
+    // Sellers (vendors) - for assigning orders to the right seller account
+    Route::get('/sellers', [VendorController::class, 'externalIndex']);
     
     // Products - external API access
     Route::get('/products', [ProductController::class, 'index']);
@@ -200,6 +203,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Orders - accessible via both Sanctum and Custom API authentication
 Route::middleware(['auth.api_or_sanctum'])->group(function () {
+    // Sellers (vendors) for external systems like Prixvado
+    Route::get('/sellers', [VendorController::class, 'externalIndex']);
+    Route::get('/vendors-list', [VendorController::class, 'externalIndex']);
+
     Route::get('/orders/delivery-companies/available', [OrderController::class, 'getAvailableDeliveryCompanies']);
     Route::get('/orders/delivery-companies/{integration}/cities', [OrderController::class, 'getDeliveryCities']);
     Route::apiResource('orders', OrderController::class);

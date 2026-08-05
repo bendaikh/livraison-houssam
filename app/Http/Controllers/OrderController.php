@@ -1053,6 +1053,14 @@ class OrderController extends Controller
 
     private function applyAuthenticatedVendor(Request $request, array $validated): array
     {
+        // External systems (e.g. Prixvado) may assign the seller per store via vendor_id.
+        if (
+            $request->attributes->get('auth_method') === 'custom_api'
+            && !empty($validated['vendor_id'])
+        ) {
+            return $validated;
+        }
+
         $user = $request->user();
 
         if (!$user || !$user->isVendor()) {

@@ -37,6 +37,54 @@ class VendorController extends Controller
         return response()->json($vendors);
     }
 
+    /**
+     * Lightweight seller list for Custom API / external integrations (e.g. Prixvado).
+     */
+    public function externalIndex(Request $request)
+    {
+        $query = Vendor::query()->select([
+            'id',
+            'name',
+            'company_name',
+            'email',
+            'phone',
+            'is_active',
+        ]);
+
+        if ($request->boolean('active_only', true)) {
+            $query->where('is_active', true);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->string('search')->toString();
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('email', 'like', '%' . $search . '%')
+                    ->orWhere('company_name', 'like', '%' . $search . '%');
+            });
+        }
+
+        $vendors = $query
+            ->orderByRaw('COALESCE(NULLIF(company_name, ""), name) asc')
+            ->get()
+            ->map(function (Vendor $vendor) {
+                return [
+                    'id' => $vendor->id,
+                    'name' => $vendor->name,
+                    'company_name' => $vendor->company_name,
+                    'email' => $vendor->email,
+                    'phone' => $vendor->phone,
+                    'is_active' => (bool) $vendor->is_active,
+                    'label' => trim(($vendor->company_name ?: $vendor->name) . ($vendor->email ? " ({$vendor->email})" : '')),
+                ];
+            });
+
+        return response()->json([
+            'data' => $vendors,
+            'count' => $vendors->count(),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

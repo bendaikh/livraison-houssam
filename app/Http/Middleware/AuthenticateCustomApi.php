@@ -55,6 +55,7 @@ class AuthenticateCustomApi
         $request->attributes->set('api_integration', $integration);
         $request->attributes->set('api_integration_id', $integration->id);
         $request->attributes->set('api_vendor_id', $integration->vendor_id);
+        $request->attributes->set('auth_method', 'custom_api');
 
         // If the integration is linked to a vendor, authenticate as that vendor's user
         if ($integration->vendor_id) {
