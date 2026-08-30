@@ -55,6 +55,8 @@ export default function GoogleSheetIntegrationPage() {
     const [connectingSheet, setConnectingSheet] = useState(false);
     const [syncingKey, setSyncingKey] = useState('');
     const [syncingAll, setSyncingAll] = useState(false);
+    const [syncWebhookUrl, setSyncWebhookUrl] = useState('');
+    const [copiedWebhook, setCopiedWebhook] = useState(false);
 
     useEffect(() => {
         fetchIntegration();
@@ -88,6 +90,9 @@ export default function GoogleSheetIntegrationPage() {
             try {
                 const connectionsRes = await api.get(`/api-integrations/${gs.id}/google-sheet/connections`);
                 applyConnectedSheets(connectionsRes.data.data || []);
+                if (connectionsRes.data.sync_webhook_url) {
+                    setSyncWebhookUrl(connectionsRes.data.sync_webhook_url);
+                }
             } catch {
                 applyConnectedSheets(gs.settings?.connected_sheets || []);
             }
@@ -612,6 +617,42 @@ export default function GoogleSheetIntegrationPage() {
                                 {syncingAll ? t('admin.apiIntegrations.googleSheet.importing') : t('admin.apiIntegrations.googleSheet.syncAll')}
                             </button>
                         </div>
+
+                        {syncWebhookUrl && (
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 space-y-2">
+                                <p className="text-sm font-medium text-emerald-900">
+                                    {t('admin.apiIntegrations.googleSheet.autoImportTitle')}
+                                </p>
+                                <p className="text-sm text-emerald-800">
+                                    {t('admin.apiIntegrations.googleSheet.autoImportHelp')}
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={syncWebhookUrl}
+                                        className="flex-1 px-3 py-2 text-xs bg-white border border-emerald-200 rounded-lg text-slate-700"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                await navigator.clipboard.writeText(syncWebhookUrl);
+                                                setCopiedWebhook(true);
+                                                setTimeout(() => setCopiedWebhook(false), 2000);
+                                            } catch {
+                                                setMessage({ type: 'error', text: t('admin.apiIntegrations.googleSheet.copyFailed') });
+                                            }
+                                        }}
+                                        className="px-3 py-2 text-sm bg-white border border-emerald-200 text-emerald-800 rounded-lg hover:bg-emerald-50"
+                                    >
+                                        {copiedWebhook
+                                            ? t('admin.apiIntegrations.googleSheet.copied')
+                                            : t('admin.apiIntegrations.googleSheet.copyWebhook')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {connectedSheets.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BlacklistEntry;
 use App\Models\Order;
+use App\Models\OrderHistory;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Vendor;
@@ -825,6 +826,65 @@ class OrderController extends Controller
         $this->authorizeOrderAccess($request, $order, true);
 
         $order = $this->orderService->assignConfirmationAgentToSelf($order->id, $request->user());
+        $this->attachBlacklistMetadata($request, $order);
+
+        return response()->json($order);
+    }
+
+    public function incrementCallCount(Request $request, Order $order)
+    {
+        return $this->adjustCallCount($request, $order, 1);
+    }
+
+    public function decrementCallCount(Request $request, Order $order)
+    {
+        return $this->adjustCallCount($request, $order, -1);
+    }
+
+    private function adjustCallCount(Request $request, Order $order, int $delta)
+    {
+        $user = $request->user();
+
+        if (!$user?->isConfirmationAgent() && !$user?->isAdmin()) {
+            abort(403, 'Only confirmation agents and admins can change the call counter.');
+        }
+
+        $this->authorizeOrderAccess($request, $order);
+
+        $current = (int) ($order->call_count ?? 0);
+
+        if ($delta < 0 && $current <= 0) {
+            return response()->json([
+                'message' => 'Call count is already at 0.',
+            ], 422);
+        }
+
+        if ($delta > 0) {
+            $order->increment('call_count');
+        } else {
+            $order->decrement('call_count');
+        }
+
+        $order->refresh();
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'status' => $order->status,
+            'note' => $delta > 0
+                ? 'Client call logged. Call count: ' . (int) $order->call_count
+                : 'Call count decreased. Call count: ' . (int) $order->call_count,
+        ]);
+
+        $order->load([
+            'client',
+            'vendor',
+            'deliveryAgent',
+            'deliveryPerson',
+            'confirmationAgent',
+            'items.product',
+            'history.user',
+        ]);
         $this->attachBlacklistMetadata($request, $order);
 
         return response()->json($order);

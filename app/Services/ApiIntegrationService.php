@@ -323,6 +323,26 @@ class ApiIntegrationService
         return array_values($normalized);
     }
 
+    /**
+     * Ensure a stable secret token exists for HTTP auto-sync webhooks.
+     */
+    public function ensureGoogleSheetSyncToken(ApiIntegration $integration): string
+    {
+        $settings = $integration->settings ?? [];
+        $token = trim((string) ($settings['sync_token'] ?? ''));
+
+        if ($token !== '') {
+            return $token;
+        }
+
+        $token = bin2hex(random_bytes(24));
+        $settings['sync_token'] = $token;
+        $settings['auto_sync'] = $settings['auto_sync'] ?? true;
+        $integration->update(['settings' => $settings]);
+
+        return $token;
+    }
+
     public function addConnectedGoogleSheet(ApiIntegration $integration, array $payload): array
     {
         $sheetId = trim((string) ($payload['sheet_id'] ?? ''));

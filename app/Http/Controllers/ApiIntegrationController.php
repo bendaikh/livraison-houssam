@@ -396,8 +396,13 @@ class ApiIntegrationController extends Controller
 
     public function listGoogleSheetConnections(ApiIntegration $apiIntegration)
     {
+        $token = $this->apiIntegrationService->ensureGoogleSheetSyncToken($apiIntegration->fresh());
+
         return response()->json([
-            'data' => $this->apiIntegrationService->getConnectedGoogleSheets($apiIntegration),
+            'data' => $this->apiIntegrationService->getConnectedGoogleSheets($apiIntegration->fresh()),
+            'auto_sync' => (bool) (($apiIntegration->fresh()->settings['auto_sync'] ?? true)),
+            'sync_token' => $token,
+            'sync_webhook_url' => url('/api/webhooks/google-sheet/sync?token=' . urlencode($token)),
         ]);
     }
 

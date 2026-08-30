@@ -46,6 +46,7 @@ Route::post('/seller/register', [VendorController::class, 'register']);
 Route::post('/webhooks/shopify/orders/create', [WebhookController::class, 'handleShopifyOrderCreate']);
 Route::post('/webhooks/bmdelivery/status-update', [WebhookController::class, 'handleBMDeliveryWebhook']);
 Route::post('/webhooks/tawsilex/status-update', [WebhookController::class, 'handleTawsilexWebhook']);
+Route::match(['get', 'post'], '/webhooks/google-sheet/sync', [WebhookController::class, 'handleGoogleSheetSync']);
 Route::post('/webhooks/test', [WebhookController::class, 'testWebhook']);
 
 // External API routes (authenticated with custom API keys)
@@ -214,6 +215,8 @@ Route::middleware(['auth.api_or_sanctum'])->group(function () {
     Route::patch('/orders/{order}/delivery-workflow', [OrderController::class, 'updateDeliveryWorkflow']);
     Route::patch('/orders/{order}/assign-agent', [OrderController::class, 'assignDeliveryAgent']);
     Route::post('/orders/{order}/assign-to-me', [OrderController::class, 'assignToMe']);
+    Route::post('/orders/{order}/increment-call-count', [OrderController::class, 'incrementCallCount']);
+    Route::post('/orders/{order}/decrement-call-count', [OrderController::class, 'decrementCallCount']);
     Route::patch('/orders/{order}/confirmation-workflow', [OrderController::class, 'updateConfirmationWorkflow']);
     Route::patch('/orders/{order}/confirmation-assignment', [OrderController::class, 'updateConfirmationAssignment']);
     Route::post('/orders/{order}/sync-delivery-status', [OrderController::class, 'syncDeliveryStatus']);

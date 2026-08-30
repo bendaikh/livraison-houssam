@@ -5,7 +5,7 @@ import api from '../../utils/api';
 import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { isAdminRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
+import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
 import { 
     Package, User, MapPin, Phone, Calendar, DollarSign, 
     Truck, UserCheck, ArrowLeft, Edit, Printer, CheckCircle,
@@ -26,11 +26,14 @@ export default function OrderDetail() {
     const [syncing, setSyncing] = useState(false);
     const [resettingAssignment, setResettingAssignment] = useState(false);
     const [clientHistoryOpen, setClientHistoryOpen] = useState(false);
+    const [incrementingCallCount, setIncrementingCallCount] = useState(false);
     const autoSyncPerformed = useRef(false);
     const printRef = useRef(null);
     const isAdminUser = isAdminRole(user?.role?.slug);
     const isDeliveryPersonUser = isDeliveryPersonRole(user?.role?.slug);
     const isVendorUser = isVendorRole(user?.role?.slug);
+    const isConfirmationAgentUser = isConfirmationAgentRole(user?.role?.slug);
+    const canIncrementCallCount = isConfirmationAgentUser || isAdminUser;
 
     useEffect(() => {
         fetchOrder();
@@ -471,6 +474,32 @@ export default function OrderDetail() {
         }
     };
 
+    const handleIncrementCallCount = async () => {
+        try {
+            setIncrementingCallCount(true);
+            const response = await api.post(`/orders/${id}/increment-call-count`);
+            setOrder(response.data);
+        } catch (error) {
+            console.error('Error incrementing call count:', error);
+            alert(error.response?.data?.message || t('admin.orderDetail.callCountUpdateFailed'));
+        } finally {
+            setIncrementingCallCount(false);
+        }
+    };
+
+    const handleDecrementCallCount = async () => {
+        try {
+            setIncrementingCallCount(true);
+            const response = await api.post(`/orders/${id}/decrement-call-count`);
+            setOrder(response.data);
+        } catch (error) {
+            console.error('Error decrementing call count:', error);
+            alert(error.response?.data?.message || t('admin.orderDetail.callCountUpdateFailed'));
+        } finally {
+            setIncrementingCallCount(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -699,8 +728,35 @@ export default function OrderDetail() {
                                 <Phone size={16} className="text-gray-400" />
                                 <div className="flex-1">
                                     <p className="text-sm text-gray-500">{t('admin.orderDetail.phone')}</p>
-                                    <p className="font-medium text-gray-900">{order.client?.phone || 'N/A'}</p>
+                                    <p className="font-medium text-gray-900">{order.client?.phone || order.phone || 'N/A'}</p>
                                 </div>
+                            </div>
+                            <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2">
+                                <p className="text-sm text-sky-700">{t('admin.orderDetail.calls')}</p>
+                                <div className="mt-1 flex items-center gap-3">
+                                    <p className="text-xl font-bold text-sky-900">{order.call_count || 0}</p>
+                                    {canIncrementCallCount && (
+                                        <div className="inline-flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleDecrementCallCount}
+                                                disabled={incrementingCallCount || !(order.call_count > 0)}
+                                                className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50"
+                                            >
+                                                {t('admin.orderDetail.undoCall')}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleIncrementCallCount}
+                                                disabled={incrementingCallCount}
+                                                className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+                                            >
+                                                {incrementingCallCount ? t('admin.orderDetail.loggingCall') : t('admin.orderDetail.logCall')}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="mt-1 text-xs text-sky-600">{t('admin.orderDetail.callsHelp')}</p>
                             </div>
                             {order.client?.email && (
                                 <div>

@@ -6,6 +6,7 @@ use App\Models\ApiIntegration;
 use App\Models\Order;
 use App\Models\Client;
 use App\Models\Product;
+use App\Services\ApiIntegrationService;
 use App\Services\BMDeliveryService;
 use App\Services\DeliveryStatusMapper;
 use App\Services\OrderService;
@@ -18,6 +19,7 @@ class WebhookController extends Controller
     public function __construct(
         private DeliveryStatusMapper $deliveryStatusMapper,
         private OrderService $orderService,
+        private ApiIntegrationService $apiIntegrationService,
     ) {
     }
 
@@ -200,6 +202,78 @@ class WebhookController extends Controller
             'message' => 'Webhook endpoint is working',
             'received_at' => now()->toISOString(),
         ], 200);
+    }
+
+    /**
+     * Trigger Google Sheet order import (Hostinger HTTP cron / Apps Script).
+     * Auth: ?token= or X-Google-Sheet-Sync-Token header matching integration settings.sync_token.
+     */
+    public function handleGoogleSheetSync(Request $request)
+    {
+        $token = trim((string) (
+            $request->query('token')
+            ?? $request->header('X-Google-Sheet-Sync-Token')
+            ?? $request->input('token')
+            ?? ''
+        ));
+
+        if ($token === '') {
+            return response()->json(['message' => 'Missing sync token'], 401);
+        }
+
+        $integrations = ApiIntegration::query()
+            ->where('provider', 'google_sheet')
+            ->where('is_active', true)
+            ->get()
+            ->filter(function (ApiIntegration $integration) use ($token) {
+                $settings = $integration->settings ?? [];
+                $expected = (string) ($settings['sync_token'] ?? '');
+                return $expected !== '' && hash_equals($expected, $token);
+            })
+            ->values();
+
+        if ($integrations->isEmpty()) {
+            Log::warning('Google Sheet sync webhook: invalid token');
+            return response()->json(['message' => 'Invalid sync token'], 401);
+        }
+
+        $results = [];
+        $failed = 0;
+
+        foreach ($integrations as $integration) {
+            try {
+                $connectionKey = $request->input('connection_key');
+                $log = $this->apiIntegrationService->syncGoogleSheetOrders(
+                    $integration->id,
+                    $connectionKey
+                );
+                $results[] = [
+                    'integration_id' => $integration->id,
+                    'success' => true,
+                    'message' => $log->message,
+                    'successful_records' => $log->successful_records,
+                    'failed_records' => $log->failed_records,
+                ];
+            } catch (\Throwable $e) {
+                $failed++;
+                Log::error('Google Sheet sync webhook failed', [
+                    'integration_id' => $integration->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $results[] = [
+                    'integration_id' => $integration->id,
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'message' => 'Google Sheet sync completed',
+            'synced' => count($results) - $failed,
+            'failed' => $failed,
+            'results' => $results,
+        ], $failed > 0 && $failed === count($results) ? 500 : 200);
     }
 
     /**

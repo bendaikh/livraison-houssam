@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X } from 'lucide-react';
+import { Eye, Edit, MessageCircle, RefreshCw, Trash2, Truck, MapPin, AlertCircle, X, Phone } from 'lucide-react';
 import DeliveryCompanyModal from '../../components/DeliveryCompanyModal';
 import ClientHistoryModal, { ClientIntelligenceIndicators } from '../../components/ClientHistoryModal';
 import { isAdminRole, isConfirmationAgentRole, isDeliveryPersonRole, isVendorRole } from '../../utils/roles';
@@ -44,6 +44,7 @@ export default function OrderList({ status = '' }) {
         phone: '',
         clientName: '',
     });
+    const [incrementingCallCountId, setIncrementingCallCountId] = useState(null);
     const [assignmentScope, setAssignmentScope] = useState('my');
     const [pagination, setPagination] = useState({
         current_page: 1,
@@ -79,6 +80,7 @@ export default function OrderList({ status = '' }) {
     const isVendorUser = isVendorRole(roleSlug);
     const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
     const isDeliveryPersonUser = isDeliveryPersonRole(roleSlug);
+    const canIncrementCallCount = isConfirmationAgentUser || isAdminUser;
     const [isDarkMode, setIsDarkMode] = useState(() => (
         typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
     ));
@@ -840,6 +842,42 @@ export default function OrderList({ status = '' }) {
         }
     };
 
+    const handleIncrementCallCount = async (orderId) => {
+        try {
+            setIncrementingCallCountId(orderId);
+            const response = await api.post(`/orders/${orderId}/increment-call-count`);
+            const nextCount = response.data?.call_count;
+            setOrders((prev) => prev.map((order) => (
+                order.id === orderId
+                    ? { ...order, call_count: nextCount ?? ((order.call_count || 0) + 1) }
+                    : order
+            )));
+        } catch (error) {
+            console.error('Error incrementing call count:', error);
+            alert(error.response?.data?.message || t('admin.orderList.callCountUpdateFailed'));
+        } finally {
+            setIncrementingCallCountId(null);
+        }
+    };
+
+    const handleDecrementCallCount = async (orderId) => {
+        try {
+            setIncrementingCallCountId(orderId);
+            const response = await api.post(`/orders/${orderId}/decrement-call-count`);
+            const nextCount = response.data?.call_count;
+            setOrders((prev) => prev.map((order) => (
+                order.id === orderId
+                    ? { ...order, call_count: nextCount ?? Math.max(0, (order.call_count || 0) - 1) }
+                    : order
+            )));
+        } catch (error) {
+            console.error('Error decrementing call count:', error);
+            alert(error.response?.data?.message || t('admin.orderList.callCountUpdateFailed'));
+        } finally {
+            setIncrementingCallCountId(null);
+        }
+    };
+
     const handleAgentClick = (order) => {
         setSelectedOrderForAgent(order);
         setShowAgentModal(true);
@@ -1433,8 +1471,33 @@ export default function OrderList({ status = '' }) {
                                         </div>
                                     </div>
 
-                                    {(order.callback_date || isBlacklisted) && (
                                     <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-sky-100 text-sky-800">
+                                            <Phone size={11} />
+                                            {t('admin.orderList.calls')}: {order.call_count || 0}
+                                        </span>
+                                        {canIncrementCallCount && (isAdminUser || canWorkOnOrder) && (
+                                            <div className="inline-flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDecrementCallCount(order.id)}
+                                                    disabled={incrementingCallCountId === order.id || !(order.call_count > 0)}
+                                                    className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50"
+                                                    title={t('admin.orderList.undoCall')}
+                                                >
+                                                    {t('admin.orderList.undoCall')}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleIncrementCallCount(order.id)}
+                                                    disabled={incrementingCallCountId === order.id}
+                                                    className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+                                                    title={t('admin.orderList.logCall')}
+                                                >
+                                                    {incrementingCallCountId === order.id ? '...' : t('admin.orderList.logCall')}
+                                                </button>
+                                            </div>
+                                        )}
                                         {order.callback_date && (
                                             <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-700">
                                                 {t('admin.orderList.callback')} {formatDate(order.callback_date)}
@@ -1446,7 +1509,6 @@ export default function OrderList({ status = '' }) {
                                             </span>
                                         )}
                                     </div>
-                                    )}
 
                                     {/* Items */}
                                     {primaryItems.length > 0 && (
@@ -1832,6 +1894,9 @@ function DeliveryPersonOrderCard({
                         {order.callback_date && (
                             <p className={`text-xs ${isDarkMode ? 'text-amber-300' : 'text-amber-700'}`}>Callback {formatDate(order.callback_date)}</p>
                         )}
+                        <p className={`text-xs font-semibold ${isDarkMode ? 'text-sky-300' : 'text-sky-700'}`}>
+                            {t('admin.orderList.calls')}: {order.call_count || 0}
+                        </p>
                         {order.delivered_at && (
                             <div>
                                 <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-emerald-300' : 'text-emerald-600'}`}>
