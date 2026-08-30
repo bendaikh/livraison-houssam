@@ -217,6 +217,7 @@ Route::middleware(['auth.api_or_sanctum'])->group(function () {
     Route::post('/orders/{order}/assign-to-me', [OrderController::class, 'assignToMe']);
     Route::post('/orders/{order}/increment-call-count', [OrderController::class, 'incrementCallCount']);
     Route::post('/orders/{order}/decrement-call-count', [OrderController::class, 'decrementCallCount']);
+    Route::patch('/orders/{order}/call-assignment', [OrderController::class, 'updateCallAssignment']);
     Route::patch('/orders/{order}/confirmation-workflow', [OrderController::class, 'updateConfirmationWorkflow']);
     Route::patch('/orders/{order}/confirmation-assignment', [OrderController::class, 'updateConfirmationAssignment']);
     Route::post('/orders/{order}/sync-delivery-status', [OrderController::class, 'syncDeliveryStatus']);

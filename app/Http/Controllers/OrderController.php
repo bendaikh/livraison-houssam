@@ -54,7 +54,7 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'deliveryIntegration', 'items.product']);
+        $query = Order::with(['client', 'vendor', 'deliveryAgent', 'deliveryPerson', 'confirmationAgent', 'callAgent', 'deliveryIntegration', 'items.product']);
 
         $user = $request->user();
 
@@ -322,6 +322,7 @@ class OrderController extends Controller
             'deliveryAgent',
             'deliveryPerson',
             'confirmationAgent',
+            'callAgent',
             'deliveryIntegration',
             'items.product',
             'history.user'
@@ -841,15 +842,88 @@ class OrderController extends Controller
         return $this->adjustCallCount($request, $order, -1);
     }
 
+    public function updateCallAssignment(Request $request, Order $order)
+    {
+        $this->authorizeAdmin($request);
+
+        $validated = $request->validate([
+            'call_agent_id' => 'nullable|exists:users,id',
+        ]);
+
+        if (!empty($validated['call_agent_id'])) {
+            $agent = User::with('role')->findOrFail($validated['call_agent_id']);
+
+            if (!$agent->isConfirmationAgent()) {
+                throw ValidationException::withMessages([
+                    'call_agent_id' => ['Selected user is not a confirmation agent.'],
+                ]);
+            }
+        }
+
+        $previousAgentId = $order->call_agent_id;
+        $nextAgentId = $validated['call_agent_id'] ?? null;
+
+        $order->update([
+            'call_agent_id' => $nextAgentId,
+        ]);
+
+        $order->refresh();
+
+        $note = $nextAgentId
+            ? 'Call assignment set to agent #' . $nextAgentId . '.'
+            : 'Call assignment cleared.';
+
+        if ((int) $previousAgentId !== (int) $nextAgentId) {
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'user_id' => $request->user()->id,
+                'status' => $order->status,
+                'note' => $note,
+            ]);
+        }
+
+        $order->load([
+            'client',
+            'vendor',
+            'deliveryAgent',
+            'deliveryPerson',
+            'confirmationAgent',
+            'callAgent',
+            'items.product',
+            'history.user',
+        ]);
+        $this->attachBlacklistMetadata($request, $order);
+
+        return response()->json($order);
+    }
+
     private function adjustCallCount(Request $request, Order $order, int $delta)
     {
         $user = $request->user();
 
         if (!$user?->isConfirmationAgent() && !$user?->isAdmin()) {
-            abort(403, 'Only confirmation agents and admins can change the call counter.');
+            return response()->json([
+                'message' => 'Only confirmation agents and admins can change the call counter.',
+            ], 422);
         }
 
-        $this->authorizeOrderAccess($request, $order);
+        // Call assignment is separate from order confirmation assignment.
+        // Agents may view the counter anytime; only the call-assigned agent (or admin) can change it.
+        if ($user->isConfirmationAgent() && !$user->isAdmin()) {
+            if (!(int) $order->call_agent_id) {
+                return response()->json([
+                    'message' => 'Call is not assigned yet. An admin must assign the call first.',
+                    'call_count' => (int) ($order->call_count ?? 0),
+                ], 422);
+            }
+
+            if ((int) $order->call_agent_id !== (int) $user->id) {
+                return response()->json([
+                    'message' => 'Call is assigned to another agent. You can view the count but cannot change it.',
+                    'call_count' => (int) ($order->call_count ?? 0),
+                ], 422);
+            }
+        }
 
         $current = (int) ($order->call_count ?? 0);
 
@@ -882,6 +956,7 @@ class OrderController extends Controller
             'deliveryAgent',
             'deliveryPerson',
             'confirmationAgent',
+            'callAgent',
             'items.product',
             'history.user',
         ]);

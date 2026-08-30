@@ -11,7 +11,6 @@ use App\Models\Vendor;
 use App\Support\MoroccanPhone;
 use Illuminate\Support\Facades\Log;
 use App\Services\GoogleSheetService;
-use Carbon\Carbon;
 
 class ApiIntegrationService
 {
@@ -900,7 +899,6 @@ class ApiIntegrationService
         $statusRaw  = $pick(['status','etat']);
         $shopifyName= $pick(['shopify_name','shopify_order_name','order_name','shopify_reference']);
         $sourceRaw  = $pick(['source'], 'google_sheet');
-        $dateRaw    = $pick(['date','created_at','order_date']);
 
         $isPresent = function ($val) {
             if ($val === null) return false;
@@ -1023,21 +1021,6 @@ class ApiIntegrationService
             'notes' => $pick(['notes','comment','comments']),
             'whatsapp' => $pick(['whatsapp']),
         ]);
-
-        // Apply provided order date if present
-        if ($dateRaw) {
-            try {
-                $parsedDate = Carbon::parse($dateRaw);
-                $order->created_at = $parsedDate;
-                $order->save();
-            } catch (\Exception $e) {
-                Log::warning('Failed to parse order date from sheet row', [
-                    'row' => $row['__row_number'] ?? null,
-                    'raw_date' => $dateRaw,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
 
         return ['order' => $order, 'created' => true];
     }

@@ -45,6 +45,11 @@ export default function OrderList({ status = '' }) {
         clientName: '',
     });
     const [incrementingCallCountId, setIncrementingCallCountId] = useState(null);
+    const [showCallAssignModal, setShowCallAssignModal] = useState(false);
+    const [selectedOrderForCall, setSelectedOrderForCall] = useState(null);
+    const [confirmationAgents, setConfirmationAgents] = useState([]);
+    const [selectedCallAgentId, setSelectedCallAgentId] = useState('');
+    const [savingCallAssignment, setSavingCallAssignment] = useState(false);
     const [assignmentScope, setAssignmentScope] = useState('my');
     const [pagination, setPagination] = useState({
         current_page: 1,
@@ -80,7 +85,7 @@ export default function OrderList({ status = '' }) {
     const isVendorUser = isVendorRole(roleSlug);
     const isConfirmationAgentUser = isConfirmationAgentRole(roleSlug);
     const isDeliveryPersonUser = isDeliveryPersonRole(roleSlug);
-    const canIncrementCallCount = isConfirmationAgentUser || isAdminUser;
+    const canSeeCallCount = isConfirmationAgentUser || isAdminUser;
     const [isDarkMode, setIsDarkMode] = useState(() => (
         typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
     ));
@@ -878,6 +883,54 @@ export default function OrderList({ status = '' }) {
         }
     };
 
+    const openCallAssignModal = async (order) => {
+        setSelectedOrderForCall(order);
+        setSelectedCallAgentId(order.call_agent_id ? String(order.call_agent_id) : '');
+        setShowCallAssignModal(true);
+        try {
+            const response = await api.get('/confirmation-agents');
+            setConfirmationAgents(response.data || []);
+        } catch (error) {
+            console.error('Error fetching confirmation agents:', error);
+            setConfirmationAgents([]);
+        }
+    };
+
+    const closeCallAssignModal = () => {
+        setShowCallAssignModal(false);
+        setSelectedOrderForCall(null);
+        setSelectedCallAgentId('');
+    };
+
+    const handleSaveCallAssignment = async () => {
+        if (!selectedOrderForCall) {
+            return;
+        }
+
+        try {
+            setSavingCallAssignment(true);
+            const response = await api.patch(`/orders/${selectedOrderForCall.id}/call-assignment`, {
+                call_agent_id: selectedCallAgentId ? Number(selectedCallAgentId) : null,
+            });
+            setOrders((prev) => prev.map((order) => (
+                order.id === selectedOrderForCall.id
+                    ? {
+                        ...order,
+                        ...response.data,
+                        call_agent_id: response.data?.call_agent_id ?? null,
+                        call_agent: response.data?.call_agent ?? null,
+                    }
+                    : order
+            )));
+            closeCallAssignModal();
+        } catch (error) {
+            console.error('Error updating call assignment:', error);
+            alert(error.response?.data?.message || t('admin.orderList.callAssignFailed'));
+        } finally {
+            setSavingCallAssignment(false);
+        }
+    };
+
     const handleAgentClick = (order) => {
         setSelectedOrderForAgent(order);
         setShowAgentModal(true);
@@ -1472,31 +1525,57 @@ export default function OrderList({ status = '' }) {
                                     </div>
 
                                     <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-sky-100 text-sky-800">
-                                            <Phone size={11} />
-                                            {t('admin.orderList.calls')}: {order.call_count || 0}
-                                        </span>
-                                        {canIncrementCallCount && (isAdminUser || canWorkOnOrder) && (
-                                            <div className="inline-flex items-center gap-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDecrementCallCount(order.id)}
-                                                    disabled={incrementingCallCountId === order.id || !(order.call_count > 0)}
-                                                    className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50"
-                                                    title={t('admin.orderList.undoCall')}
-                                                >
-                                                    {t('admin.orderList.undoCall')}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleIncrementCallCount(order.id)}
-                                                    disabled={incrementingCallCountId === order.id}
-                                                    className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
-                                                    title={t('admin.orderList.logCall')}
-                                                >
-                                                    {incrementingCallCountId === order.id ? '...' : t('admin.orderList.logCall')}
-                                                </button>
-                                            </div>
+                                        {canSeeCallCount && (
+                                            <>
+                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-sky-100 text-sky-800">
+                                                    <Phone size={11} />
+                                                    {t('admin.orderList.calls')}: {order.call_count || 0}
+                                                </span>
+                                                {(isAdminUser || String(order.call_agent_id) === String(user?.id)) ? (
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDecrementCallCount(order.id)}
+                                                            disabled={incrementingCallCountId === order.id || !(order.call_count > 0)}
+                                                            className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50"
+                                                            title={t('admin.orderList.undoCall')}
+                                                        >
+                                                            {t('admin.orderList.undoCall')}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleIncrementCallCount(order.id)}
+                                                            disabled={incrementingCallCountId === order.id}
+                                                            className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+                                                            title={t('admin.orderList.logCall')}
+                                                        >
+                                                            {incrementingCallCountId === order.id ? '...' : t('admin.orderList.logCall')}
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+                                                {isAdminUser && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openCallAssignModal(order)}
+                                                        className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded border border-sky-300 bg-white text-sky-700 hover:bg-sky-50"
+                                                        title={t('admin.orderList.assignCall')}
+                                                    >
+                                                        {order.call_agent?.name
+                                                            ? t('admin.orderList.callAssignedTo', { name: order.call_agent.name })
+                                                            : t('admin.orderList.assignCall')}
+                                                    </button>
+                                                )}
+                                                {!isAdminUser && order.call_agent?.name && (
+                                                    <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-slate-100 text-slate-600">
+                                                        {t('admin.orderList.callAssignedTo', { name: order.call_agent.name })}
+                                                    </span>
+                                                )}
+                                                {!isAdminUser && !order.call_agent_id && (
+                                                    <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                        {t('admin.orderList.callNotAssigned')}
+                                                    </span>
+                                                )}
+                                            </>
                                         )}
                                         {order.callback_date && (
                                             <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-700">
@@ -1691,6 +1770,65 @@ export default function OrderList({ status = '' }) {
                             fetchOrders();
                         }}
                     />
+                </div>
+            )}
+
+            {showCallAssignModal && selectedOrderForCall && (
+                <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-4">
+                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                    {t('admin.orderList.assignCall')}
+                                </p>
+                                <h3 className="text-lg font-bold text-slate-900 mt-1">
+                                    {selectedOrderForCall.order_number}
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeCallAssignModal}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="px-5 py-4 space-y-3">
+                            <p className="text-sm text-slate-600">{t('admin.orderList.assignCallHelp')}</p>
+                            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                {t('admin.orderList.confirmation')}
+                            </label>
+                            <select
+                                value={selectedCallAgentId}
+                                onChange={(e) => setSelectedCallAgentId(e.target.value)}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800"
+                            >
+                                <option value="">{t('admin.orderList.unassigned')}</option>
+                                {confirmationAgents.map((agent) => (
+                                    <option key={agent.id} value={agent.id}>
+                                        {agent.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 bg-slate-50">
+                            <button
+                                type="button"
+                                onClick={closeCallAssignModal}
+                                className="px-3 py-1.5 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200"
+                            >
+                                {t('admin.orderList.cancel', { defaultValue: 'Cancel' })}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveCallAssignment}
+                                disabled={savingCallAssignment}
+                                className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+                            >
+                                {savingCallAssignment ? '...' : t('admin.orderList.saveCallAssign')}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

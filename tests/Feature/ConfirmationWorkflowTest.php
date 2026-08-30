@@ -716,6 +716,70 @@ class ConfirmationWorkflowTest extends TestCase
         $response->assertJsonPath('data.1.id', $olderOrder->id);
     }
 
+    public function test_assigned_confirmation_agent_can_increment_and_decrement_call_count(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $order = $this->createOrderForConfirmationAgent($agent);
+        $order->update(['call_agent_id' => $agent->id]);
+        $token = $agent->createToken('test')->plainTextToken;
+
+        $increment = $this->withToken($token)->postJson("/api/orders/{$order->id}/increment-call-count");
+        $increment->assertOk();
+        $increment->assertJsonPath('call_count', 1);
+
+        $decrement = $this->withToken($token)->postJson("/api/orders/{$order->id}/decrement-call-count");
+        $decrement->assertOk();
+        $decrement->assertJsonPath('call_count', 0);
+    }
+
+    public function test_unassigned_confirmation_agent_cannot_change_call_count(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $order = $this->createOrderForConfirmationAgent($agent);
+        $order->update(['call_agent_id' => null, 'call_count' => 0]);
+
+        $token = $agent->createToken('test')->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson("/api/orders/{$order->id}/increment-call-count")
+            ->assertStatus(422)
+            ->assertJsonPath('call_count', 0);
+    }
+
+    public function test_other_confirmation_agent_cannot_change_call_count_after_call_reassignment(): void
+    {
+        $firstAgent = $this->createConfirmationAgent();
+        $secondAgent = $this->createConfirmationAgent();
+        $admin = $this->createAdmin();
+        $order = $this->createOrderForConfirmationAgent($firstAgent);
+        $order->update(['call_agent_id' => $firstAgent->id]);
+
+        $firstToken = $firstAgent->createToken('test')->plainTextToken;
+        $secondToken = $secondAgent->createToken('test')->plainTextToken;
+        $adminToken = $admin->createToken('test')->plainTextToken;
+
+        $this->withToken($firstToken)
+            ->postJson("/api/orders/{$order->id}/increment-call-count")
+            ->assertOk()
+            ->assertJsonPath('call_count', 1);
+
+        $this->withToken($adminToken)
+            ->patchJson("/api/orders/{$order->id}/call-assignment", [
+                'call_agent_id' => $secondAgent->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('call_agent_id', $secondAgent->id);
+
+        $this->withToken($firstToken)
+            ->postJson("/api/orders/{$order->id}/increment-call-count")
+            ->assertStatus(422);
+
+        $this->withToken($secondToken)
+            ->postJson("/api/orders/{$order->id}/increment-call-count")
+            ->assertOk()
+            ->assertJsonPath('call_count', 2);
+    }
+
     public function test_confirmation_agent_can_filter_orders_by_seller(): void
     {
         $agent = $this->createConfirmationAgent();
@@ -756,6 +820,22 @@ class ConfirmationWorkflowTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('data.0.is_blacklisted', true);
         $response->assertJsonPath('data.0.blacklist_entry.reason', 'Phone blocked');
+    }
+
+    private function createAdmin(): User
+    {
+        $role = Role::firstOrCreate(
+            ['slug' => 'superadmin'],
+            [
+                'name' => 'Super Admin',
+                'permissions' => ['*'],
+            ]
+        );
+
+        return User::factory()->create([
+            'role_id' => $role->id,
+            'is_active' => true,
+        ]);
     }
 
     private function createConfirmationAgent(): User

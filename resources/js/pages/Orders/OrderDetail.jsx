@@ -27,13 +27,20 @@ export default function OrderDetail() {
     const [resettingAssignment, setResettingAssignment] = useState(false);
     const [clientHistoryOpen, setClientHistoryOpen] = useState(false);
     const [incrementingCallCount, setIncrementingCallCount] = useState(false);
+    const [confirmationAgents, setConfirmationAgents] = useState([]);
+    const [selectedCallAgentId, setSelectedCallAgentId] = useState('');
+    const [savingCallAssignment, setSavingCallAssignment] = useState(false);
     const autoSyncPerformed = useRef(false);
     const printRef = useRef(null);
     const isAdminUser = isAdminRole(user?.role?.slug);
     const isDeliveryPersonUser = isDeliveryPersonRole(user?.role?.slug);
     const isVendorUser = isVendorRole(user?.role?.slug);
     const isConfirmationAgentUser = isConfirmationAgentRole(user?.role?.slug);
-    const canIncrementCallCount = isConfirmationAgentUser || isAdminUser;
+    const isCallAssignedAgent = Boolean(order?.call_agent_id)
+        && String(order.call_agent_id) === String(user?.id);
+    // Call assignment is separate from order confirmation assignment.
+    const canChangeCallCount = isAdminUser || isCallAssignedAgent;
+    const canSeeCallCount = isAdminUser || isConfirmationAgentUser;
 
     useEffect(() => {
         fetchOrder();
@@ -44,12 +51,30 @@ export default function OrderDetail() {
             setLoading(true);
             const response = await api.get(`/orders/${id}`);
             setOrder(response.data);
+            setSelectedCallAgentId(response.data?.call_agent_id ? String(response.data.call_agent_id) : '');
         } catch (error) {
             console.error('Error fetching order:', error);
         } finally {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (!isAdminUser) {
+            return;
+        }
+
+        const fetchConfirmationAgents = async () => {
+            try {
+                const response = await api.get('/confirmation-agents');
+                setConfirmationAgents(response.data || []);
+            } catch (error) {
+                console.error('Error fetching confirmation agents:', error);
+            }
+        };
+
+        fetchConfirmationAgents();
+    }, [isAdminUser]);
 
     useEffect(() => {
         if (order && order.delivery_tracking_code && order.delivery_tracking_code.toLowerCase() !== 'ko' && !autoSyncPerformed.current) {
@@ -500,6 +525,21 @@ export default function OrderDetail() {
         }
     };
 
+    const handleSaveCallAssignment = async () => {
+        try {
+            setSavingCallAssignment(true);
+            const response = await api.patch(`/orders/${id}/call-assignment`, {
+                call_agent_id: selectedCallAgentId ? Number(selectedCallAgentId) : null,
+            });
+            setOrder(response.data);
+        } catch (error) {
+            console.error('Error updating call assignment:', error);
+            alert(error.response?.data?.message || t('admin.orderDetail.callAssignFailed'));
+        } finally {
+            setSavingCallAssignment(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -731,11 +771,12 @@ export default function OrderDetail() {
                                     <p className="font-medium text-gray-900">{order.client?.phone || order.phone || 'N/A'}</p>
                                 </div>
                             </div>
-                            <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2">
+                            {canSeeCallCount && (
+                            <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 space-y-2">
                                 <p className="text-sm text-sky-700">{t('admin.orderDetail.calls')}</p>
-                                <div className="mt-1 flex items-center gap-3">
+                                <div className="mt-1 flex items-center gap-3 flex-wrap">
                                     <p className="text-xl font-bold text-sky-900">{order.call_count || 0}</p>
-                                    {canIncrementCallCount && (
+                                    {canChangeCallCount && (
                                         <div className="inline-flex items-center gap-2">
                                             <button
                                                 type="button"
@@ -756,8 +797,39 @@ export default function OrderDetail() {
                                         </div>
                                     )}
                                 </div>
-                                <p className="mt-1 text-xs text-sky-600">{t('admin.orderDetail.callsHelp')}</p>
+                                {isAdminUser && (
+                                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                                        <select
+                                            value={selectedCallAgentId}
+                                            onChange={(e) => setSelectedCallAgentId(e.target.value)}
+                                            className="rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-xs text-sky-900"
+                                        >
+                                            <option value="">{t('admin.orderDetail.callUnassigned')}</option>
+                                            {confirmationAgents.map((agent) => (
+                                                <option key={agent.id} value={agent.id}>
+                                                    {agent.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveCallAssignment}
+                                            disabled={savingCallAssignment}
+                                            className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-sky-300 text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                                        >
+                                            {savingCallAssignment ? '...' : t('admin.orderDetail.assignCall')}
+                                        </button>
+                                    </div>
+                                )}
+                                <p className="mt-1 text-xs text-sky-600">
+                                    {canChangeCallCount
+                                        ? t('admin.orderDetail.callsHelp')
+                                        : order.call_agent?.name
+                                            ? t('admin.orderDetail.callsHelpAssignedTo', { name: order.call_agent.name })
+                                            : t('admin.orderDetail.callsHelpAssignedOnly')}
+                                </p>
                             </div>
+                            )}
                             {order.client?.email && (
                                 <div>
                                     <p className="text-sm text-gray-500">{t('admin.orderDetail.email')}</p>

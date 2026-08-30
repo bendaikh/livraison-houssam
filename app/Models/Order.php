@@ -23,6 +23,7 @@ class Order extends Model
         'created_by_user_id',
         'callback_date',
         'call_count',
+        'call_agent_id',
         'delivery_integration_id',
         'status',
         'payment_status',
@@ -121,6 +122,11 @@ class Order extends Model
     public function confirmationAgent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmation_agent_id');
+    }
+
+    public function callAgent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'call_agent_id');
     }
 
     public function creator(): BelongsTo
