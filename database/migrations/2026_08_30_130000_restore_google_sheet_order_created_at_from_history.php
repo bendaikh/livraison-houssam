@@ -12,6 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // MySQL-specific UPDATE ... INNER JOIN syntax.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("
             UPDATE orders
             INNER JOIN (

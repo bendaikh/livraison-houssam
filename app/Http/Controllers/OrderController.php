@@ -950,6 +950,21 @@ class OrderController extends Controller
                 : 'Call count decreased. Call count: ' . (int) $order->call_count,
         ]);
 
+        // After 10 unanswered calls, automatically cancel the order.
+        $terminalStatuses = ['delivered', 'cancelled', 'refused', 'returned'];
+        if (
+            $delta > 0
+            && (int) $order->call_count >= 10
+            && !in_array($order->status, $terminalStatuses, true)
+        ) {
+            $this->orderService->updateOrderStatus(
+                $order->id,
+                'cancelled',
+                'Order automatically cancelled after reaching 10 client calls.'
+            );
+            $order->refresh();
+        }
+
         $order->load([
             'client',
             'vendor',

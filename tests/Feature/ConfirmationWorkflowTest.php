@@ -732,6 +732,31 @@ class ConfirmationWorkflowTest extends TestCase
         $decrement->assertJsonPath('call_count', 0);
     }
 
+    public function test_order_is_automatically_cancelled_when_call_count_reaches_ten(): void
+    {
+        $agent = $this->createConfirmationAgent();
+        $order = $this->createOrderForConfirmationAgent($agent);
+        $order->update([
+            'call_agent_id' => $agent->id,
+            'call_count' => 9,
+            'status' => 'pending',
+        ]);
+        $token = $agent->createToken('test')->plainTextToken;
+
+        $response = $this->withToken($token)->postJson("/api/orders/{$order->id}/increment-call-count");
+
+        $response->assertOk();
+        $response->assertJsonPath('call_count', 10);
+        $response->assertJsonPath('status', 'cancelled');
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertNotNull($order->fresh()->cancelled_at);
+        $this->assertDatabaseHas('order_history', [
+            'order_id' => $order->id,
+            'status' => 'cancelled',
+            'note' => 'Order automatically cancelled after reaching 10 client calls.',
+        ]);
+    }
+
     public function test_unassigned_confirmation_agent_cannot_change_call_count(): void
     {
         $agent = $this->createConfirmationAgent();

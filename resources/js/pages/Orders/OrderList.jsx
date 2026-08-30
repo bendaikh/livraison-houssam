@@ -851,12 +851,21 @@ export default function OrderList({ status = '' }) {
         try {
             setIncrementingCallCountId(orderId);
             const response = await api.post(`/orders/${orderId}/increment-call-count`);
-            const nextCount = response.data?.call_count;
+            const updated = response.data;
+            const nextCount = updated?.call_count;
             setOrders((prev) => prev.map((order) => (
                 order.id === orderId
-                    ? { ...order, call_count: nextCount ?? ((order.call_count || 0) + 1) }
+                    ? {
+                        ...order,
+                        ...updated,
+                        call_count: nextCount ?? ((order.call_count || 0) + 1),
+                    }
                     : order
             )));
+            // Order may have been auto-cancelled at 10 calls — refresh list filters.
+            if (updated?.status === 'cancelled' && filters.status && filters.status !== 'cancelled') {
+                await fetchOrders();
+            }
         } catch (error) {
             console.error('Error incrementing call count:', error);
             alert(error.response?.data?.message || t('admin.orderList.callCountUpdateFailed'));

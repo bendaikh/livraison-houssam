@@ -56,6 +56,11 @@ class DeliveryStatusMapper
             'refuse' => 'refused',
             'retourné' => 'returned',
             'retourne' => 'returned',
+            'retour client reçu' => 'returned',
+            'retour client recu' => 'returned',
+            'retour client' => 'returned',
+            'retour reçu' => 'returned',
+            'retour recu' => 'returned',
             'annulé' => 'cancelled',
             'annule' => 'cancelled',
             'demande de retour' => 'return_requested',
@@ -88,6 +93,19 @@ class DeliveryStatusMapper
             'livraison' => 'out_for_delivery',
         ];
 
-        return $statusMap[$normalizedStatus] ?? null;
+        if (isset($statusMap[$normalizedStatus])) {
+            return $statusMap[$normalizedStatus];
+        }
+
+        // Fallback for BMDelivery variants like "Retour client reçu".
+        if (
+            str_contains($normalizedStatus, 'retour client')
+            || str_contains($normalizedStatus, 'retour reçu')
+            || str_contains($normalizedStatus, 'retour recu')
+        ) {
+            return 'returned';
+        }
+
+        return null;
     }
 }

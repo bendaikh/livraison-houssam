@@ -612,7 +612,7 @@ class ApiIntegrationService
 
         // Map delivery status to our status
         $deliveryStatus = $shipment['status'] ?? $shipment['state'] ?? '';
-        $mappedStatus = $this->mapDeliveryStatus($deliveryStatus, $provider);
+        $mappedStatus = app(DeliveryStatusMapper::class)->mapToOrderStatus($deliveryStatus, $provider);
 
         if ($mappedStatus && $order->status !== $mappedStatus) {
             $this->orderService->updateOrderStatus(
@@ -621,40 +621,6 @@ class ApiIntegrationService
                 "Status updated from {$provider}: {$deliveryStatus}"
             );
         }
-    }
-
-    /**
-     * Map delivery company status to internal status
-     */
-    private function mapDeliveryStatus(string $deliveryStatus, string $provider): ?string
-    {
-        $statusMap = [
-            'tawsilex' => [
-                'en_attente' => 'pending',
-                'ramassage' => 'confirmed',
-                'en_cours' => 'shipped',
-                'sent' => 'shipped',
-                'livre' => 'delivered',
-                'livré' => 'delivered',
-                'livree' => 'delivered',
-                'livrée' => 'delivered',
-                'annule' => 'cancelled',
-                'retour' => 'cancelled',
-            ],
-            'bmdelivery' => [
-                'pending' => 'pending',
-                'picked_up' => 'confirmed',
-                'in_transit' => 'shipped',
-                'delivered' => 'delivered',
-                'cancelled' => 'cancelled',
-                'returned' => 'cancelled',
-            ],
-        ];
-
-        $providerKey = strtolower(str_replace(' ', '', $provider));
-        $map = $statusMap[$providerKey] ?? [];
-
-        return $map[strtolower($deliveryStatus)] ?? null;
     }
 
     /**
