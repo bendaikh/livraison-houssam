@@ -76,11 +76,17 @@ class AuthController extends Controller
     public function updateProfile(Request $request)
     {
         $user = $request->user();
+        $vendor = $user->vendor;
 
         $rules = [
             'email' => 'required|email|unique:users,email,' . $user->id,
             'name' => 'sometimes|string|max:255',
         ];
+
+        // Keep vendors.email unique when the linked seller profile is synced
+        if ($vendor) {
+            $rules['email'] .= '|unique:vendors,email,' . $vendor->id;
+        }
 
         if ($request->filled('current_password') || $request->filled('new_password')) {
             $rules['current_password'] = 'required|string';
@@ -105,6 +111,20 @@ class AuthController extends Controller
         }
 
         $user->save();
+
+        // Superadmin seller list reads vendors.name/email — keep them in sync with the user account
+        if ($vendor) {
+            $vendorData = [
+                'name' => $user->name,
+                'email' => $user->email,
+            ];
+
+            if ($request->filled('current_password')) {
+                $vendorData['password'] = $user->password;
+            }
+
+            $vendor->update($vendorData);
+        }
 
         return response()->json([
             'message' => 'Profile updated successfully.',
