@@ -589,6 +589,60 @@ class OrderDeliveryIntegrationTest extends TestCase
         $this->assertSame('60.00', $order->shipping_cost);
     }
 
+    public function test_updating_order_in_auto_mode_replaces_placeholder_zero_shipping_when_city_is_unchanged(): void
+    {
+        $admin = $this->createAdmin();
+        $client = $this->createClient();
+        $product = $this->createProduct();
+
+        City::create([
+            'name' => 'Casablanca',
+            'delivery_cost' => 25,
+            'is_active' => true,
+        ]);
+
+        $order = $this->createPendingOrder($client, $product);
+        $order->update([
+            'shipping_cost' => 0,
+            'shipping_included_in_price' => true,
+            'total' => 120,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->putJson("/api/orders/{$order->id}", [
+            'client_id' => $client->id,
+            'client_name' => $client->name,
+            'client_phone' => $client->phone,
+            'vendor_id' => null,
+            'delivery_agent_id' => null,
+            'delivery_integration_id' => null,
+            'delivery_person_id' => null,
+            'confirmation_agent_id' => null,
+            'status' => 'pending',
+            'source' => 'google_sheet',
+            'items' => [[
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'price' => 120,
+            ]],
+            'shipping_cost' => 25,
+            'shipping_cost_source' => 'auto',
+            'shipping_included_in_price' => true,
+            'discount' => 0,
+            'shipping_address' => 'Rue Hassan II',
+            'city' => 'Casablanca',
+            'notes' => 'Replace placeholder zero shipping',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('shipping_cost', '25.00');
+        $response->assertJsonPath('effective_shipping_cost', 25);
+
+        $order->refresh();
+        $this->assertSame('25.00', $order->shipping_cost);
+    }
+
     private function createAdmin(): User
     {
         $role = Role::firstOrCreate(

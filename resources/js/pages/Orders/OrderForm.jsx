@@ -223,7 +223,9 @@ export default function OrderForm() {
 
     const fetchVendors = async () => {
         try {
-            const response = await api.get('/vendors');
+            const response = await api.get('/vendors', {
+                params: { is_active: 1, per_page: 1000 },
+            });
             setVendors(response.data.data || response.data);
         } catch (error) {
             console.error('Error fetching vendors:', error);
@@ -408,8 +410,11 @@ export default function OrderForm() {
         emptyCost: 35,
     });
     const parsedShipping = parseFloat(formData.shipping_cost ?? '');
+    // Treat 0 as a placeholder (e.g. Google Sheet imports), not a real saved rate,
+    // when the city resolves to a non-zero delivery cost.
     const hasSavedShippingCost = formData.shipping_cost !== '' && formData.shipping_cost !== null && formData.shipping_cost !== undefined
-        && Number.isFinite(parsedShipping);
+        && Number.isFinite(parsedShipping)
+        && !(Math.abs(parsedShipping) < 0.009 && Math.abs(resolvedShipping.cost) >= 0.009);
     const hasPricingContextChanged = Boolean(
         isEditing
         && initialPricingContext
@@ -918,16 +923,14 @@ export default function OrderForm() {
                         ) : (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Seller</label>
-                                <select
-                                    value={formData.vendor_id}
-                                    onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                >
-                                    <option value="">Select Seller</option>
-                                    {vendors.map(vendor => (
-                                        <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                                    ))}
-                                </select>
+                                <SearchableSelect
+                                    value={String(formData.vendor_id || '')}
+                                    onChange={(value) => setFormData({ ...formData, vendor_id: value })}
+                                    placeholder="Search and select seller..."
+                                    options={vendors}
+                                    getOptionLabel={(vendor) => vendor.name}
+                                    getOptionValue={(vendor) => vendor.id}
+                                />
                                 {isConfirmationAgentUser && (
                                     <p className="text-xs text-gray-500 mt-1">
                                         If you choose a seller, the order goes to that seller. If you leave it empty, your name will appear in the Seller column.

@@ -40,7 +40,7 @@ class VendorController extends Controller
             $query->where('is_active', $request->is_active);
         }
 
-        $perPage = max(1, min((int) $request->get('per_page', 15), 100));
+        $perPage = max(1, min((int) $request->get('per_page', 15), 1000));
         $vendors = $query->latest()->paginate($perPage);
 
         return response()->json(array_merge($vendors->toArray(), [

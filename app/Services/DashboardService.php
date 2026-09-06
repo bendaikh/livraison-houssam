@@ -19,12 +19,35 @@ use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
+    private const PLATFORM_CANCELLED_STATUS = 'cancelled';
+
+    private const PLATFORM_PENDING_LEAD_STATUSES = [
+        'pending',
+        'reported',
+        'no_response',
+    ];
+
+    private const PLATFORM_CONFIRMED_STATUS = 'confirmed';
+
+    private const PLATFORM_SHIPPED_STATUSES = [
+        'shipped',
+        'out_for_delivery',
+    ];
+
+    private const PLATFORM_DELIVERED_STATUS = 'delivered';
+
+    private const PLATFORM_RETURNED_STATUSES = [
+        'returned',
+        'return_requested',
+    ];
+
     public function getStatistics(string $period = 'daily', $vendorId = null, ?string $dateFrom = null, ?string $dateTo = null)
     {
         $dateRange = $this->getDateRange($period, $dateFrom, $dateTo);
 
         return [
             'seller_overview' => $vendorId ? $this->getSellerOverviewStats($vendorId, $dateRange) : null,
+            'platform_performance' => $this->getPlatformPerformanceStats($dateRange),
             'kpis' => $this->getBusinessKpis($vendorId, $dateRange),
             'sales' => $this->getSalesStats($dateRange, $vendorId),
             'orders' => $this->getOrdersStats($dateRange, $vendorId),
@@ -159,6 +182,125 @@ class DashboardService
                     ->first(),
             ],
         ];
+    }
+
+    public function getPlatformPerformanceStats(array $dateRange): array
+    {
+        $current = $this->aggregatePlatformOrderMetrics($dateRange);
+        $previousRange = $this->getPreviousDateRange($dateRange);
+        $previous = $this->aggregatePlatformOrderMetrics($previousRange);
+
+        return [
+            ...$current,
+            'rates' => $this->buildPlatformPerformanceRates($current),
+            'trends' => $this->buildPlatformPerformanceTrends($current, $previous),
+            'date_from' => $dateRange['start']->toDateString(),
+            'date_to' => $dateRange['end']->toDateString(),
+        ];
+    }
+
+    private function aggregatePlatformOrderMetrics(array $dateRange): array
+    {
+        $pendingLeadStatuses = $this->sqlInList(self::PLATFORM_PENDING_LEAD_STATUSES);
+        $shippedStatuses = $this->sqlInList(self::PLATFORM_SHIPPED_STATUSES);
+        $returnedStatuses = $this->sqlInList(self::PLATFORM_RETURNED_STATUSES);
+        $confirmedStatus = self::PLATFORM_CONFIRMED_STATUS;
+        $deliveredStatus = self::PLATFORM_DELIVERED_STATUS;
+        $cancelledStatus = self::PLATFORM_CANCELLED_STATUS;
+
+        $row = Order::query()
+            ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
+            ->selectRaw('COUNT(*) as total_orders')
+            ->selectRaw("SUM(CASE WHEN status = '{$cancelledStatus}' THEN 1 ELSE 0 END) as cancelled_orders")
+            ->selectRaw("SUM(CASE WHEN status IN ({$pendingLeadStatuses}) THEN 1 ELSE 0 END) as pending_lead_orders")
+            ->selectRaw("SUM(CASE WHEN status = '{$confirmedStatus}' THEN 1 ELSE 0 END) as confirmed_strict_orders")
+            ->selectRaw("SUM(CASE WHEN status IN ({$shippedStatuses}) THEN 1 ELSE 0 END) as shipped_orders")
+            ->selectRaw("SUM(CASE WHEN status = '{$deliveredStatus}' THEN 1 ELSE 0 END) as delivered_orders")
+            ->selectRaw("SUM(CASE WHEN status IN ({$returnedStatuses}) THEN 1 ELSE 0 END) as returned_orders")
+            ->selectRaw("SUM(CASE WHEN status = 'refused' THEN 1 ELSE 0 END) as refused_orders")
+            ->first();
+
+        $totalOrders = (int) ($row->total_orders ?? 0);
+        $cancelledOrders = (int) ($row->cancelled_orders ?? 0);
+        $pendingLeadOrders = (int) ($row->pending_lead_orders ?? 0);
+        $confirmedStrictOrders = (int) ($row->confirmed_strict_orders ?? 0);
+        $shippedOrders = (int) ($row->shipped_orders ?? 0);
+        $deliveredOrders = (int) ($row->delivered_orders ?? 0);
+        $expeditedOrders = $shippedOrders + $deliveredOrders;
+        $confirmedPipelineOrders = $confirmedStrictOrders + $expeditedOrders;
+        $confirmationDenominator = $pendingLeadOrders + $confirmedPipelineOrders;
+
+        return [
+            'total_orders' => $totalOrders,
+            'cancelled_orders' => $cancelledOrders,
+            'pending_lead_orders' => $pendingLeadOrders,
+            'confirmed_strict_orders' => $confirmedStrictOrders,
+            'shipped_orders' => $shippedOrders,
+            'delivered_orders' => $deliveredOrders,
+            'expedited_orders' => $expeditedOrders,
+            'confirmed_pipeline_orders' => $confirmedPipelineOrders,
+            'confirmation_denominator' => $confirmationDenominator,
+            'delivery_denominator' => $confirmedPipelineOrders,
+            'returned_orders' => (int) ($row->returned_orders ?? 0),
+            'refused_orders' => (int) ($row->refused_orders ?? 0),
+        ];
+    }
+
+    private function buildPlatformPerformanceRates(array $metrics): array
+    {
+        $confirmedPipelineOrders = (int) ($metrics['confirmed_pipeline_orders'] ?? 0);
+        $confirmationDenominator = (int) ($metrics['confirmation_denominator'] ?? 0);
+        $deliveredOrders = (int) ($metrics['delivered_orders'] ?? 0);
+        $deliveryDenominator = (int) ($metrics['delivery_denominator'] ?? 0);
+        $returnedOrders = (int) ($metrics['returned_orders'] ?? 0);
+        $expeditedOrders = (int) ($metrics['expedited_orders'] ?? 0);
+        $eligibleOrders = max(0, (int) ($metrics['total_orders'] ?? 0) - (int) ($metrics['cancelled_orders'] ?? 0));
+
+        return [
+            'confirmation_rate' => $this->calculateRate($confirmedPipelineOrders, $confirmationDenominator),
+            'delivery_rate' => $this->calculateRate($deliveredOrders, $deliveryDenominator),
+            'return_rate' => $this->calculateRate($returnedOrders, $eligibleOrders),
+            'shipping_rate' => $this->calculateRate($expeditedOrders, $eligibleOrders),
+            'success_rate' => $this->calculateRate(
+                $deliveredOrders,
+                $deliveredOrders + $returnedOrders + (int) ($metrics['refused_orders'] ?? 0)
+            ),
+        ];
+    }
+
+    private function buildPlatformPerformanceTrends(array $current, array $previous): array
+    {
+        $currentRates = $this->buildPlatformPerformanceRates($current);
+        $previousRates = $this->buildPlatformPerformanceRates($previous);
+
+        $trends = [];
+        foreach ($currentRates as $key => $value) {
+            $trends[$key] = round($value - ($previousRates[$key] ?? 0), 2);
+        }
+
+        return $trends;
+    }
+
+    private function getPreviousDateRange(array $dateRange): array
+    {
+        $start = $dateRange['start']->copy()->startOfDay();
+        $end = $dateRange['end']->copy()->endOfDay();
+        $days = max(1, (int) $start->diffInDays($end) + 1);
+
+        $previousEnd = $start->copy()->subDay()->endOfDay();
+        $previousStart = $previousEnd->copy()->subDays($days - 1)->startOfDay();
+
+        return [
+            'start' => $previousStart,
+            'end' => $previousEnd,
+        ];
+    }
+
+    private function sqlInList(array $values): string
+    {
+        return collect($values)
+            ->map(fn (string $value) => "'" . str_replace("'", "''", $value) . "'")
+            ->implode(', ');
     }
 
     public function getSellerOverviewStats(int $vendorId, ?array $dateRange = null): array

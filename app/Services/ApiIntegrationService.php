@@ -978,7 +978,7 @@ class ApiIntegrationService
             'shopify_name' => $shopifyName,
             'status' => $status,
             'items' => $items,
-            'shipping_cost' => 0,
+            'shipping_cost_source' => 'auto',
             'shipping_included_in_price' => true,
             'tax' => 0,
             'discount' => 0,

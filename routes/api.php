@@ -47,6 +47,7 @@ Route::post('/webhooks/shopify/orders/create', [WebhookController::class, 'handl
 Route::post('/webhooks/bmdelivery/status-update', [WebhookController::class, 'handleBMDeliveryWebhook']);
 Route::post('/webhooks/tawsilex/status-update', [WebhookController::class, 'handleTawsilexWebhook']);
 Route::match(['get', 'post'], '/webhooks/google-sheet/sync', [WebhookController::class, 'handleGoogleSheetSync']);
+Route::match(['get', 'post'], '/webhooks/delivery/sync-statuses', [WebhookController::class, 'handleDeliveryStatusSync']);
 Route::post('/webhooks/test', [WebhookController::class, 'testWebhook']);
 
 // External API routes (authenticated with custom API keys)

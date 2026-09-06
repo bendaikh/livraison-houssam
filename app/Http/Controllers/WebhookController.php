@@ -12,6 +12,7 @@ use App\Services\DeliveryStatusMapper;
 use App\Services\OrderService;
 use App\Services\ShopifyService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
@@ -270,6 +271,83 @@ class WebhookController extends Controller
 
         return response()->json([
             'message' => 'Google Sheet sync completed',
+            'synced' => count($results) - $failed,
+            'failed' => $failed,
+            'results' => $results,
+        ], $failed > 0 && $failed === count($results) ? 500 : 200);
+    }
+
+    /**
+     * Trigger automatic delivery status sync (Hostinger HTTP cron).
+     * Auth: ?token= or X-Delivery-Status-Sync-Token matching DELIVERY_STATUS_SYNC_TOKEN.
+     *
+     * Optional query: provider=tawsilex|bmdelivery (omit to sync both).
+     */
+    public function handleDeliveryStatusSync(Request $request)
+    {
+        $expected = trim((string) config('services.delivery_status_sync.token', ''));
+        $token = trim((string) (
+            $request->query('token')
+            ?? $request->header('X-Delivery-Status-Sync-Token')
+            ?? $request->input('token')
+            ?? ''
+        ));
+
+        if ($expected === '' || $token === '' || !hash_equals($expected, $token)) {
+            Log::warning('Delivery status sync webhook: invalid or missing token');
+            return response()->json(['message' => 'Invalid sync token'], 401);
+        }
+
+        $provider = strtolower(trim((string) $request->query('provider', $request->input('provider', ''))));
+        $providers = $provider !== ''
+            ? [$provider]
+            : ['tawsilex', 'bmdelivery'];
+
+        $allowed = ['tawsilex', 'bmdelivery'];
+        $providers = array_values(array_intersect($providers, $allowed));
+
+        if ($providers === []) {
+            return response()->json(['message' => 'Unsupported provider'], 400);
+        }
+
+        // HTTP cron requests can time out on shared hosting; raise limit for bulk sync.
+        @set_time_limit(180);
+
+        $results = [];
+        $failed = 0;
+
+        foreach ($providers as $providerName) {
+            try {
+                Log::info('Delivery status sync webhook starting', ['provider' => $providerName]);
+                $exitCode = Artisan::call('orders:sync-delivery-statuses', [
+                    '--provider' => $providerName,
+                ]);
+                $output = trim(Artisan::output());
+                $results[] = [
+                    'provider' => $providerName,
+                    'success' => $exitCode === 0,
+                    'exit_code' => $exitCode,
+                    'output' => $output,
+                ];
+                if ($exitCode !== 0) {
+                    $failed++;
+                }
+            } catch (\Throwable $e) {
+                $failed++;
+                Log::error('Delivery status sync webhook failed', [
+                    'provider' => $providerName,
+                    'error' => $e->getMessage(),
+                ]);
+                $results[] = [
+                    'provider' => $providerName,
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'message' => 'Delivery status sync completed',
             'synced' => count($results) - $failed,
             'failed' => $failed,
             'results' => $results,

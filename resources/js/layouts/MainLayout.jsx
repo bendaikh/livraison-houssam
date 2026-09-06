@@ -9,7 +9,7 @@ import api from '../utils/api';
 import { 
     LayoutDashboard, Package, ShoppingCart, Users, Store, DollarSign, 
     Box, Settings, LogOut, Bell, Menu, X, FileText, Link2, ChevronRight,
-    Search, Moon, Sun, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle, TrendingUp, Ban, Truck, UserRoundCheck, Globe, RefreshCw
+    Search, Moon, Sun, ChevronDown, List, Tags, Receipt, ShoppingBag, Shield, UserCog, Clock, CheckCircle, TrendingUp, Ban, Truck, UserRoundCheck, Globe, RefreshCw, User
 } from 'lucide-react';
 
 const getInitialDarkMode = () => {
@@ -46,7 +46,7 @@ export default function MainLayout() {
 
     const handleLogout = async () => {
         await logout();
-        navigate('/login');
+        navigate('/');
     };
     
     const roleSlug = user?.role?.slug;
@@ -63,6 +63,7 @@ export default function MainLayout() {
 
     const canShowMenuItem = (item) => {
         if (item.adminOnly && !isAdmin) return false;
+        if (item.hiddenForAdmin && isAdmin) return false;
         if (item.adminOrConfirmation && !(isAdmin || isConfirmationAgent)) return false;
         if (item.adminOrDelivery && !(isAdmin || isDeliveryPerson)) return false;
         if (item.confirmationOnly && !isConfirmationAgent) return false;
@@ -168,6 +169,7 @@ export default function MainLayout() {
         },
         { path: appPath('/billing'), icon: DollarSign, label: t('admin.menu.billing'), description: t('admin.menu.billingDesc'), expandKey: 'billing', hasSubItems: true, billingOnly: true, subItems: billingSubItems },
         { path: appPath('/blacklist'), icon: Ban, label: t('admin.menu.blacklist'), description: t('admin.menu.blacklistDesc'), adminOrConfirmation: true },
+        { path: appPath('/profile'), icon: User, label: t('admin.menu.profile'), description: t('admin.menu.profileDesc'), hiddenForAdmin: true },
         { path: appPath('/settings'), icon: Settings, label: t('admin.menu.settings'), description: t('admin.menu.settingsDesc'), adminOnly: true, hiddenForConfirmationAgent: true, hiddenForDeliveryPerson: true },
     ], [billingSubItems, isAdmin, isConfirmationAgent, isDeliveryPerson, isVendor, t]);
 
@@ -782,10 +784,19 @@ export default function MainLayout() {
                                             <p className={`text-sm font-semibold ${darkMode ? 'text-slate-100' : 'text-slate-700'}`}>{user?.name}</p>
                                             <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{user?.email}</p>
                                         </div>
-                                        {isAdmin && (
+                                        {isAdmin ? (
                                             <Link to={appPath('/settings')} className={`flex items-center space-x-3 px-4 py-2.5 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
                                                 <Settings size={18} />
                                                 <span>{t('admin.layout.settings')}</span>
+                                            </Link>
+                                        ) : (
+                                            <Link
+                                                to={appPath('/profile')}
+                                                onClick={() => setShowUserMenu(false)}
+                                                className={`flex items-center space-x-3 px-4 py-2.5 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                                            >
+                                                <User size={18} />
+                                                <span>{t('admin.layout.profile')}</span>
                                             </Link>
                                         )}
                                         <button 

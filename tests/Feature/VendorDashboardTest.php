@@ -180,5 +180,147 @@ class VendorDashboardTest extends TestCase
         $response->assertJsonPath('seller_billing.estimated_payout', 180);
         $response->assertJsonPath('products.total', 2);
         $response->assertJsonPath('products.active', 1);
+        $response->assertJsonStructure([
+            'platform_performance' => [
+                'total_orders',
+                'rates' => [
+                    'confirmation_rate',
+                    'delivery_rate',
+                    'return_rate',
+                    'shipping_rate',
+                    'success_rate',
+                ],
+            ],
+        ]);
+    }
+
+    public function test_vendor_dashboard_includes_global_platform_performance_excluding_cancelled(): void
+    {
+        $vendorRole = Role::firstOrCreate(
+            ['slug' => 'vendor'],
+            [
+                'name' => 'Vendor',
+                'permissions' => ['view_own_orders'],
+            ]
+        );
+
+        $sellerUser = User::factory()->create([
+            'role_id' => $vendorRole->id,
+            'is_active' => true,
+        ]);
+
+        $sellerVendor = Vendor::create([
+            'user_id' => $sellerUser->id,
+            'name' => 'Seller One',
+            'email' => 'seller-one@example.com',
+            'commission_rate' => 10,
+            'billing_frequency' => 'weekly',
+            'is_active' => true,
+        ]);
+
+        $otherVendor = Vendor::create([
+            'user_id' => User::factory()->create(['role_id' => $vendorRole->id, 'is_active' => true])->id,
+            'name' => 'Seller Two',
+            'email' => 'seller-two@example.com',
+            'commission_rate' => 10,
+            'billing_frequency' => 'weekly',
+            'is_active' => true,
+        ]);
+
+        $client = Client::create([
+            'name' => 'Client Test',
+            'phone' => '0612345678',
+            'address' => 'Casablanca',
+            'is_active' => true,
+        ]);
+
+        $createdAt = now();
+
+        for ($i = 0; $i < 100; $i++) {
+            Order::create([
+                'client_id' => $client->id,
+                'vendor_id' => $sellerVendor->id,
+                'status' => 'cancelled',
+                'source' => 'manual',
+                'subtotal' => 100,
+                'shipping_cost' => 0,
+                'discount' => 0,
+                'total' => 100,
+                'created_at' => $createdAt,
+            ]);
+        }
+
+        for ($i = 0; $i < 200; $i++) {
+            Order::create([
+                'client_id' => $client->id,
+                'vendor_id' => $otherVendor->id,
+                'status' => 'confirmed',
+                'source' => 'manual',
+                'subtotal' => 100,
+                'shipping_cost' => 0,
+                'discount' => 0,
+                'total' => 100,
+                'created_at' => $createdAt,
+            ]);
+        }
+
+        for ($i = 0; $i < 500; $i++) {
+            Order::create([
+                'client_id' => $client->id,
+                'vendor_id' => $i % 2 === 0 ? $sellerVendor->id : $otherVendor->id,
+                'status' => 'delivered',
+                'source' => 'manual',
+                'subtotal' => 100,
+                'shipping_cost' => 0,
+                'discount' => 0,
+                'total' => 100,
+                'delivered_at' => $createdAt,
+                'created_at' => $createdAt,
+            ]);
+        }
+
+        for ($i = 0; $i < 100; $i++) {
+            Order::create([
+                'client_id' => $client->id,
+                'vendor_id' => $otherVendor->id,
+                'status' => 'returned',
+                'source' => 'manual',
+                'subtotal' => 100,
+                'shipping_cost' => 0,
+                'discount' => 0,
+                'total' => 100,
+                'returned_at' => $createdAt,
+                'created_at' => $createdAt,
+            ]);
+        }
+
+        for ($i = 0; $i < 100; $i++) {
+            Order::create([
+                'client_id' => $client->id,
+                'vendor_id' => $sellerVendor->id,
+                'status' => 'pending',
+                'source' => 'manual',
+                'subtotal' => 100,
+                'shipping_cost' => 0,
+                'discount' => 0,
+                'total' => 100,
+                'created_at' => $createdAt,
+            ]);
+        }
+
+        Sanctum::actingAs($sellerUser);
+
+        $response = $this->getJson('/api/dashboard?period=daily');
+
+        $response->assertOk();
+        $response->assertJsonPath('platform_performance.total_orders', 1000);
+        $response->assertJsonPath('platform_performance.cancelled_orders', 100);
+        $response->assertJsonPath('platform_performance.confirmed_pipeline_orders', 700);
+        $response->assertJsonPath('platform_performance.delivered_orders', 500);
+        $response->assertJsonPath('platform_performance.returned_orders', 100);
+        $response->assertJsonPath('platform_performance.rates.confirmation_rate', 87.5);
+        $response->assertJsonPath('platform_performance.rates.delivery_rate', 71.43);
+        $response->assertJsonPath('platform_performance.rates.return_rate', 11.11);
+        $response->assertJsonPath('seller_overview.orders.total', 450);
     }
 }

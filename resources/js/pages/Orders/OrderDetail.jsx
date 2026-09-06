@@ -15,6 +15,41 @@ import { formatOrderSource } from '../../utils/orderSource';
 import { resolveOrderDisplayTotals } from '../../utils/orderTotals';
 import ClientHistoryModal, { ClientIntelligenceIndicators } from '../../components/ClientHistoryModal';
 
+function extractLocationFromNotes(notes) {
+    if (!notes || typeof notes !== 'string' || !notes.includes('[ChatEasy')) {
+        return '';
+    }
+
+    return notes
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('[ChatEasy') && !line.startsWith('[Alfa'))
+        .join(', ')
+        .trim();
+}
+
+function resolveOrderCity(order) {
+    return (
+        order?.city
+        || order?.delivery_city
+        || order?.client?.city
+        || extractLocationFromNotes(order?.notes)
+        || ''
+    );
+}
+
+function resolveOrderShippingAddress(order) {
+    return (
+        order?.shipping_address
+        || order?.client?.address
+        || order?.city
+        || order?.delivery_city
+        || order?.client?.city
+        || extractLocationFromNotes(order?.notes)
+        || ''
+    );
+}
+
 export default function OrderDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -369,12 +404,12 @@ export default function OrderDetail() {
                         <h2>Shipping Information</h2>
                         <div class="info-group">
                             <label>Address</label>
-                            <p>${order.shipping_address || order.client?.address || 'N/A'}</p>
+                            <p>${resolveOrderShippingAddress(order) || 'N/A'}</p>
                         </div>
-                        ${order.client?.city ? `
+                        ${resolveOrderCity(order) ? `
                         <div class="info-group">
                             <label>City</label>
-                            <p>${order.client.city}</p>
+                            <p>${resolveOrderCity(order)}</p>
                         </div>
                         ` : ''}
                         ${order.delivery_agent ? `
@@ -871,13 +906,13 @@ export default function OrderDetail() {
                             <div>
                                 <p className="text-sm text-gray-500">{t('admin.orderDetail.shippingAddress')}</p>
                                 <p className="font-medium text-gray-900">
-                                    {order.shipping_address || order.client?.address || 'N/A'}
+                                    {resolveOrderShippingAddress(order) || 'N/A'}
                                 </p>
                             </div>
-                            {order.client?.city && (
+                            {resolveOrderCity(order) && (
                                 <div>
                                         <p className="text-sm text-gray-500">{t('admin.orderDetail.city')}</p>
-                                    <p className="font-medium text-gray-900">{order.client.city}</p>
+                                    <p className="font-medium text-gray-900">{resolveOrderCity(order)}</p>
                                 </div>
                             )}
                         </div>

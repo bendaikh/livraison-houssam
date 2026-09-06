@@ -30,17 +30,17 @@ Schedule::call(function () {
     ->name('google-sheet-sync')
     ->withoutOverlapping(2);
 
-// Legacy sync command (BMDelivery) every 30 minutes.
+// Legacy sync command (BMDelivery) every 15 minutes.
 Schedule::call(fn () => Artisan::call('orders:sync-delivery-statuses', ['--provider' => 'bmdelivery']))
-    ->everyThirtyMinutes()
+    ->everyFifteenMinutes()
     ->name('orders-sync-bmdelivery')
-    ->withoutOverlapping(25);
+    ->withoutOverlapping(12);
 
-// Tawsilex automatic sync every 10 minutes.
+// VadoMax (Tawsilex provider) automatic sync every 5 minutes.
 Schedule::call(fn () => Artisan::call('orders:sync-delivery-statuses', ['--provider' => 'tawsilex']))
-    ->everyTenMinutes()
+    ->everyFiveMinutes()
     ->name('orders-sync-tawsilex')
-    ->withoutOverlapping(8);
+    ->withoutOverlapping(4);
 
 Schedule::call(fn () => Artisan::call('delivery-billings:generate-daily'))
     ->dailyAt('00:00')

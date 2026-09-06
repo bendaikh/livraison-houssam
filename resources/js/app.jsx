@@ -12,13 +12,11 @@ import ScrollToTop from './components/ScrollToTop';
 
 // Layout
 import MainLayout from './layouts/MainLayout';
-import AuthLayout from './layouts/AuthLayout';
 
 // Public Pages
 import HomePage from './pages/Public/HomePage';
 
 // Auth Pages
-import Login from './pages/Auth/Login';
 import SellerSignup from './pages/Auth/SellerSignup';
 
 // Dashboard
@@ -75,6 +73,7 @@ import RoleForm from './pages/Roles/RoleForm';
 
 // Settings
 import Settings from './pages/Settings/Settings';
+import Profile from './pages/Profile/Profile';
 import BillingIndexPage from './pages/Billing/BillingIndexPage';
 import SellerBillingPage from './pages/Billing/SellerBillingPage';
 import DeliveryBillingPage from './pages/Billing/DeliveryBillingPage';
@@ -88,7 +87,7 @@ function ProtectedRoute({ children }) {
         return <div className="flex items-center justify-center h-screen">{t('admin.common.loading')}</div>;
     }
 
-    return user ? children : <Navigate to="/login" />;
+    return user ? children : <Navigate to="/" />;
 }
 
 function AdminRoute({ children }) {
@@ -123,8 +122,8 @@ function App() {
                     <Route path="/" element={<HomePage />} />
                     <Route path="/seller/signup" element={<SellerSignup />} />
 
-                    {/* Auth Routes */}
-                    <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
+                    {/* Legacy login URL → homepage */}
+                    <Route path="/login" element={<Navigate to="/" replace />} />
 
                     {/* Protected Routes */}
                     <Route path="/dashboard" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
@@ -187,7 +186,8 @@ function App() {
                         <Route path="roles/create" element={<RoleForm />} />
                         <Route path="roles/:id/edit" element={<RoleForm />} />
                         
-                        {/* Settings */}
+                        {/* Profile & Settings */}
+                        <Route path="profile" element={<Profile />} />
                         <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
                         <Route path="billing" element={<BillingIndexPage />} />
                         <Route path="billing/sellers" element={<SellerBillingPage />} />

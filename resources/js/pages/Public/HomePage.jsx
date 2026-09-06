@@ -1,560 +1,354 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import { Globe, Package, TrendingUp, Headphones, Truck, ShieldCheck, Menu, X, UserPlus, ShoppingCart, Megaphone, BarChart3, CheckCircle, Wallet, Laptop, Home, Heart, Shirt, GraduationCap, Cpu } from 'lucide-react';
-import axios from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+    Globe,
+    Lock,
+    Mail,
+    AlertCircle,
+    Eye,
+    EyeOff,
+    ArrowRight,
+    Package,
+    Truck,
+    TrendingUp,
+    ShieldCheck,
+    UserPlus,
+    CheckCircle,
+    Store,
+} from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
-import { getProductImageSrc } from '../../utils/images';
+import { appPath } from '../../constants/appPaths';
 
 export default function HomePage() {
     const { t, i18n } = useTranslation();
     const { settings } = useSettings();
+    const { login, user, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
     const appName = settings.app_name || 'Livraison';
-    const [products, setProducts] = useState([]);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [brokenImages, setBrokenImages] = useState({});
     const isRTL = i18n.language === 'ar';
+
+    const [activeTab, setActiveTab] = useState('login');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
         document.documentElement.lang = i18n.language;
-        fetchProducts();
     }, [i18n.language, isRTL]);
 
-    const fetchProducts = async () => {
-        try {
-            const response = await axios.get('/api/public/products');
-            setProducts(response.data.data || []);
-        } catch (error) {
-            console.error('Error fetching products:', error);
+    useEffect(() => {
+        if (!authLoading && user) {
+            navigate(appPath('/'), { replace: true });
         }
-    };
+    }, [user, authLoading, navigate]);
 
-    const changeLanguage = (lng) => {
-        i18n.changeLanguage(lng);
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            await login(email, password);
+            navigate(appPath('/'));
+        } catch (err) {
+            setError(err.response?.data?.message || t('admin.login.invalidCredentials'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const features = [
-        {
-            icon: <Package className="w-8 h-8" />,
-            title: t('home.features.feature1.title'),
-            description: t('home.features.feature1.description'),
-            color: 'from-teal-500 to-emerald-500'
-        },
-        {
-            icon: <Headphones className="w-8 h-8" />,
-            title: t('home.features.feature2.title'),
-            description: t('home.features.feature2.description'),
-            color: 'from-blue-500 to-cyan-500'
-        },
-        {
-            icon: <Truck className="w-8 h-8" />,
-            title: t('home.features.feature3.title'),
-            description: t('home.features.feature3.description'),
-            color: 'from-purple-500 to-pink-500'
-        },
-        {
-            icon: <ShieldCheck className="w-8 h-8" />,
-            title: t('home.features.feature4.title'),
-            description: t('home.features.feature4.description'),
-            color: 'from-amber-500 to-orange-500'
-        }
+        { icon: Package, title: t('home.gateway.feature1Title'), desc: t('home.gateway.feature1Desc') },
+        { icon: Truck, title: t('home.gateway.feature2Title'), desc: t('home.gateway.feature2Desc') },
+        { icon: TrendingUp, title: t('home.gateway.feature3Title'), desc: t('home.gateway.feature3Desc') },
+        { icon: ShieldCheck, title: t('home.gateway.feature4Title'), desc: t('home.gateway.feature4Desc') },
     ];
 
-    const stats = [
-        { value: '500+', label: t('home.stats.sellers') },
-        { value: '5000+', label: t('home.stats.products') },
-        { value: '1000+', label: t('home.stats.orders') },
-        { value: '50+', label: t('home.stats.cities') }
+    const signupBenefits = [
+        t('home.gateway.signupBenefit1'),
+        t('home.gateway.signupBenefit2'),
+        t('home.gateway.signupBenefit3'),
+        t('home.gateway.signupBenefit4'),
     ];
 
-    const howItWorksSteps = [
-        {
-            number: '01',
-            icon: <UserPlus className="w-6 h-6" />,
-            title: t('home.howItWorks.step1.title'),
-            description: t('home.howItWorks.step1.description'),
-            color: 'from-teal-500 to-cyan-500'
-        },
-        {
-            number: '02',
-            icon: <Package className="w-6 h-6" />,
-            title: t('home.howItWorks.step2.title'),
-            description: t('home.howItWorks.step2.description'),
-            color: 'from-blue-500 to-indigo-500'
-        },
-        {
-            number: '03',
-            icon: <Megaphone className="w-6 h-6" />,
-            title: t('home.howItWorks.step3.title'),
-            description: t('home.howItWorks.step3.description'),
-            color: 'from-purple-500 to-pink-500'
-        },
-        {
-            number: '04',
-            icon: <BarChart3 className="w-6 h-6" />,
-            title: t('home.howItWorks.step4.title'),
-            description: t('home.howItWorks.step4.description'),
-            color: 'from-pink-500 to-rose-500'
-        },
-        {
-            number: '05',
-            icon: <CheckCircle className="w-6 h-6" />,
-            title: t('home.howItWorks.step5.title'),
-            description: t('home.howItWorks.step5.description'),
-            color: 'from-emerald-500 to-teal-500'
-        },
-        {
-            number: '06',
-            icon: <Wallet className="w-6 h-6" />,
-            title: t('home.howItWorks.step6.title'),
-            description: t('home.howItWorks.step6.description'),
-            color: 'from-amber-500 to-orange-500'
-        }
-    ];
-
-    const categories = [
-        {
-            icon: <Laptop className="w-8 h-8" />,
-            title: t('home.categories.electronics'),
-            color: 'from-blue-500 to-cyan-500',
-            bgColor: 'bg-blue-50'
-        },
-        {
-            icon: <Shirt className="w-8 h-8" />,
-            title: t('home.categories.fashion'),
-            color: 'from-purple-500 to-pink-500',
-            bgColor: 'bg-purple-50'
-        },
-        {
-            icon: <Home className="w-8 h-8" />,
-            title: t('home.categories.home'),
-            color: 'from-orange-500 to-amber-500',
-            bgColor: 'bg-orange-50'
-        },
-        {
-            icon: <Heart className="w-8 h-8" />,
-            title: t('home.categories.health'),
-            color: 'from-green-500 to-emerald-500',
-            bgColor: 'bg-green-50'
-        },
-        {
-            icon: <Heart className="w-8 h-8" />,
-            title: t('home.categories.beauty'),
-            color: 'from-pink-500 to-rose-500',
-            bgColor: 'bg-pink-50'
-        },
-        {
-            icon: <GraduationCap className="w-8 h-8" />,
-            title: t('home.categories.food'),
-            color: 'from-indigo-500 to-purple-500',
-            bgColor: 'bg-indigo-50'
-        }
-    ];
-
-    const integrations = [
-        {
-            name: 'Custom API',
-            title: t('home.integrations.customApi.title'),
-            description: t('home.integrations.customApi.description'),
-            logo: <Cpu className="w-12 h-12" />,
-            bgColor: 'bg-yellow-50',
-            badge: t('home.integrations.badge.connected'),
-            badgeColor: 'bg-green-500'
-        },
-        {
-            name: 'Google Sheets',
-            title: t('home.integrations.googleSheets.title'),
-            description: t('home.integrations.googleSheets.description'),
-            logo: '📊',
-            bgColor: 'bg-green-50',
-            badge: t('home.integrations.badge.connected'),
-            badgeColor: 'bg-green-500'
-        },
-        {
-            name: 'WooCommerce',
-            title: t('home.integrations.woocommerce.title'),
-            description: t('home.integrations.woocommerce.description'),
-            logo: '🛒',
-            bgColor: 'bg-purple-50',
-            badge: t('home.integrations.badge.soon'),
-            badgeColor: 'bg-orange-500'
-        },
-        {
-            name: 'Shopify',
-            title: t('home.integrations.shopify.title'),
-            description: t('home.integrations.shopify.description'),
-            logo: '🛍️',
-            bgColor: 'bg-green-50',
-            badge: t('home.integrations.badge.soon'),
-            badgeColor: 'bg-orange-500'
-        },
-        {
-            name: 'YouCan',
-            title: t('home.integrations.youcan.title'),
-            description: t('home.integrations.youcan.description'),
-            logo: '🇾',
-            bgColor: 'bg-pink-50',
-            badge: t('home.integrations.badge.soon'),
-            badgeColor: 'bg-orange-500'
-        }
-    ];
+    if (authLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-50">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+            </div>
+        );
+    }
 
     return (
-        <div className={`min-h-screen bg-gradient-to-b from-gray-50 to-white ${isRTL ? 'font-arabic' : ''}`}>
-            {/* Navigation */}
-            <nav className="bg-white shadow-sm sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        {/* Logo */}
-                        <div className="flex-shrink-0 flex items-center">
-                            <div className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-xl">
-                                {appName}
-                            </div>
-                        </div>
-
-                        {/* Desktop Navigation */}
-                        <div className="hidden md:flex items-center space-x-8 rtl:space-x-reverse">
-                            <a href="#home" className="text-gray-700 hover:text-teal-600 transition">{t('home.nav.home')}</a>
-                            <a href="#products" className="text-gray-700 hover:text-teal-600 transition">{t('home.nav.products')}</a>
-                            <a href="#about" className="text-gray-700 hover:text-teal-600 transition">{t('home.nav.about')}</a>
-                            <a href="#contact" className="text-gray-700 hover:text-teal-600 transition">{t('home.nav.contact')}</a>
-                        </div>
-
-                        {/* Language Switcher & Auth Buttons */}
-                        <div className="flex items-center gap-4">
-                            {/* Language Dropdown */}
-                            <div className="relative group">
-                                <button className="flex items-center gap-2 text-gray-700 hover:text-teal-600 transition">
-                                    <Globe className="w-5 h-5" />
-                                    <span className="text-sm font-medium">{i18n.language.toUpperCase()}</span>
-                                </button>
-                                <div className="absolute top-full mt-2 bg-white rounded-lg shadow-lg py-2 min-w-[120px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                                    <button onClick={() => changeLanguage('ar')} className="block w-full text-start px-4 py-2 text-sm hover:bg-gray-100">العربية</button>
-                                    <button onClick={() => changeLanguage('fr')} className="block w-full text-start px-4 py-2 text-sm hover:bg-gray-100">Français</button>
-                                    <button onClick={() => changeLanguage('en')} className="block w-full text-start px-4 py-2 text-sm hover:bg-gray-100">English</button>
-                                </div>
-                            </div>
-
-                            {/* Auth Buttons */}
-                            <div className="hidden md:flex items-center gap-3">
-                                <Link to="/login" className="text-gray-700 hover:text-teal-600 font-medium transition">
-                                    {t('home.nav.login')}
-                                </Link>
-                                <Link to="/seller/signup" className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white px-5 py-2 rounded-lg font-medium hover:shadow-lg transition transform hover:-translate-y-0.5">
-                                    {t('home.nav.signup')}
-                                </Link>
-                            </div>
-
-                            {/* Mobile Menu Button */}
-                            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-gray-700">
-                                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Mobile Menu */}
-                    {mobileMenuOpen && (
-                        <div className="md:hidden py-4 border-t">
-                            <a href="#home" className="block py-2 text-gray-700">{t('home.nav.home')}</a>
-                            <a href="#products" className="block py-2 text-gray-700">{t('home.nav.products')}</a>
-                            <a href="#about" className="block py-2 text-gray-700">{t('home.nav.about')}</a>
-                            <a href="#contact" className="block py-2 text-gray-700">{t('home.nav.contact')}</a>
-                            <div className="pt-4 flex flex-col gap-2">
-                                <Link to="/login" className="text-center py-2 text-gray-700 border rounded-lg">
-                                    {t('home.nav.login')}
-                                </Link>
-                                <Link to="/seller/signup" className="text-center bg-gradient-to-r from-teal-500 to-emerald-500 text-white py-2 rounded-lg">
-                                    {t('home.nav.signup')}
-                                </Link>
-                            </div>
-                        </div>
-                    )}
+        <div className={`min-h-screen flex ${isRTL ? 'font-arabic' : ''}`}>
+            {/* Branding Panel */}
+            <div className="hidden lg:flex lg:w-[55%] xl:w-[58%] relative overflow-hidden bg-gradient-to-br from-slate-900 via-teal-950 to-emerald-950">
+                <div className="absolute inset-0 opacity-20">
+                    <div className="absolute -top-24 -start-24 h-96 w-96 rounded-full bg-teal-400 blur-3xl" />
+                    <div className="absolute top-1/3 end-0 h-80 w-80 rounded-full bg-emerald-500 blur-3xl" />
+                    <div className="absolute bottom-0 start-1/4 h-72 w-72 rounded-full bg-cyan-400 blur-3xl" />
                 </div>
-            </nav>
 
-            {/* Hero Section */}
-            <section id="home" className="relative py-20 px-4 overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-transparent opacity-50"></div>
-                <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center relative z-10">
+                <div className="absolute inset-0 opacity-[0.03]" style={{
+                    backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
+                    backgroundSize: '32px 32px',
+                }} />
+
+                <div className="relative z-10 flex flex-col justify-between w-full p-10 xl:p-16">
                     <div>
-                        <h1 className="text-5xl md:text-6xl font-bold text-gray-900 leading-tight mb-6">
-                            {t('home.hero.title')}
-                        </h1>
-                        <p className="text-xl text-gray-600 mb-4">
-                            {t('home.hero.subtitle')}
-                        </p>
-                        <p className="text-lg text-gray-500 mb-8">
-                            {t('home.hero.description')}
-                        </p>
-                        <div className="flex flex-wrap gap-4">
-                            <Link to="/seller/signup" className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white px-8 py-4 rounded-lg font-semibold hover:shadow-xl transition transform hover:-translate-y-1">
-                                {t('home.hero.startNow')}
-                            </Link>
-                            <a href="#about" className="border-2 border-teal-500 text-teal-600 px-8 py-4 rounded-lg font-semibold hover:bg-teal-50 transition">
-                                {t('home.hero.learnMore')}
-                            </a>
+                        <div className="flex items-center gap-4 mb-16">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-500 shadow-lg shadow-teal-500/30">
+                                <Store className="h-7 w-7 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-white tracking-tight">{appName}</h1>
+                                <p className="text-sm text-teal-300/80">{t('home.gateway.sellerPortal')}</p>
+                            </div>
                         </div>
-                    </div>
-                    <div className="relative">
-                        <img src="https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?w=600&h=500&fit=crop" 
-                             alt="E-commerce" 
-                             className="rounded-2xl shadow-2xl" />
-                    </div>
-                </div>
-            </section>
 
-            {/* Stats Section */}
-            <section className="py-12 bg-gradient-to-r from-teal-500 to-emerald-500">
-                <div className="max-w-7xl mx-auto px-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-                        {stats.map((stat, index) => (
-                            <div key={index} className="text-center text-white">
-                                <div className="text-4xl font-bold mb-2">{stat.value}</div>
-                                <div className="text-teal-100">{stat.label}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* How It Works Section */}
-            <section className="py-20 px-4 bg-white">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-16">
-                        <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                            {t('home.howItWorks.title')}
+                        <h2 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-5">
+                            {t('home.gateway.headline')}
+                            <br />
+                            <span className="bg-gradient-to-r from-teal-300 to-emerald-300 bg-clip-text text-transparent">
+                                {t('home.gateway.headlineAccent')}
+                            </span>
                         </h2>
-                        <p className="text-xl text-teal-600 font-semibold mb-2">
-                            {t('home.howItWorks.subtitle')}
-                        </p>
-                        <p className="text-lg text-gray-600">
-                            {t('home.howItWorks.description')}
+                        <p className="text-lg text-slate-300 max-w-lg leading-relaxed">
+                            {t('home.gateway.tagline')}
                         </p>
                     </div>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {howItWorksSteps.map((step, index) => (
-                            <div key={index} className="relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition group">
-                                <div className="absolute top-4 end-4 text-6xl font-bold text-gray-100 group-hover:text-teal-100 transition">
-                                    {step.number}
-                                </div>
-                                <div className={`w-14 h-14 bg-gradient-to-br ${step.color} rounded-xl flex items-center justify-center text-white mb-6 relative z-10 group-hover:scale-110 transition`}>
-                                    {step.icon}
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-3 relative z-10">
-                                    {step.title}
-                                </h3>
-                                <p className="text-gray-600 relative z-10">
-                                    {step.description}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
 
-            {/* Categories Section */}
-            <section className="py-20 px-4 bg-gray-50">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-16">
-                        <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                            {t('home.categories.title')}
-                        </h2>
-                        <p className="text-xl text-gray-600">
-                            {t('home.categories.subtitle')}
-                        </p>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-                        {categories.map((category, index) => (
-                            <div key={index} className="group cursor-pointer">
-                                <div className={`${category.bgColor} rounded-2xl p-8 aspect-square flex flex-col items-center justify-center transition hover:shadow-xl hover:-translate-y-2`}>
-                                    <div className={`w-16 h-16 bg-gradient-to-br ${category.color} rounded-xl flex items-center justify-center text-white mb-4 group-hover:scale-110 transition`}>
-                                        {category.icon}
-                                    </div>
-                                    <h3 className="text-center font-semibold text-gray-900 text-sm leading-tight">
-                                        {category.title}
-                                    </h3>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* Integrations Section */}
-            <section className="py-20 px-4 bg-white">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-16">
-                        <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                            {t('home.integrations.title')}
-                        </h2>
-                        <p className="text-xl text-gray-600">
-                            {t('home.integrations.subtitle')}
-                        </p>
-                    </div>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
-                        {integrations.map((integration, index) => (
-                            <div key={index} className={`${integration.bgColor} rounded-2xl p-6 text-center hover:shadow-xl transition relative group`}>
-                                <div className="absolute top-3 end-3">
-                                    <span className={`${integration.badgeColor} text-white text-xs font-semibold px-3 py-1 rounded-full`}>
-                                        {integration.badge}
-                                    </span>
-                                </div>
-                                <div className="text-5xl mb-4 group-hover:scale-110 transition">
-                                    {typeof integration.logo === 'string' ? integration.logo : integration.logo}
-                                </div>
-                                <h3 className="font-bold text-gray-900 mb-2 text-lg">
-                                    {integration.name}
-                                </h3>
-                                <p className="text-gray-600 text-sm leading-snug">
-                                    {integration.description}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* Features Section */}
-            <section className="py-20 px-4">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-16">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-4">
-                            {t('home.features.title')}
-                        </h2>
-                        <p className="text-xl text-gray-600">
-                            {t('home.features.subtitle')}
-                        </p>
-                    </div>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-2 gap-4 my-10">
                         {features.map((feature, index) => (
-                            <div key={index} className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition transform hover:-translate-y-2">
-                                <div className={`w-16 h-16 bg-gradient-to-br ${feature.color} rounded-xl flex items-center justify-center text-white mb-6`}>
-                                    {feature.icon}
+                            <div
+                                key={index}
+                                className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition hover:bg-white/10"
+                            >
+                                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/20">
+                                    <feature.icon className="h-5 w-5 text-teal-300" />
                                 </div>
-                                <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                                    {feature.title}
-                                </h3>
-                                <p className="text-gray-600">
-                                    {feature.description}
-                                </p>
+                                <h3 className="font-semibold text-white text-sm mb-1">{feature.title}</h3>
+                                <p className="text-xs text-slate-400 leading-relaxed">{feature.desc}</p>
                             </div>
                         ))}
+                    </div>
+
+                    <div className="flex items-center gap-8 pt-6 border-t border-white/10">
+                        <div>
+                            <div className="text-2xl font-bold text-white">500+</div>
+                            <div className="text-xs text-slate-400">{t('home.stats.sellers')}</div>
+                        </div>
+                        <div className="h-8 w-px bg-white/10" />
+                        <div>
+                            <div className="text-2xl font-bold text-white">50+</div>
+                            <div className="text-xs text-slate-400">{t('home.stats.cities')}</div>
+                        </div>
+                        <div className="h-8 w-px bg-white/10" />
+                        <div>
+                            <div className="text-2xl font-bold text-white">24/7</div>
+                            <div className="text-xs text-slate-400">{t('home.gateway.support')}</div>
+                        </div>
                     </div>
                 </div>
-            </section>
+            </div>
 
-            {/* Products Section */}
-            <section id="products" className="py-20 px-4 bg-gray-50">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-16">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-4">
-                            {t('home.products.title')}
-                        </h2>
-                        <p className="text-xl text-gray-600">
-                            {t('home.products.subtitle')}
-                        </p>
+            {/* Auth Panel */}
+            <div className="flex flex-1 flex-col bg-gradient-to-br from-slate-50 via-white to-teal-50/30">
+                <div className="flex items-center justify-between p-5 sm:p-6">
+                    <div className="flex items-center gap-3 lg:hidden">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 shadow-md">
+                            <Store className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-lg font-bold text-slate-800">{appName}</span>
                     </div>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-                        {products.slice(0, 8).map((product) => (
-                            <div key={product.id} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition transform hover:-translate-y-2">
-                                <div className="aspect-square bg-gray-200 overflow-hidden">
-                                    {getProductImageSrc(product) && !brokenImages[product.id] ? (
-                                        <img
-                                            src={getProductImageSrc(product)}
-                                            alt={product.name}
-                                            className="w-full h-full object-cover"
-                                            onError={() => setBrokenImages((prev) => ({ ...prev, [product.id]: true }))}
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <Package className="w-16 h-16 text-gray-400" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-4">
-                                    <h3 className="font-semibold text-gray-900 mb-2 truncate">{product.name}</h3>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-2xl font-bold text-teal-600">{product.price} DH</span>
-                                        {product.stock_quantity > 0 ? (
-                                            <button className="bg-teal-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-600 transition">
-                                                {t('home.products.addToCart')}
-                                            </button>
-                                        ) : (
-                                            <span className="text-red-500 text-sm">{t('home.products.outOfStock')}</span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+
+                    <div className="relative group ms-auto">
+                        <button
+                            type="button"
+                            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:border-teal-200 hover:text-teal-700 transition"
+                        >
+                            <Globe className="h-4 w-4" />
+                            <span>{i18n.language.toUpperCase()}</span>
+                        </button>
+                        <div className="absolute end-0 top-full z-20 mt-2 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-xl opacity-0 invisible transition-all group-hover:opacity-100 group-hover:visible">
+                            <button type="button" onClick={() => i18n.changeLanguage('ar')} className="block w-full px-4 py-2.5 text-start text-sm text-slate-700 hover:bg-teal-50">العربية</button>
+                            <button type="button" onClick={() => i18n.changeLanguage('fr')} className="block w-full px-4 py-2.5 text-start text-sm text-slate-700 hover:bg-teal-50">Français</button>
+                            <button type="button" onClick={() => i18n.changeLanguage('en')} className="block w-full px-4 py-2.5 text-start text-sm text-slate-700 hover:bg-teal-50">English</button>
+                        </div>
                     </div>
-                    {products.length > 8 && (
-                        <div className="text-center mt-12">
-                            <button className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white px-8 py-4 rounded-lg font-semibold hover:shadow-xl transition">
-                                {t('home.products.viewAll')}
+                </div>
+
+                <div className="flex flex-1 items-center justify-center px-5 pb-10 sm:px-8">
+                    <div className="w-full max-w-md">
+                        {/* Tab Switcher */}
+                        <div className="mb-8 flex rounded-2xl bg-slate-100 p-1.5">
+                            <button
+                                type="button"
+                                onClick={() => { setActiveTab('login'); setError(''); }}
+                                className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all ${
+                                    activeTab === 'login'
+                                        ? 'bg-white text-teal-700 shadow-md shadow-slate-200/50'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <Lock className="h-4 w-4" />
+                                {t('home.gateway.signIn')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setActiveTab('signup'); setError(''); }}
+                                className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all ${
+                                    activeTab === 'signup'
+                                        ? 'bg-white text-teal-700 shadow-md shadow-slate-200/50'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <UserPlus className="h-4 w-4" />
+                                {t('home.gateway.signUp')}
                             </button>
                         </div>
-                    )}
-                </div>
-            </section>
 
-            {/* CTA Section */}
-            <section className="py-20 px-4 bg-gradient-to-r from-teal-500 to-emerald-500">
-                <div className="max-w-4xl mx-auto text-center text-white">
-                    <h2 className="text-4xl font-bold mb-6">
-                        {t('home.cta.title')}
-                    </h2>
-                    <p className="text-xl mb-8 text-teal-100">
-                        {t('home.cta.description')}
-                    </p>
-                    <Link to="/seller/signup" className="inline-block bg-white text-teal-600 px-10 py-4 rounded-lg font-bold text-lg hover:shadow-2xl transition transform hover:-translate-y-1">
-                        {t('home.cta.button')}
-                    </Link>
-                </div>
-            </section>
+                        {activeTab === 'login' ? (
+                            <div className="animate-in fade-in duration-300">
+                                <div className="mb-8 text-center">
+                                    <h2 className="text-2xl font-bold text-slate-900">{t('admin.login.welcomeBack')}</h2>
+                                    <p className="mt-2 text-slate-500">{t('home.gateway.loginSubtitle')}</p>
+                                </div>
 
-            {/* Footer */}
-            <footer className="bg-gray-900 text-white py-12 px-4">
-                <div className="max-w-7xl mx-auto grid md:grid-cols-4 gap-8">
-                    <div>
-                        <div className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-xl mb-4 inline-block">
-                            {appName}
-                        </div>
-                        <p className="text-gray-400 mt-4">
-                            {t('home.footer.aboutText')}
-                        </p>
-                    </div>
-                    <div>
-                        <h3 className="font-semibold text-lg mb-4">{t('home.footer.quickLinks')}</h3>
-                        <ul className="space-y-2 text-gray-400">
-                            <li><a href="#home" className="hover:text-teal-400 transition">{t('home.nav.home')}</a></li>
-                            <li><a href="#products" className="hover:text-teal-400 transition">{t('home.nav.products')}</a></li>
-                            <li><a href="#about" className="hover:text-teal-400 transition">{t('home.nav.about')}</a></li>
-                            <li><a href="#contact" className="hover:text-teal-400 transition">{t('home.nav.contact')}</a></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 className="font-semibold text-lg mb-4">{t('home.footer.support')}</h3>
-                        <ul className="space-y-2 text-gray-400">
-                            <li><a href="#" className="hover:text-teal-400 transition">{t('home.footer.faq')}</a></li>
-                            <li><a href="#" className="hover:text-teal-400 transition">{t('home.footer.contact')}</a></li>
-                            <li><a href="#" className="hover:text-teal-400 transition">{t('home.footer.terms')}</a></li>
-                            <li><a href="#" className="hover:text-teal-400 transition">{t('home.footer.privacy')}</a></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 className="font-semibold text-lg mb-4">{t('home.footer.contact')}</h3>
-                        <ul className="space-y-2 text-gray-400">
-                            <li>{t('home.footer.emailLabel')}</li>
-                            <li>Tel: +212 5XX-XXXXXX</li>
-                            <li>Casablanca, Morocco</li>
-                        </ul>
+                                {error && (
+                                    <div className="mb-5 flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+                                        <AlertCircle className="h-5 w-5 shrink-0" />
+                                        <span className="text-sm font-medium">{error}</span>
+                                    </div>
+                                )}
+
+                                <form onSubmit={handleLogin} className="space-y-5">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            {t('auth.login.email')}
+                                        </label>
+                                        <div className="relative group">
+                                            <div className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4">
+                                                <Mail className="h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                                            </div>
+                                            <input
+                                                type="email"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3.5 ps-12 pe-4 text-slate-700 placeholder-slate-400 transition focus:border-transparent focus:bg-white focus:ring-2 focus:ring-teal-500"
+                                                placeholder={t('admin.login.emailPlaceholder')}
+                                                required
+                                                dir="ltr"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            {t('auth.login.password')}
+                                        </label>
+                                        <div className="relative group">
+                                            <div className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4">
+                                                <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                                            </div>
+                                            <input
+                                                type={showPassword ? 'text' : 'password'}
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3.5 ps-12 pe-12 text-slate-700 placeholder-slate-400 transition focus:border-transparent focus:bg-white focus:ring-2 focus:ring-teal-500"
+                                                placeholder={t('admin.login.passwordPlaceholder')}
+                                                required
+                                                dir="ltr"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute inset-y-0 end-0 flex items-center pe-4 text-slate-400 hover:text-slate-600"
+                                            >
+                                                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-4 font-semibold text-white shadow-lg shadow-teal-500/25 transition hover:from-teal-700 hover:to-emerald-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                                <span>{t('admin.login.signingIn')}</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span>{t('auth.login.submit')}</span>
+                                                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1" />
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
+
+                                <p className="mt-8 text-center text-sm text-slate-500">
+                                    {t('auth.login.noAccount')}{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('signup')}
+                                        className="font-semibold text-teal-600 hover:text-teal-700 transition"
+                                    >
+                                        {t('auth.login.signupLink')}
+                                    </button>
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="animate-in fade-in duration-300">
+                                <div className="mb-8 text-center">
+                                    <h2 className="text-2xl font-bold text-slate-900">{t('auth.signup.title')}</h2>
+                                    <p className="mt-2 text-slate-500">{t('home.gateway.signupSubtitle')}</p>
+                                </div>
+
+                                <div className="mb-8 space-y-3">
+                                    {signupBenefits.map((benefit, index) => (
+                                        <div key={index} className="flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50/50 px-4 py-3">
+                                            <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
+                                            <span className="text-sm text-slate-700">{benefit}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <Link
+                                    to="/seller/signup"
+                                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 py-4 font-semibold text-white shadow-lg shadow-teal-500/25 transition hover:from-teal-700 hover:to-emerald-700 hover:shadow-xl"
+                                >
+                                    <UserPlus className="h-5 w-5" />
+                                    <span>{t('home.gateway.createSellerAccount')}</span>
+                                    <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1" />
+                                </Link>
+
+                                <p className="mt-8 text-center text-sm text-slate-500">
+                                    {t('home.gateway.alreadyHaveAccount')}{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('login')}
+                                        className="font-semibold text-teal-600 hover:text-teal-700 transition"
+                                    >
+                                        {t('home.gateway.signIn')}
+                                    </button>
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
-                <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-gray-800 text-center text-gray-400">
-                    <p>&copy; 2026 {appName}. {t('home.footer.rights')}</p>
+
+                <div className="pb-6 text-center text-xs text-slate-400">
+                    &copy; 2026 {appName}. {t('home.footer.rights')}
                 </div>
-            </footer>
+            </div>
         </div>
     );
 }

@@ -259,7 +259,7 @@ export default function SellerSignup() {
                                     {t('auth.signup.returnHome') || 'Return to Home'}
                                 </Link>
                                 <Link
-                                    to="/login"
+                                    to="/"
                                     className="flex-1 text-center px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-lg font-semibold hover:shadow-xl transition transform hover:-translate-y-0.5"
                                 >
                                     {t('auth.signup.goToLogin') || 'Go to Login'}
@@ -582,7 +582,7 @@ export default function SellerSignup() {
                         <div className="mt-6 text-center">
                             <p className="text-gray-600">
                                 {t('auth.signup.haveAccount')}{' '}
-                                <Link to="/login" className="text-teal-600 hover:underline font-medium">
+                                <Link to="/" className="text-teal-600 hover:underline font-medium">
                                     {t('auth.signup.loginLink')}
                                 </Link>
                             </p>

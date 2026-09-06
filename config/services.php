@@ -58,4 +58,12 @@ return [
         'force_tls12' => env('BMDELIVERY_FORCE_TLS12', true),
     ],
 
+    /*
+    | Token for Hostinger HTTP cron that auto-syncs delivery statuses
+    | (VadoMax / BMDelivery) without clicking "Synchroniser le statut".
+    */
+    'delivery_status_sync' => [
+        'token' => env('DELIVERY_STATUS_SYNC_TOKEN'),
+    ],
+
 ];

@@ -6,7 +6,7 @@ import { appPath } from '../../constants/appPaths';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown, FileText, X, Calendar } from 'lucide-react';
+import { TrendingUp, ShoppingCart, DollarSign, AlertTriangle, Package, Users, ArrowUpRight, ArrowDownRight, Eye, Clock, CheckCircle, Store, UserPlus, TrendingDown, FileText, X, Calendar, Globe, Truck, RotateCcw, Target } from 'lucide-react';
 import ConfirmationAgentDashboard from './ConfirmationAgentDashboard';
 import DeliveryPersonDashboard from './DeliveryPersonDashboard';
 import { isConfirmationAgentRole, isDeliveryPersonRole } from '../../utils/roles';
@@ -134,6 +134,9 @@ export default function Dashboard() {
     };
     const sellerOverview = stats?.seller_overview || null;
     const sellerBilling = stats?.seller_billing || null;
+    const platformPerformance = stats?.platform_performance || null;
+    const platformRates = platformPerformance?.rates || {};
+    const platformTrends = platformPerformance?.trends || {};
     const latestSellerInvoice = sellerBilling?.latest_invoice || null;
     const kpis = stats?.kpis || {};
     const displayOrdersStats = isVendor && sellerOverview ? sellerOverview.orders : (stats?.orders || {});
@@ -147,6 +150,69 @@ export default function Dashboard() {
     const periodLabel = hasCustomDates
         ? t('admin.dashboard.customRange')
         : t(`admin.dashboard.${period}`);
+
+    const formatTrend = (value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric === 0) {
+            return { label: '0%', type: 'neutral' };
+        }
+
+        return {
+            label: `${numeric > 0 ? '+' : ''}${numeric.toFixed(2)}%`,
+            type: numeric > 0 ? 'positive' : 'negative',
+        };
+    };
+
+    const platformKpiCards = platformPerformance
+        ? [
+            {
+                title: t('admin.dashboard.confirmationRate'),
+                value: formatRate(platformRates.confirmation_rate),
+                description: t('admin.dashboard.platformConfirmationDesc'),
+                icon: CheckCircle,
+                gradient: 'from-cyan-500 to-sky-600',
+                bgGradient: 'from-cyan-50 to-sky-50',
+                trend: formatTrend(platformTrends.confirmation_rate),
+            },
+            {
+                title: t('admin.dashboard.deliveryRate'),
+                value: formatRate(platformRates.delivery_rate),
+                description: t('admin.dashboard.platformDeliveryDesc'),
+                icon: Truck,
+                gradient: 'from-emerald-500 to-teal-600',
+                bgGradient: 'from-emerald-50 to-teal-50',
+                trend: formatTrend(platformTrends.delivery_rate),
+            },
+            {
+                title: t('admin.dashboard.returnRate'),
+                value: formatRate(platformRates.return_rate),
+                description: t('admin.dashboard.platformReturnDesc'),
+                icon: RotateCcw,
+                gradient: 'from-orange-500 to-amber-600',
+                bgGradient: 'from-orange-50 to-amber-50',
+                trend: formatTrend(platformTrends.return_rate),
+                invertTrend: true,
+            },
+            {
+                title: t('admin.dashboard.shippingRate'),
+                value: formatRate(platformRates.shipping_rate),
+                description: t('admin.dashboard.platformShippingDesc'),
+                icon: Package,
+                gradient: 'from-indigo-500 to-violet-600',
+                bgGradient: 'from-indigo-50 to-violet-50',
+                trend: formatTrend(platformTrends.shipping_rate),
+            },
+            {
+                title: t('admin.dashboard.successRate'),
+                value: formatRate(platformRates.success_rate),
+                description: t('admin.dashboard.platformSuccessDesc'),
+                icon: Target,
+                gradient: 'from-blue-500 to-indigo-600',
+                bgGradient: 'from-blue-50 to-indigo-50',
+                trend: formatTrend(platformTrends.success_rate),
+            },
+        ]
+        : [];
 
     const statCards = isVendor
         ? [
@@ -329,6 +395,59 @@ export default function Dashboard() {
                     </div>
                 ))}
             </div>
+
+            {platformPerformance && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+                        <div>
+                            <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700 border border-teal-100 mb-3">
+                                <Globe size={14} />
+                                <span>{t('admin.dashboard.platformStatsBadge')}</span>
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-800">{t('admin.dashboard.platformPerformanceTitle')}</h2>
+                            <p className="text-slate-500 mt-1">{t('admin.dashboard.platformPerformanceSubtitle')}</p>
+                            <p className="text-xs text-slate-400 mt-2">{t('admin.dashboard.platformExcludedCancelled')}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                            <span className="font-medium text-slate-800">{t('admin.dashboard.totalOrders')}:</span>{' '}
+                            {platformPerformance.total_orders ?? 0}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+                        {platformKpiCards.map((card, index) => (
+                            <div
+                                key={index}
+                                className={`relative overflow-hidden bg-gradient-to-br ${card.bgGradient} rounded-2xl p-5 border border-white/50 shadow-sm hover:shadow-lg transition-all duration-300`}
+                            >
+                                <div className={`absolute -right-4 -top-4 w-20 h-20 bg-gradient-to-br ${card.gradient} rounded-full opacity-10`} />
+                                <div className="relative flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-slate-600 mb-1">{card.title}</p>
+                                        <p className="text-3xl font-bold text-slate-800">{card.value}</p>
+                                        <p className="text-xs text-slate-500 mt-2 leading-relaxed">{card.description}</p>
+                                        {card.trend && (
+                                            <div className={`flex items-center mt-3 text-xs font-semibold ${
+                                                (card.invertTrend ? card.trend.type === 'negative' : card.trend.type === 'positive') ? 'text-emerald-600' :
+                                                (card.invertTrend ? card.trend.type === 'positive' : card.trend.type === 'negative') ? 'text-rose-600' :
+                                                'text-slate-500'
+                                            }`}>
+                                                {(card.invertTrend ? card.trend.type === 'negative' : card.trend.type === 'positive') && <ArrowUpRight size={14} className="mr-1" />}
+                                                {(card.invertTrend ? card.trend.type === 'positive' : card.trend.type === 'negative') && <ArrowDownRight size={14} className="mr-1" />}
+                                                <span>{card.trend.label}</span>
+                                                <span className="ml-1 font-normal text-slate-400">{t('admin.dashboard.vsPreviousPeriod')}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center shadow-md shrink-0`}>
+                                        <card.icon className="text-white" size={22} />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {isVendor && sellerBilling && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/50 p-6">
@@ -516,7 +635,8 @@ export default function Dashboard() {
                         <p className="text-2xl font-bold text-red-900 mt-1">{displayOrdersStats?.refused || 0}</p>
                     </div>
                 </div>
-                {/* Cancelled Orders */}
+                {/* Cancelled Orders - hidden for sellers */}
+                {!isVendor && (
                 <div className="bg-rose-50 rounded-xl p-4 border border-rose-100">
                     <div className="text-center">
                         <X className="w-8 h-8 text-rose-600 mx-auto mb-2" />
@@ -524,6 +644,7 @@ export default function Dashboard() {
                         <p className="text-2xl font-bold text-rose-900 mt-1">{displayOrdersStats?.cancelled || 0}</p>
                     </div>
                 </div>
+                )}
                 {/* Waiting Confirmation */}
                 <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                     <div className="text-center">

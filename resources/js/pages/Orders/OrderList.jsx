@@ -71,11 +71,13 @@ export default function OrderList({ status = '' }) {
         website: 0,
     });
     const [vendors, setVendors] = useState([]);
+    const [products, setProducts] = useState([]);
     const [filters, setFilters] = useState({
         search: '',
         status: status,
         source: '',
         vendor_id: '',
+        product_id: '',
         date_from: '',
         date_to: '',
         page: 1
@@ -131,6 +133,10 @@ export default function OrderList({ status = '' }) {
     }, [isDeliveryPersonUser, isVendorUser]);
 
     useEffect(() => {
+        fetchProducts();
+    }, []);
+
+    useEffect(() => {
         if (!isConfirmationAgentUser || assignmentScope !== 'available') {
             return undefined;
         }
@@ -164,6 +170,7 @@ export default function OrderList({ status = '' }) {
             if (filters.status) params.append('status', filters.status);
             if (filters.source) params.append('source', filters.source);
             if (filters.vendor_id) params.append('vendor_id', filters.vendor_id);
+            if (filters.product_id) params.append('product_id', filters.product_id);
             if (filters.date_from) params.append('date_from', filters.date_from);
             if (filters.date_to) params.append('date_to', filters.date_to);
             params.append('page', filters.page);
@@ -221,6 +228,20 @@ export default function OrderList({ status = '' }) {
             setVendors(response.data?.data || response.data || []);
         } catch (error) {
             console.error('Error fetching vendors:', error);
+        }
+    };
+
+    const fetchProducts = async () => {
+        try {
+            const response = await api.get('/products', {
+                params: { per_page: 1000 },
+            });
+            const list = response.data?.data || response.data || [];
+            setProducts(
+                [...list].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }))
+            );
+        } catch (error) {
+            console.error('Error fetching products:', error);
         }
     };
 
@@ -1278,7 +1299,7 @@ export default function OrderList({ status = '' }) {
 
             {/* Filters */}
             <div className="bg-white rounded-lg p-3 shadow-sm mb-3 border border-gray-100">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
                     <input
                         type="text"
                         placeholder={t('admin.orderList.search')}
@@ -1329,6 +1350,18 @@ export default function OrderList({ status = '' }) {
                             ))}
                         </select>
                     )}
+                    <select
+                        value={filters.product_id}
+                        onChange={(e) => setFilters({ ...filters, product_id: e.target.value, page: 1 })}
+                        className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
+                    >
+                        <option value="">{t('admin.orderList.product')}</option>
+                        {products.map((product) => (
+                            <option key={product.id} value={product.id}>
+                                {product.name}{product.sku ? ` (${product.sku})` : ''}
+                            </option>
+                        ))}
+                    </select>
                     <input
                         type="date"
                         value={filters.date_from}

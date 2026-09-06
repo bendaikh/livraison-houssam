@@ -77,10 +77,25 @@ class ShippingPriceService
                     ? 'auto_recalculated_from_city_context'
                     : 'auto_resolved_on_create';
             } else {
-                $finalShippingCost = $existingShippingCost ?? $requestedShippingCost ?? $resolved['cost'];
-                $decision = $existingShippingCost !== null
-                    ? 'auto_preserved_existing_saved_value'
-                    : 'auto_used_requested_value';
+                // Placeholder zeros (common from Google Sheet imports) are not real
+                // saved rates — replace them with the requested/city value.
+                $existingIsPlaceholderZero = $existingShippingCost !== null
+                    && abs($existingShippingCost) < 0.00001
+                    && abs((float) $resolved['cost']) >= 0.00001;
+
+                if ($existingIsPlaceholderZero) {
+                    $finalShippingCost = ($requestedShippingCost !== null && abs($requestedShippingCost) >= 0.00001)
+                        ? $requestedShippingCost
+                        : $resolved['cost'];
+                    $decision = ($requestedShippingCost !== null && abs($requestedShippingCost) >= 0.00001)
+                        ? 'auto_replaced_placeholder_zero_with_requested_value'
+                        : 'auto_replaced_placeholder_zero_from_city';
+                } else {
+                    $finalShippingCost = $existingShippingCost ?? $requestedShippingCost ?? $resolved['cost'];
+                    $decision = $existingShippingCost !== null
+                        ? 'auto_preserved_existing_saved_value'
+                        : 'auto_used_requested_value';
+                }
             }
         } elseif ($requestedShippingCost !== null) {
             $finalShippingCost = $requestedShippingCost;

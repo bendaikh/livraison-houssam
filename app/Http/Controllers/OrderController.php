@@ -111,6 +111,13 @@ class OrderController extends Controller
             $this->applyVendorFilter($query, (int) $request->vendor_id);
         }
 
+        if ($request->filled('product_id')) {
+            $productId = (int) $request->product_id;
+            $query->whereHas('items', function ($itemsQuery) use ($productId) {
+                $itemsQuery->where('product_id', $productId);
+            });
+        }
+
         if ($request->has('delivery_agent_id')) {
             $query->where('delivery_agent_id', $request->delivery_agent_id);
         }
@@ -184,6 +191,7 @@ class OrderController extends Controller
         
         $this->normalizeLegacyItemProductKeys($request);
         $this->enrichItemsFromRequestMetadata($request);
+        $this->normalizeShippingLocationAliases($request);
 
         if ($request->user()?->isDeliveryPerson()) {
             abort(403, 'Delivery people cannot create orders.');
@@ -216,6 +224,8 @@ class OrderController extends Controller
             'discount' => 'nullable|numeric|min:0',
             'shipping_address' => 'nullable|string',
             'city' => 'nullable|string|max:255',
+            'client_address' => 'nullable|string',
+            'client_city' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'whatsapp' => 'nullable|string',
             'metadata' => 'nullable|array',
@@ -245,6 +255,7 @@ class OrderController extends Controller
             $validated['notes'] ?? null,
             $request->input('metadata')
         );
+        $validated = $this->fillLocationFromNotesIfMissing($validated);
 
         $preferSkuResolution = $this->shouldPreferSkuResolution($request, $validated);
 
@@ -280,9 +291,20 @@ class OrderController extends Controller
                     'name' => $validated['client_name'],
                     'phone' => $validated['client_phone'],
                     'address' => $validated['shipping_address'] ?? null,
+                    'city' => $validated['city'] ?? null,
                     'is_active' => true,
                 ]
             );
+            $clientUpdates = [];
+            if ($this->isBlankItemField($client->address) && !$this->isBlankItemField($validated['shipping_address'] ?? null)) {
+                $clientUpdates['address'] = $validated['shipping_address'];
+            }
+            if ($this->isBlankItemField($client->city) && !$this->isBlankItemField($validated['city'] ?? null)) {
+                $clientUpdates['city'] = $validated['city'];
+            }
+            if ($clientUpdates !== []) {
+                $client->update($clientUpdates);
+            }
             $validated['client_id'] = $client->id;
         }
 
@@ -1539,9 +1561,16 @@ class OrderController extends Controller
     private function attachShippingPricingMetadata(Order $order, string $context): void
     {
         $resolved = $this->shippingPriceService->resolveCityRate($order->city);
-        $effectiveShippingCost = $order->shipping_cost !== null
+        $savedShippingCost = $order->shipping_cost !== null
             ? (float) $order->shipping_cost
-            : $resolved['cost'];
+            : null;
+        // Treat placeholder zero as unset when the city has a real delivery rate.
+        $effectiveShippingCost = (
+            $savedShippingCost === null
+            || (abs($savedShippingCost) < 0.00001 && abs((float) $resolved['cost']) >= 0.00001)
+        )
+            ? $resolved['cost']
+            : $savedShippingCost;
 
         $order->setAttribute('resolved_shipping_cost', $resolved['cost']);
         $order->setAttribute('effective_shipping_cost', $effectiveShippingCost);
@@ -2462,6 +2491,97 @@ class OrderController extends Controller
         }
 
         return $notesText === '' ? $metadataLine : $notesText . "\n" . $metadataLine;
+    }
+
+    /**
+     * Map legacy/API aliases (client_address, client_city, etc.) onto shipping_address/city.
+     */
+    private function normalizeShippingLocationAliases(Request $request): void
+    {
+        $payload = $request->all();
+
+        if ($this->isBlankItemField($payload['shipping_address'] ?? null)) {
+            foreach (['client_address', 'address', 'adresse'] as $alias) {
+                if (!$this->isBlankItemField($payload[$alias] ?? null)) {
+                    $payload['shipping_address'] = trim((string) $payload[$alias]);
+                    break;
+                }
+            }
+        }
+
+        if ($this->isBlankItemField($payload['city'] ?? null)) {
+            foreach (['client_city', 'ville'] as $alias) {
+                if (!$this->isBlankItemField($payload[$alias] ?? null)) {
+                    $payload['city'] = trim((string) $payload[$alias]);
+                    break;
+                }
+            }
+        }
+
+        $request->merge($payload);
+    }
+
+    /**
+     * ChatEasy and similar integrations often put city/address in notes instead of city/shipping_address.
+     */
+    private function fillLocationFromNotesIfMissing(array $validated): array
+    {
+        $hasCity = !$this->isBlankItemField($validated['city'] ?? null);
+        $hasAddress = !$this->isBlankItemField($validated['shipping_address'] ?? null);
+
+        if ($hasCity && $hasAddress) {
+            return $validated;
+        }
+
+        $notes = (string) ($validated['notes'] ?? '');
+        // Only lift free-text from notes when ChatEasy metadata is present
+        // (ChatEasy sends location in notes, then we append [ChatEasy ...]).
+        if ($notes === '' || !str_contains($notes, '[ChatEasy')) {
+            return $validated;
+        }
+
+        $location = $this->extractCustomerLocationFromNotes($notes);
+        if ($location === null || $location === '') {
+            return $validated;
+        }
+
+        if (!$hasCity) {
+            $validated['city'] = $location;
+        }
+        if (!$hasAddress) {
+            $validated['shipping_address'] = $location;
+        }
+
+        return $validated;
+    }
+
+    private function extractCustomerLocationFromNotes(?string $notes): ?string
+    {
+        if ($notes === null || trim($notes) === '') {
+            return null;
+        }
+
+        $lines = preg_split('/\R/u', $notes) ?: [];
+        $customerLines = [];
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (str_starts_with($trimmed, '[ChatEasy') || str_starts_with($trimmed, '[Alfa')) {
+                continue;
+            }
+
+            $customerLines[] = $trimmed;
+        }
+
+        if ($customerLines === []) {
+            return null;
+        }
+
+        return implode(', ', $customerLines);
     }
 
     private function isBlankItemField(mixed $value): bool
